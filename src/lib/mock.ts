@@ -89,7 +89,7 @@ const proxy: any = {
       { split: "sni", unit: "records", disorder: false, oob: true },
     ],
     rules: { scope: "all", zapret_lists: true, bypass: [], skip: ["sberbank.ru"], block: [] },
-    doh: true, system: true, lan: false, user: "", pass: "",
+    doh: true, system: true, lan: false, user: "", pass: "", rcvbuf: 0,
   },
   enabled: false,
   stats: { running: false, port: 8881, active: 0, total: 0, failed: 0, system: false, lan: false, auth: false, bypassed: 0, passed: 0, blocked: 0, dns_cached: 0, bypass_domains: 0, auto_retries: 0, auto_sites: 0, last_error: null },
@@ -109,10 +109,12 @@ const diagSample = (domain: string) => ({
   doh_error: null,
   system_bogus: true,
   checks: [
-    { ip: "127.0.0.1", source: "system", result: "tcp_fail", ms: null, detail: "bogus" },
-    { ip: "157.240.205.174", source: "doh", result: "tls_timeout", ms: null, detail: "os error 10060" },
+    { ip: "127.0.0.1", source: "system", result: "tcp_fail", ms: null, detail: "bogus", stage: null, unstable: false },
+    { ip: "157.240.205.174", source: "doh", result: "tls_timeout", ms: null, detail: "os error 10060", stage: "response", unstable: true },
   ],
   verdict: "dpi",
+  stage: "response",
+  extra: { ip: "157.240.205.174", split_ok: false, small_buf_ok: true, ip_clean: true, name_anywhere: false },
 });
 
 const tg: any = {
@@ -130,6 +132,13 @@ const tg: any = {
   stats: { running: false, active: 0, total: 0, ws: 0, cf: 0, worker: 0, fronted: 0, tcp: 0, bad: 0, failed: 0, bytes_up: 0, bytes_down: 0, last_error: null },
   link: "tg://proxy?server=127.0.0.1&port=1443&secret=dd3f1c0a9b7e5d4c2b1a0f9e8d7c6b5a49",
   default_cf: Array.from({ length: 20 }, (_, i) => `cf${i}.co.uk`),
+};
+
+const net: any = {
+  rules: { enabled: false, mode: "except", networks: [], zapret: true, proxy: true },
+  current: ["HomeWiFi"],
+  allowed: true,
+  paused: false,
 };
 
 export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
@@ -281,6 +290,12 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
           { domain: "nnmclub.to", system: ["172.67.144.20"], public: ["188.114.97.3"], trusted: ["172.67.144.20"], verdict: "differs", cert_check: "188.114.97.3: TcpFail" },
         ],
       };
+    case "net_status":
+      return structuredClone(net);
+    case "net_set":
+      net.rules = JSON.parse(JSON.stringify(args.rules));
+      net.allowed = !args.rules.enabled || !args.rules.networks.length || (args.rules.mode === "only") === args.rules.networks.includes("HomeWiFi");
+      return structuredClone(net);
     case "tg_status":
       return structuredClone(tg);
     case "tg_start":

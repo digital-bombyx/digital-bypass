@@ -9,6 +9,7 @@ mod hosts;
 mod i18n;
 mod ipset;
 mod lists;
+mod netrules;
 mod proxy;
 mod proxytest;
 mod runner;
@@ -47,6 +48,11 @@ pub struct AppState {
     tg: Mutex<Option<telegram::TgProxy>>,
     proxy_test_cancel: AtomicBool,
     stub: Mutex<Option<doh::Stub>>,
+    /// Текущие сети (имена профилей Windows).
+    net_names: Mutex<Vec<String>>,
+    /// Что остановлено правилом сети (вернуть, когда сеть снова разрешена).
+    net_paused_zapret: AtomicBool,
+    net_paused_proxy: AtomicBool,
 }
 
 impl AppState {
@@ -207,6 +213,47 @@ impl AppState {
         self.stub.lock().unwrap().take();
         dns::flush();
         Ok(())
+    }
+
+    /// Применить правило сети к текущим сетям: остановить или вернуть то,
+    /// что было включено. Флаги «включено» в настройках не меняются.
+    fn net_apply(&self) -> bool {
+        let rules = self.settings.lock().unwrap().net.clone();
+        let names = self.net_names.lock().unwrap().clone();
+        let allowed = rules.allowed(&names);
+        let mut changed = false;
+        if !allowed {
+            if rules.proxy && self.proxy.lock().unwrap().is_some() {
+                self.proxy_stop_inner();
+                self.net_paused_proxy.store(true, Ordering::SeqCst);
+                changed = true;
+            }
+            let st = self.runner.status();
+            if rules.zapret && st.running && st.mode == "process" {
+                self.runner.stop();
+                self.net_paused_zapret.store(true, Ordering::SeqCst);
+                changed = true;
+            }
+        } else {
+            if self.net_paused_proxy.swap(false, Ordering::SeqCst) {
+                let (on, cfg) = {
+                    let s = self.settings.lock().unwrap();
+                    (s.proxy_enabled, s.proxy.clone())
+                };
+                if on && self.proxy.lock().unwrap().is_none() {
+                    let _ = self.proxy_start(cfg);
+                    changed = true;
+                }
+            }
+            if self.net_paused_zapret.swap(false, Ordering::SeqCst) {
+                let last = self.settings.lock().unwrap().last_enabled;
+                if last && winapi::is_admin() && !self.runner.status().running {
+                    let _ = self.apply();
+                    changed = true;
+                }
+            }
+        }
+        changed
     }
 
     /// После изменения настроек перезапустить, если обход работает под нашим управлением.
@@ -734,6 +781,49 @@ impl AppState {
     }
 }
 
+#[derive(Serialize)]
+struct NetStatus {
+    rules: netrules::NetRules,
+    current: Vec<String>,
+    allowed: bool,
+    paused: bool,
+}
+
+fn net_status_of(state: &AppState) -> NetStatus {
+    let rules = state.settings.lock().unwrap().net.clone();
+    let current = state.net_names.lock().unwrap().clone();
+    NetStatus {
+        allowed: rules.allowed(&current),
+        paused: state.net_paused_proxy.load(Ordering::SeqCst) || state.net_paused_zapret.load(Ordering::SeqCst),
+        rules,
+        current,
+    }
+}
+
+fn net_changed(app: &AppHandle) {
+    let _ = app.emit("proxy-changed", ());
+    let st = app.state::<AppState>().runner.status();
+    let _ = app.emit("status", &st);
+    refresh_tray(app);
+}
+
+#[tauri::command(async)]
+fn net_status(state: State<AppState>) -> NetStatus {
+    // Окно открыто — имена перечитать (дёшево, по запросу).
+    *state.net_names.lock().unwrap() = netrules::current();
+    net_status_of(&state)
+}
+
+#[tauri::command(async)]
+fn net_set(app: AppHandle, state: State<AppState>, mut rules: netrules::NetRules) -> NetStatus {
+    rules.normalize();
+    state.update(|s| s.net = rules);
+    if state.net_apply() {
+        net_changed(&app);
+    }
+    net_status_of(&state)
+}
+
 #[tauri::command(async)]
 fn tg_status(state: State<AppState>) -> TgStatus {
     tg_status_of(&state)
@@ -1169,6 +1259,9 @@ pub fn run() {
                 tg: Mutex::new(None),
                 proxy_test_cancel: AtomicBool::new(false),
                 stub: Mutex::new(None),
+                net_names: Mutex::new(Vec::new()),
+                net_paused_zapret: AtomicBool::new(false),
+                net_paused_proxy: AtomicBool::new(false),
             });
 
             let handle = app.handle().clone();
@@ -1239,6 +1332,27 @@ pub fn run() {
                     }
                 }
                 refresh_tray(&handle);
+            });
+
+            // Включение по сети: следить за сменой подключений.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                let mut last = String::new();
+                loop {
+                    let fp = netrules::fingerprint();
+                    if fp != last {
+                        last = fp;
+                        // Профиль сети появляется не сразу после подключения.
+                        std::thread::sleep(std::time::Duration::from_secs(3));
+                        let st = handle.state::<AppState>();
+                        *st.net_names.lock().unwrap() = netrules::current();
+                        if st.net_apply() {
+                            net_changed(&handle);
+                        }
+                        let _ = handle.emit("net-changed", ());
+                    }
+                    std::thread::sleep(std::time::Duration::from_secs(10));
+                }
             });
 
             if start_in_tray {
@@ -1321,6 +1435,8 @@ pub fn run() {
             dns_check_defaults,
             lan_addresses,
             tg_status,
+            net_status,
+            net_set,
             tg_start,
             tg_stop,
             tg_set_config,

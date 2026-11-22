@@ -407,7 +407,7 @@ impl TlsDuplex {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string()))?;
         let config = if sni_override.is_some() { crate::doh::tls_config_any_name() } else { crate::doh::tls_config() };
         let mut conn = rustls::ClientConnection::new(config, name).map_err(std::io::Error::other)?;
-        let mut io = crate::diag::Fragmenting { inner: tcp.try_clone()?, first: fragment };
+        let mut io = crate::diag::Fragmenting { inner: tcp.try_clone()?, first: fragment, got: 0 };
         while conn.is_handshaking() {
             conn.complete_io(&mut io)?;
         }

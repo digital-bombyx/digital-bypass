@@ -162,6 +162,7 @@ export type ProxyConfig = {
   lan: boolean;
   user: string;
   pass: string;
+  rcvbuf: number;
 };
 export type ProxyStatus = {
   config: ProxyConfig;
@@ -244,9 +245,29 @@ export type DiagReport = {
   doh: string[];
   doh_error: string | null;
   system_bogus: boolean;
-  checks: { ip: string; source: "system" | "doh" | "both"; result: Probe; ms: number | null; detail: string | null }[];
+  checks: {
+    ip: string;
+    source: "system" | "doh" | "both";
+    result: Probe;
+    ms: number | null;
+    detail: string | null;
+    stage: Stage | null;
+    unstable: boolean;
+  }[];
   verdict: Verdict;
+  stage: Stage | null;
+  extra: {
+    ip: string;
+    split_ok: boolean | null;
+    small_buf_ok: boolean | null;
+    ip_clean: boolean | null;
+    name_anywhere: boolean | null;
+  } | null;
 };
+export type Stage = "request" | "response";
+
+export type NetRules = { enabled: boolean; mode: "only" | "except"; networks: string[]; zapret: boolean; proxy: boolean };
+export type NetStatus = { rules: NetRules; current: string[]; allowed: boolean; paused: boolean };
 
 export type SniOutcome = "pass" | "reset" | "timeout" | "no_tcp";
 export type SniReport = {
@@ -307,6 +328,8 @@ export const api = {
   dnsCheckDefaults: () => invoke<string[]>("dns_check_defaults"),
   lanAddresses: () => invoke<string[]>("lan_addresses"),
   tgStatus: () => invoke<TgStatus>("tg_status"),
+  netStatus: () => invoke<NetStatus>("net_status"),
+  netSet: (rules: NetRules) => invoke<NetStatus>("net_set", { rules }),
   tgStart: (config: TgConfig) => invoke<TgStatus>("tg_start", { config }),
   tgStop: () => invoke<TgStatus>("tg_stop"),
   tgSetConfig: (config: TgConfig) => invoke<TgStatus>("tg_set_config", { config }),

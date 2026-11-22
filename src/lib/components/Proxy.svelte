@@ -29,6 +29,7 @@
     lan: false,
     user: "",
     pass: "",
+    rcvbuf: 0,
   });
   /** Списки правил в textarea — по домену в строке. */
   let ruleText = $state({ bypass: "", skip: "", block: "" });
@@ -264,6 +265,13 @@
         <div class="hint faint mono">{t("запрашивать и использовать IPv6-адреса сайтов", "query and use IPv6 site addresses")}</div>
       </div>
       <Switch checked={cfg.ipv6} disabled={app.busy} onchange={(v) => change({ ipv6: v })} />
+    </div>
+    <div class="opt">
+      <div>
+        <div class="label">{t("маленький буфер приёма", "small receive buffer")} <span class="chip">{t("эксперимент", "experimental")}</span></div>
+        <div class="hint faint mono">{t("сервер шлёт ответ мелкими кусками — против DPI, который режет по сертификату (см. «Проверку»); первый ответ медленнее", "the server sends its reply in small pieces — against DPI that cuts on the certificate (see Check); the first reply is slower")}</div>
+      </div>
+      <Switch checked={cfg.rcvbuf > 0} disabled={app.busy} onchange={(v) => change({ rcvbuf: v ? 2048 : 0 })} />
     </div>
     <div class="opt">
       <div>

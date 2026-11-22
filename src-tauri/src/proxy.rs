@@ -68,6 +68,11 @@ pub struct Config {
     /// не умеет его передавать.
     pub user: String,
     pub pass: String,
+    /// Экспериментально: маленький буфер приёма (байт, 0 — системный) на
+    /// соединениях к сайтам. Сервер тогда шлёт ответ (сертификат) мелкими
+    /// кусками — против DPI, который режет по ответу. После первого ответа
+    /// буфер возвращается к большому.
+    pub rcvbuf: u32,
 }
 
 impl Default for Config {
@@ -92,6 +97,7 @@ impl Default for Config {
             lan: false,
             user: String::new(),
             pass: String::new(),
+            rcvbuf: 0,
         }
     }
 }
@@ -302,6 +308,9 @@ pub fn attempt_order(primary: &Variant, cached: Option<&Variant>, chain: &[Varia
 impl Config {
     /// Перевести настройки прошлых версий и проверить значения.
     pub fn normalize(&mut self) {
+        if self.rcvbuf != 0 {
+            self.rcvbuf = self.rcvbuf.clamp(512, 65536);
+        }
         match self.method.take().as_deref() {
             Some("split") => self.disorder = false,
             Some("disorder") => self.disorder = true,
@@ -1008,7 +1017,7 @@ impl Shared {
         if addrs.is_empty() {
             return Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("{host}: no address")));
         }
-        connect_race(&addrs, CONNECT_TIMEOUT)
+        connect_race_buf(&addrs, CONNECT_TIMEOUT, self.cfg.rcvbuf)
     }
 
     /// Туннель: первый пакет клиента (обычно ClientHello) режется, дальше — пересылка.
@@ -1138,7 +1147,34 @@ impl Shared {
 /// Подключиться к первому ответившему адресу: попытки стартуют с шагом 250 мс
 /// и идут параллельно. Часть адресов сайта может быть заблокирована по IP —
 /// так один «мёртвый» адрес не задерживает соединение на весь таймаут.
+#[cfg(test)]
 pub fn connect_race(addrs: &[SocketAddr], timeout: Duration) -> std::io::Result<TcpStream> {
+    connect_race_buf(addrs, timeout, 0)
+}
+
+/// Подключение с заданным буфером приёма (0 — системный). Буфер ставится до
+/// подключения: от него зависит окно, объявленное серверу в SYN.
+pub fn connect_one(a: SocketAddr, timeout: Duration, rcvbuf: usize) -> std::io::Result<TcpStream> {
+    if rcvbuf == 0 {
+        return TcpStream::connect_timeout(&a, timeout);
+    }
+    let s = socket2::Socket::new(socket2::Domain::for_address(a), socket2::Type::STREAM, Some(socket2::Protocol::TCP))?;
+    s.set_recv_buffer_size(rcvbuf)?;
+    s.connect_timeout(&a.into(), timeout)?;
+    Ok(s.into())
+}
+
+/// Буфер приёма меньше этого — наш маленький: после первого ответа вернуть большой.
+const SMALL_BUF_LIMIT: usize = 32 * 1024;
+
+fn restore_rcvbuf(s: &TcpStream) {
+    let r = socket2::SockRef::from(s);
+    if r.recv_buffer_size().is_ok_and(|n| n < SMALL_BUF_LIMIT) {
+        let _ = r.set_recv_buffer_size(1024 * 1024);
+    }
+}
+
+pub fn connect_race_buf(addrs: &[SocketAddr], timeout: Duration, rcvbuf: u32) -> std::io::Result<TcpStream> {
     let (tx, rx) = std::sync::mpsc::channel();
     let won = Arc::new(AtomicBool::new(false));
     let n = addrs.len().min(6);
@@ -1150,7 +1186,7 @@ pub fn connect_race(addrs: &[SocketAddr], timeout: Duration) -> std::io::Result<
             if won.load(Ordering::SeqCst) {
                 return;
             }
-            let _ = tx.send(TcpStream::connect_timeout(&a, timeout));
+            let _ = tx.send(connect_one(a, timeout, rcvbuf as usize));
         });
     }
     drop(tx);
@@ -1173,7 +1209,17 @@ fn relay(client: TcpStream, up: TcpStream) -> std::io::Result<()> {
     up.set_read_timeout(None)?;
     let (mut c2, mut u2) = (client.try_clone()?, up.try_clone()?);
     let t = std::thread::spawn(move || {
-        let _ = std::io::copy(&mut u2, &mut c2);
+        // Первый кусок ответа — с маленьким буфером (если он задан), дальше полный.
+        let mut buf = vec![0u8; 16 * 1024];
+        match u2.read(&mut buf) {
+            Ok(n) if n > 0 => {
+                restore_rcvbuf(&u2);
+                if c2.write_all(&buf[..n]).is_ok() {
+                    let _ = std::io::copy(&mut u2, &mut c2);
+                }
+            }
+            _ => {}
+        }
         let _ = c2.shutdown(Shutdown::Write);
     });
     let (mut c, mut u) = (client, up);

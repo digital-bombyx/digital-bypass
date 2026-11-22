@@ -37,6 +37,36 @@ pub struct Check {
     pub result: Probe,
     pub ms: Option<u64>,
     pub detail: Option<String>,
+    /// Для сброса/таймаута TLS: на каком шаге (пришло ли что-то от сервера).
+    pub stage: Option<Stage>,
+    /// Повторы проверки дали разный результат (балансировка, несколько DPI).
+    pub unstable: bool,
+}
+
+/// На чём срабатывает DPI.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Stage {
+    /// Ответа сервера не было: режут наш ClientHello (имя сайта) — нарезка помогает.
+    Request,
+    /// Сервер ответил, потом сброс/тишина: режут по ответу (сертификат) —
+    /// нарезка запроса не поможет.
+    Response,
+}
+
+/// Дополнительные проверки, если сайт режет DPI: что именно блокируется.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct Extra {
+    /// Адрес, на котором проверяли.
+    pub ip: String,
+    /// С нарезкой ClientHello (как в прокси) открывается.
+    pub split_ok: Option<bool>,
+    /// С маленьким буфером приёма (сервер шлёт ответ мелкими кусками) открывается.
+    pub small_buf_ok: Option<bool>,
+    /// Тот же адрес с другим именем сайта отвечает (адрес сам по себе не фильтруется).
+    pub ip_clean: Option<bool>,
+    /// Имя сайта режется и на постороннем адресе (1.1.1.1) — DPI по имени везде.
+    pub name_anywhere: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -67,6 +97,9 @@ pub struct Report {
     pub system_bogus: bool,
     pub checks: Vec<Check>,
     pub verdict: Verdict,
+    /// Для вердикта «DPI»: на чём режут (по первому заблокированному адресу).
+    pub stage: Option<Stage>,
+    pub extra: Option<Extra>,
 }
 
 /// Домен из того, что вставил пользователь: схема, путь, порт, `*.` отбрасываются.
@@ -122,18 +155,54 @@ fn classify(e: &std::io::Error) -> (Probe, String) {
 }
 
 pub fn probe(ip: IpAddr, host: &str) -> (Probe, Option<u64>, Option<String>) {
+    let r = handshake(ip, host, false, 0);
+    (r.probe, r.ms, r.detail)
+}
+
+/// Результат TLS-рукопожатия; `got` — сколько байт успел прислать сервер.
+pub struct Outcome {
+    pub probe: Probe,
+    pub ms: Option<u64>,
+    pub detail: Option<String>,
+    pub got: usize,
+}
+
+impl Outcome {
+    /// Для сброса/таймаута: режут запрос или ответ.
+    pub fn stage(&self) -> Option<Stage> {
+        matches!(self.probe, Probe::TlsReset | Probe::TlsTimeout).then_some(if self.got > 0 { Stage::Response } else { Stage::Request })
+    }
+}
+
+/// TLS-рукопожатие с `host` на `ip:443`. `split` — нарезать ClientHello как
+/// прокси; `rcvbuf` — маленький буфер приёма (0 — системный).
+/// Сертификат проверяется полностью (несовпадение имени → `TlsCert`).
+pub fn handshake(ip: IpAddr, host: &str, split: bool, rcvbuf: usize) -> Outcome {
+    let fail = |probe, detail: String, got| Outcome { probe, ms: None, detail: Some(detail), got };
     let t0 = Instant::now();
-    let tcp = match TcpStream::connect_timeout(&SocketAddr::new(ip, 443), TIMEOUT) {
+    let tcp = match crate::proxy::connect_one(SocketAddr::new(ip, 443), TIMEOUT, rcvbuf) {
         Ok(s) => s,
-        Err(e) => return (Probe::TcpFail, None, Some(e.to_string())),
+        Err(e) => return fail(Probe::TcpFail, e.to_string(), 0),
     };
-    match crate::doh::tls_handshake(tcp, host, TIMEOUT) {
-        Ok(_) => (Probe::Ok, Some(t0.elapsed().as_millis() as u64), None),
-        Err(e) => {
+    let _ = tcp.set_nodelay(true);
+    let _ = tcp.set_read_timeout(Some(TIMEOUT));
+    let _ = tcp.set_write_timeout(Some(TIMEOUT));
+    let name = match rustls::pki_types::ServerName::try_from(host.to_string()) {
+        Ok(n) => n,
+        Err(e) => return fail(Probe::TlsError, e.to_string(), 0),
+    };
+    let conn = match rustls::ClientConnection::new(crate::doh::tls_config(), name) {
+        Ok(c) => c,
+        Err(e) => return fail(Probe::TlsError, e.to_string(), 0),
+    };
+    let mut tls = rustls::StreamOwned::new(conn, Fragmenting { inner: tcp, first: split, got: 0 });
+    while tls.conn.is_handshaking() {
+        if let Err(e) = tls.conn.complete_io(&mut tls.sock) {
             let (p, d) = classify(&e);
-            (p, None, Some(d))
+            return fail(p, d, tls.sock.got);
         }
     }
+    Outcome { probe: Probe::Ok, ms: Some(t0.elapsed().as_millis() as u64), detail: None, got: tls.sock.got }
 }
 
 /// TCP-поток, у которого первая запись (ClientHello) уходит нарезанной —
@@ -143,11 +212,15 @@ pub(crate) struct Fragmenting {
     pub(crate) inner: TcpStream,
     /// Первая запись ещё не ушла (и её надо нарезать).
     pub(crate) first: bool,
+    /// Сколько байт пришло от сервера.
+    pub(crate) got: usize,
 }
 
 impl std::io::Read for Fragmenting {
     fn read(&mut self, b: &mut [u8]) -> std::io::Result<usize> {
-        self.inner.read(b)
+        let n = self.inner.read(b)?;
+        self.got += n;
+        Ok(n)
     }
 }
 
@@ -168,29 +241,51 @@ impl std::io::Write for Fragmenting {
 
 /// Как `probe`, но ClientHello нарезается — для сайтов, которые режет DPI.
 pub fn probe_fragmented(ip: IpAddr, host: &str) -> (Probe, Option<u64>, Option<String>) {
-    let t0 = Instant::now();
-    let tcp = match TcpStream::connect_timeout(&SocketAddr::new(ip, 443), TIMEOUT) {
-        Ok(s) => s,
-        Err(e) => return (Probe::TcpFail, None, Some(e.to_string())),
-    };
-    let _ = tcp.set_read_timeout(Some(TIMEOUT));
-    let _ = tcp.set_write_timeout(Some(TIMEOUT));
-    let name = match rustls::pki_types::ServerName::try_from(host.to_string()) {
-        Ok(n) => n,
-        Err(e) => return (Probe::TlsError, None, Some(e.to_string())),
-    };
-    let conn = match rustls::ClientConnection::new(crate::doh::tls_config(), name) {
-        Ok(c) => c,
-        Err(e) => return (Probe::TlsError, None, Some(e.to_string())),
-    };
-    let mut tls = rustls::StreamOwned::new(conn, Fragmenting { inner: tcp, first: true });
-    while tls.conn.is_handshaking() {
-        if let Err(e) = tls.conn.complete_io(&mut tls.sock) {
-            let (p, d) = classify(&e);
-            return (p, None, Some(d));
-        }
+    let r = handshake(ip, host, true, 0);
+    (r.probe, r.ms, r.detail)
+}
+
+/// Маленький буфер приёма для проверки «режут по ответу».
+pub const SMALL_RCVBUF: usize = 2048;
+/// Имя для проверки «адрес фильтруется сам по себе»: заведомо не блокируется.
+const NEUTRAL_SNI: &str = "example.com";
+/// Адрес для проверки «имя режется везде».
+const NEUTRAL_IP: &str = "1.1.1.1";
+
+/// Сброс/таймаут — признак вмешательства; ответ с любой ошибкой TLS — сервер отвечает.
+fn cut(p: Probe) -> bool {
+    matches!(p, Probe::TlsReset | Probe::TlsTimeout)
+}
+
+/// Две попытки параллельно: результат засчитывается, только если совпал.
+/// При расхождении берётся неудачный (как REPEATS в blockcheck).
+fn probe_twice(ip: IpAddr, host: &str) -> (Outcome, bool) {
+    let h = host.to_string();
+    let t = std::thread::spawn(move || handshake(ip, &h, false, 0));
+    let a = handshake(ip, host, false, 0);
+    let b = t.join().unwrap_or(Outcome { probe: Probe::TlsError, ms: None, detail: None, got: 0 });
+    let unstable = a.probe != b.probe;
+    let pick = if a.probe == Probe::Ok { b } else { a };
+    (pick, unstable)
+}
+
+/// Что именно режут на адресе `ip` (запускается для вердикта «DPI»).
+pub fn extra(ip: IpAddr, host: &str, stage: Option<Stage>) -> Extra {
+    let h = host.to_string();
+    let split = std::thread::spawn(move || handshake(ip, &h, true, 0).probe);
+    let h = host.to_string();
+    let small = (stage == Some(Stage::Response)).then(|| std::thread::spawn(move || handshake(ip, &h, false, SMALL_RCVBUF).probe));
+    let other = std::thread::spawn(move || handshake(ip, NEUTRAL_SNI, false, 0).probe);
+    let h = host.to_string();
+    let anywhere = std::thread::spawn(move || handshake(NEUTRAL_IP.parse().unwrap(), &h, false, 0).probe);
+    let join = |t: std::thread::JoinHandle<Probe>| t.join().ok();
+    Extra {
+        ip: ip.to_string(),
+        split_ok: join(split).map(|p| p == Probe::Ok),
+        small_buf_ok: small.and_then(join).map(|p| p == Probe::Ok),
+        ip_clean: join(other).filter(|p| *p != Probe::TcpFail).map(|p| !cut(p)),
+        name_anywhere: join(anywhere).filter(|p| *p != Probe::TcpFail).map(cut),
     }
-    (Probe::Ok, Some(t0.elapsed().as_millis() as u64), None)
 }
 
 /// Вердикт по результатам (чистая функция — покрыта тестами).
@@ -283,15 +378,21 @@ pub fn run(input: &str) -> Result<Report, String> {
             std::thread::spawn(move || {
                 // Заглушки вроде 127.0.0.1 не трогаем: там может быть что угодно локальное.
                 if is_bogus(&ip) {
-                    return Check { ip: ip.to_string(), source, result: Probe::TcpFail, ms: None, detail: Some("bogus".into()) };
+                    return Check { ip: ip.to_string(), source, result: Probe::TcpFail, ms: None, detail: Some("bogus".into()), stage: None, unstable: false };
                 }
-                let (result, ms, detail) = probe(ip, &host);
-                Check { ip: ip.to_string(), source, result, ms, detail }
+                let (o, unstable) = probe_twice(ip, &host);
+                Check { ip: ip.to_string(), source, result: o.probe, ms: o.ms, detail: o.detail.clone(), stage: o.stage(), unstable }
             })
         })
         .collect();
     let checks: Vec<Check> = handles.into_iter().filter_map(|h| h.join().ok()).collect();
     let v = verdict(&system, &doh, bogus, &checks);
+    let cutc = checks.iter().find(|c| cut(c.result) && !(bogus && c.source == "system"));
+    let stage = if v == Verdict::Dpi { cutc.and_then(|c| c.stage) } else { None };
+    let extra = match (v, cutc) {
+        (Verdict::Dpi, Some(c)) => c.ip.parse().ok().map(|ip| self::extra(ip, &domain, stage)),
+        _ => None,
+    };
     Ok(Report {
         domain,
         system: system.iter().map(|i| i.to_string()).collect(),
@@ -301,6 +402,8 @@ pub fn run(input: &str) -> Result<Report, String> {
         system_bogus: bogus,
         checks,
         verdict: v,
+        stage,
+        extra,
     })
 }
 
@@ -312,7 +415,16 @@ mod tests {
         s.parse().unwrap()
     }
     fn c(ip: &str, source: &'static str, result: Probe) -> Check {
-        Check { ip: ip.into(), source, result, ms: None, detail: None }
+        Check { ip: ip.into(), source, result, ms: None, detail: None, stage: None, unstable: false }
+    }
+
+    #[test]
+    fn stages() {
+        let o = |probe, got| Outcome { probe, ms: None, detail: None, got };
+        assert_eq!(o(Probe::TlsReset, 0).stage(), Some(Stage::Request));
+        assert_eq!(o(Probe::TlsTimeout, 3000).stage(), Some(Stage::Response));
+        assert_eq!(o(Probe::TlsCert, 3000).stage(), None);
+        assert_eq!(o(Probe::Ok, 3000).stage(), None);
     }
 
     #[test]

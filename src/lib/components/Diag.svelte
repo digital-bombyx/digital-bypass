@@ -119,6 +119,35 @@
       {#if report.system_bogus && report.verdict !== "dns"}
         <div class="vx muted">{t("Кроме того, системный DNS отдаёт заглушку — стоит сменить и DNS.", "Also, the system DNS returns a stub address — change DNS as well.")}</div>
       {/if}
+      {#if report.verdict === "dpi" && report.stage}
+        <div class="vx">
+          {#if report.stage === "request"}
+            {t("Режут по вашему запросу (имя сайта в ClientHello): сервер ничего не успел ответить. Нарезка запроса — прокси или zapret2 — как раз против этого.", "Your request is cut (site name in ClientHello): the server never replied. Splitting the request — proxy or zapret2 — targets exactly this.")}
+          {:else}
+            {t("Режут по ответу сервера (сертификат): сервер ответил, потом соединение оборвали. Нарезка запроса тут обычно не помогает.", "The server's reply is cut (certificate): the server answered, then the connection was killed. Splitting the request usually doesn't help here.")}
+          {/if}
+        </div>
+      {/if}
+      {#if report.extra}
+        {@const x = report.extra}
+        <ul class="facts">
+          {#if x.split_ok !== null}
+            <li class:good={x.split_ok}>{x.split_ok ? t("С нарезкой ClientHello открывается — подойдёт прокси.", "Opens with a split ClientHello — the proxy will do.") : t("С нарезкой ClientHello тоже не открывается.", "Doesn't open with a split ClientHello either.")}</li>
+          {/if}
+          {#if x.small_buf_ok !== null}
+            <li class:good={x.small_buf_ok}>{x.small_buf_ok ? t("С маленьким буфером приёма открывается — включите его в настройках прокси.", "Opens with a small receive buffer — enable it in the proxy settings.") : t("Маленький буфер приёма не помог.", "A small receive buffer didn't help.")}</li>
+          {/if}
+          {#if x.ip_clean !== null}
+            <li>{x.ip_clean ? t(`Адрес ${x.ip} с другим именем отвечает — режут именно имя сайта.`, `Address ${x.ip} answers with another name — it's the site name that is cut.`) : t(`Адрес ${x.ip} режется и с другим именем — частичная блокировка по IP.`, `Address ${x.ip} is cut with another name too — partial IP block.`)}</li>
+          {/if}
+          {#if x.name_anywhere !== null}
+            <li>{x.name_anywhere ? t("Имя сайта режется и на постороннем адресе (1.1.1.1) — DPI ищет его везде.", "The name is cut on an unrelated address (1.1.1.1) too — DPI looks for it everywhere.") : t("На постороннем адресе (1.1.1.1) имя проходит — DPI следит только за адресами сайта.", "On an unrelated address (1.1.1.1) the name passes — DPI watches only the site's addresses.")}</li>
+          {/if}
+        </ul>
+      {/if}
+      {#if report.checks.some((c) => c.unstable)}
+        <div class="vx muted">{t("Повторы проверки дали разный результат — у провайдера балансировка или несколько DPI. Засчитан худший.", "Repeated checks disagreed — the ISP balances traffic or runs several DPIs. The worst result is shown.")}</div>
+      {/if}
       {#if v.tabs.length}
         <div class="go">
           {#each v.tabs as [id, label] (id)}
@@ -151,6 +180,8 @@
             <span class="ip">{c.ip}</span>
             <span class="src faint">{srcText(c.source)}</span>
             <span class="chip {probeCls(c.result)}">{probeText(c.result)}{c.ms !== null ? ` · ${c.ms} ms` : ""}</span>
+            {#if c.stage}<span class="faint">{c.stage === "request" ? t("на запросе", "on request") : t("на ответе", "on reply")}</span>{/if}
+            {#if c.unstable}<span class="chip">{t("нестабильно", "unstable")}</span>{/if}
           </div>
         {/each}
       </section>
@@ -164,6 +195,17 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+  }
+  .facts {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 12.5px;
+  }
+  .facts li.good {
+    color: var(--green, #4ade80);
   }
   .block {
     padding: 12px 14px;

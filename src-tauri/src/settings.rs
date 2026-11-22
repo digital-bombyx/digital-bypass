@@ -29,6 +29,8 @@ pub struct Settings {
     pub window: Option<WindowGeom>,
     /// Telegram-прокси (MTProto → WebSocket).
     pub tg: crate::telegram::Config,
+    /// Включение по сети.
+    pub net: crate::netrules::NetRules,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -69,6 +71,7 @@ impl Default for Settings {
             dns_stub: None,
             window: None,
             tg: Default::default(),
+            net: Default::default(),
         }
     }
 }

@@ -3,6 +3,7 @@
   import { app, act, toast } from "$lib/state.svelte";
   import Switch from "./Switch.svelte";
   import Segmented from "./Segmented.svelte";
+  import NetRules from "./NetRules.svelte";
   import { t, i18n, type Lang } from "$lib/i18n.svelte";
   import { FolderOpen, Power } from "@lucide/svelte";
 
@@ -94,6 +95,8 @@
       {/if}
     </div>
   </section>
+
+  <NetRules />
 
   <section class="card blk">
     <div class="label">{t("тесты", "tests")}</div>
