@@ -15,6 +15,10 @@
     unit: "records",
     chunk: 4,
     disorder: true,
+    oob: false,
+    auto: true,
+    auto_chain: [],
+    auto_timeout: 4,
     ipv6: false,
     rules: { scope: "all", zapret_lists: true, bypass: [], skip: [], block: [] },
     doh: true,
@@ -63,6 +67,11 @@
     const r = await act(() => api.proxyStop(), t("Прокси выключен", "Proxy is off"));
     if (r) st = r;
   }
+  function variantName(v: ProxyConfig["auto_chain"][number]) {
+    const split = ({ sni: "SNI", "first-byte": t("первый байт", "first byte"), chunk: t("куски", "chunks"), random: t("случайно", "random"), none: t("без нарезки", "no split") } as Record<string, string>)[v.split];
+    return `${split} · ${v.unit === "tcp" ? "TCP" : "TLS"}${v.disorder ? " · disorder" : ""}${v.oob ? " · OOB" : ""}`;
+  }
+
   function saveRules() {
     change({ rules: { ...cfg.rules, bypass: fromLines(ruleText.bypass), skip: fromLines(ruleText.skip), block: fromLines(ruleText.block) } });
   }
@@ -116,6 +125,7 @@
         <span><b>{st.stats.failed}</b> {t("ошибок", "failed")}</span>
         <span title={t("с нарезкой / без / заблокировано", "split / passed / blocked")}><b>{st.stats.bypassed}</b>/<b>{st.stats.passed}</b>/<b>{st.stats.blocked}</b></span>
         {#if cfg.doh}<span title={t("доменов в кэше DNS", "domains in the DNS cache")}>dns <b>{st.stats.dns_cached}</b></span>{/if}
+        {#if cfg.auto}<span title={t("переподключений другим способом / сайтов со своим способом", "retries with another method / sites with their own method")}>auto <b>{st.stats.auto_retries}</b>/<b>{st.stats.auto_sites}</b></span>{/if}
         <button class="btn sm ghost addr" title={t("Скопировать адрес", "Copy address")} onclick={() => navigator.clipboard?.writeText(addr).then(() => toast(addr, "ok"))}>
           {addr} <Copy size={11} />
         </button>
@@ -183,7 +193,37 @@
         </div>
         <Switch checked={cfg.disorder} disabled={app.busy} onchange={(v) => change({ disorder: v })} />
       </div>
+      <div class="opt">
+        <div>
+          <div class="label">OOB</div>
+          <div class="hint faint mono">{t("к первой части — «срочный» байт: его видит DPI, но не сервер", "an urgent byte after the first part: DPI sees it, the server does not")}</div>
+        </div>
+        <Switch checked={cfg.oob} disabled={app.busy} onchange={(v) => change({ oob: v })} />
+      </div>
     {/if}
+    <div class="opt">
+      <div>
+        <div class="label">{t("автоматический режим", "auto mode")}</div>
+        <div class="hint faint mono">
+          {t("если сайт сбросил соединение или молчит — повторить запасными способами и запомнить рабочий", "if a site resets or stays silent — retry with fallback methods and remember the one that works")}
+        </div>
+        {#if cfg.auto}
+          <div class="chain mono">
+            {#each cfg.auto_chain as v, i (i)}
+              <span class="chip">{i + 1}. {variantName(v)}</span>
+            {:else}
+              <span class="faint">{t("запасных способов нет — запустите подбор", "no fallback methods — run the finder")}</span>
+            {/each}
+          </div>
+        {/if}
+      </div>
+      <div class="inline">
+        {#if cfg.auto}
+          <input class="input chunk" type="number" min="2" max="15" title={t("Сколько ждать ответа сервера, с", "How long to wait for the server, s")} bind:value={cfg.auto_timeout} onchange={() => change({ auto_timeout: Number(cfg.auto_timeout) })} disabled={app.busy} />
+        {/if}
+        <Switch checked={cfg.auto} disabled={app.busy} onchange={(v) => change({ auto: v })} />
+      </div>
+    </div>
     <div class="opt">
       <div>
         <div class="label">IPv6</div>
@@ -215,8 +255,8 @@
   </section>
 
   <ProxyTest
-    current={{ split: cfg.split, unit: cfg.unit, disorder: cfg.disorder }}
-    apply={(v) => change({ split: v.split, unit: v.unit, disorder: v.disorder })} />
+    current={{ split: cfg.split, unit: cfg.unit, disorder: cfg.disorder, oob: cfg.oob }}
+    apply={(v, chain) => change({ split: v.split, unit: v.unit, disorder: v.disorder, oob: v.oob, auto_chain: chain })} />
 
   <section class="card block">
     <div class="row">
@@ -375,6 +415,12 @@
   }
   .port {
     width: 96px;
+  }
+  .chain {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
   }
   .inline {
     display: flex;

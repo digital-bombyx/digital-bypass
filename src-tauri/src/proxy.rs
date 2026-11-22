@@ -40,6 +40,15 @@ pub struct Config {
     pub chunk: u16,
     /// Первая часть уходит с TTL=1 и доходит позже — поток не по порядку.
     pub disorder: bool,
+    /// Первая часть уходит со «срочным» (OOB) байтом: его видит DPI, но не сервер.
+    pub oob: bool,
+    /// Автоматический режим: при сбросе или молчании после ClientHello —
+    /// переподключиться со следующим способом из `auto_chain`; рабочий
+    /// способ запоминается для сайта.
+    pub auto: bool,
+    pub auto_chain: Vec<Variant>,
+    /// Сколько ждать первого ответа сервера, секунд.
+    pub auto_timeout: u16,
     /// Запрашивать и использовать IPv6-адреса сайтов.
     pub ipv6: bool,
     /// Какие домены обрабатывать.
@@ -66,6 +75,10 @@ impl Default for Config {
             unit: "records".into(),
             chunk: 4,
             disorder: true,
+            oob: false,
+            auto: true,
+            auto_chain: default_chain(),
+            auto_timeout: 4,
             ipv6: false,
             rules: Rules::default(),
             doh: true,
@@ -100,6 +113,51 @@ impl Default for Rules {
 
 pub const SPLITS: [&str; 5] = ["sni", "first-byte", "chunk", "random", "none"];
 
+/// Один способ нарезки — то, что перебирают подбор и автоматический режим.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(default)]
+pub struct Variant {
+    pub split: String,
+    pub unit: String,
+    pub disorder: bool,
+    pub oob: bool,
+}
+
+impl Default for Variant {
+    fn default() -> Self {
+        Variant { split: "sni".into(), unit: "records".into(), disorder: true, oob: false }
+    }
+}
+
+impl Variant {
+    pub fn new(split: &str, unit: &str, disorder: bool, oob: bool) -> Self {
+        Variant { split: split.into(), unit: unit.into(), disorder, oob }
+    }
+}
+
+/// Запасные способы по умолчанию — те, что чаще работают у российских провайдеров.
+pub fn default_chain() -> Vec<Variant> {
+    vec![
+        Variant::new("chunk", "records", true, false),
+        Variant::new("sni", "records", true, false),
+        Variant::new("chunk", "tcp", true, false),
+        Variant::new("sni", "records", false, true),
+    ]
+}
+
+/// Порядок попыток: способ, сохранённый для сайта, затем основной, затем запасные;
+/// без повторов, не больше `max`.
+pub fn attempt_order(primary: &Variant, cached: Option<&Variant>, chain: &[Variant], max: usize) -> Vec<Variant> {
+    let mut out: Vec<Variant> = Vec::new();
+    for v in cached.into_iter().chain(std::iter::once(primary)).chain(chain.iter()) {
+        if !out.contains(v) {
+            out.push(v.clone());
+        }
+    }
+    out.truncate(max);
+    out
+}
+
 impl Config {
     /// Перевести настройки прошлых версий и проверить значения.
     pub fn normalize(&mut self) {
@@ -114,6 +172,9 @@ impl Config {
         if self.unit != "tcp" {
             self.unit = "records".into();
         }
+        self.auto_timeout = self.auto_timeout.clamp(2, 15);
+        self.auto_chain.retain(|v| SPLITS.contains(&v.split.as_str()) && v.split != "none");
+        self.auto_chain.truncate(6);
         self.chunk = self.chunk.clamp(1, 1024);
         if self.rules.scope != "listed" {
             self.rules.scope = "all".into();
@@ -329,23 +390,54 @@ pub fn split_client_hello(data: &[u8]) -> Vec<Vec<u8>> {
     split_with(data, &SplitOpts::default())
 }
 
-fn send_parts(up: &mut TcpStream, parts: &[Vec<u8>], disorder: bool) -> std::io::Result<()> {
+/// Байт, который уходит «срочными» данными: стек сервера его отбрасывает
+/// (SO_OOBINLINE выключен), а DPI видит его внутри потока.
+pub const OOB_BYTE: u8 = b'a';
+
+/// Отправить часть с одним дополнительным OOB-байтом в конце (`send` с MSG_OOB).
+fn send_oob(up: &TcpStream, part: &[u8]) -> std::io::Result<()> {
+    use std::os::windows::io::AsRawSocket;
+    use windows_sys::Win32::Networking::WinSock::{send, MSG_OOB, SOCKET};
+    let mut buf = part.to_vec();
+    buf.push(OOB_BYTE);
+    let mut off = 0;
+    // Обычная часть может уйти не целиком — дописываем; MSG_OOB помечает последний байт.
+    while off < buf.len() {
+        let n = unsafe { send(up.as_raw_socket() as SOCKET, buf[off..].as_ptr(), (buf.len() - off) as i32, MSG_OOB) };
+        if n <= 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        off += n as usize;
+    }
+    Ok(())
+}
+
+fn send_parts(up: &mut TcpStream, parts: &[Vec<u8>], disorder: bool, oob: bool) -> std::io::Result<()> {
     up.set_nodelay(true)?;
     // Паузы нужны, чтобы части не склеились в один сегмент; при сотнях кусков — короче.
     let pause = Duration::from_micros(if parts.len() > 16 { 200 } else { 2000 });
     for (i, p) in parts.iter().enumerate() {
-        if i == 0 && disorder && parts.len() > 1 {
+        let first = i == 0 && parts.len() > 1;
+        if first && disorder {
             // TTL работает только для IPv4-сокета; для IPv6 — обычная нарезка.
             if let Ok(ttl) = up.ttl() {
                 if up.set_ttl(1).is_ok() {
-                    up.write_all(p)?;
+                    if oob {
+                        send_oob(up, p)?;
+                    } else {
+                        up.write_all(p)?;
+                    }
                     std::thread::sleep(Duration::from_millis(10));
                     up.set_ttl(ttl)?;
                     continue;
                 }
             }
         }
-        up.write_all(p)?;
+        if first && oob {
+            send_oob(up, p)?;
+        } else {
+            up.write_all(p)?;
+        }
         if i + 1 < parts.len() {
             std::thread::sleep(pause);
         }
@@ -603,6 +695,9 @@ pub struct Stats {
     /// Доменов в кэше DNS и в списке обхода.
     pub dns_cached: usize,
     pub bypass_domains: usize,
+    /// Автоматический режим: переподключений другим способом и сайтов в памяти.
+    pub auto_retries: u64,
+    pub auto_sites: usize,
     pub last_error: Option<String>,
 }
 
@@ -618,7 +713,13 @@ struct Shared {
     bypassed: AtomicU64,
     passed: AtomicU64,
     blocked: AtomicU64,
+    /// Сайт → способ, который сработал (если не основной), с отметкой времени.
+    auto_cache: Mutex<std::collections::HashMap<String, (Variant, std::time::Instant)>>,
+    auto_retries: AtomicU64,
 }
+
+/// Сколько помнить способ для сайта.
+const AUTO_CACHE_TTL: Duration = Duration::from_secs(6 * 3600);
 
 impl Shared {
     fn resolve(&self, host: &str, port: u16) -> Vec<SocketAddr> {
@@ -637,9 +738,79 @@ impl Shared {
         v
     }
 
-    fn split_opts(&self) -> SplitOpts {
+    fn primary(&self) -> Variant {
+        Variant::new(&self.cfg.split, &self.cfg.unit, self.cfg.disorder, self.cfg.oob)
+    }
+
+    fn send_variant(&self, up: &mut TcpStream, first: &[u8], v: &Variant) -> std::io::Result<()> {
+        if v.split == "none" {
+            return up.write_all(first);
+        }
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(7);
-        SplitOpts { split: self.cfg.split.clone(), records: self.cfg.unit != "tcp", chunk: self.cfg.chunk as usize, seed }
+        let o = SplitOpts { split: v.split.clone(), records: v.unit != "tcp", chunk: self.cfg.chunk as usize, seed };
+        send_parts(up, &split_with(first, &o), v.disorder, v.oob)
+    }
+
+    fn cached_variant(&self, host: &str) -> Option<Variant> {
+        let c = self.auto_cache.lock().unwrap();
+        c.get(host).filter(|(_, t)| t.elapsed() < AUTO_CACHE_TTL).map(|(v, _)| v.clone())
+    }
+
+    fn remember(&self, host: &str, v: &Variant) {
+        let mut c = self.auto_cache.lock().unwrap();
+        if *v == self.primary() {
+            c.remove(host);
+        } else {
+            if c.len() > 4096 {
+                c.clear();
+            }
+            c.insert(host.to_string(), (v.clone(), std::time::Instant::now()));
+        }
+    }
+
+    /// Автоматический режим: попытки разными способами, пока сервер не ответит
+    /// TLS-записью Handshake. Возвращает соединение и первые байты ответа.
+    fn auto_connect(&self, mut up: Option<TcpStream>, host: &str, port: u16, first: &[u8]) -> std::io::Result<(TcpStream, Vec<u8>)> {
+        let order = attempt_order(&self.primary(), self.cached_variant(host).as_ref(), &self.cfg.auto_chain, 4);
+        let wait = Duration::from_secs(self.cfg.auto_timeout as u64);
+        let mut last_reply: Option<(TcpStream, Vec<u8>)> = None;
+        let mut last_err = std::io::Error::new(std::io::ErrorKind::TimedOut, "no answer");
+        for (i, v) in order.iter().enumerate() {
+            if i > 0 {
+                self.auto_retries.fetch_add(1, Ordering::Relaxed);
+            }
+            let mut s = match up.take() {
+                Some(s) => s,
+                None => match self.connect(host, port) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        last_err = e;
+                        continue;
+                    }
+                },
+            };
+            if let Err(e) = self.send_variant(&mut s, first, v) {
+                last_err = e;
+                continue;
+            }
+            s.set_read_timeout(Some(wait))?;
+            let mut buf = vec![0u8; 16 * 1024];
+            match s.read(&mut buf) {
+                Ok(n) if n > 0 => {
+                    buf.truncate(n);
+                    if buf[0] == 0x16 {
+                        self.remember(host, v);
+                        return Ok((s, buf));
+                    }
+                    // Не ServerHello (например, alert) — пробуем дальше, но ответ сохраняем:
+                    // если ничего не выйдет, клиент получит его как есть.
+                    last_reply = Some((s, buf));
+                }
+                Ok(_) => last_err = std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "closed by server"),
+                Err(e) => last_err = e,
+            }
+        }
+        last_reply.ok_or(last_err)
     }
 
     fn count(&self, a: Action) {
@@ -660,7 +831,7 @@ impl Shared {
     }
 
     /// Туннель: первый пакет клиента (обычно ClientHello) режется, дальше — пересылка.
-    fn tunnel(&self, mut client: TcpStream, mut up: TcpStream, early: Vec<u8>, action: Action) -> std::io::Result<()> {
+    fn tunnel(&self, mut client: TcpStream, mut up: TcpStream, early: Vec<u8>, action: Action, host: &str, port: u16) -> std::io::Result<()> {
         if action == Action::Pass {
             up.write_all(&early)?;
             return relay(client, up);
@@ -674,8 +845,12 @@ impl Shared {
             }
             first.extend_from_slice(&tmp[..n]);
         }
-        let parts = if self.cfg.split == "none" { vec![first] } else { split_with(&first, &self.split_opts()) };
-        send_parts(&mut up, &parts, self.cfg.disorder)?;
+        if self.cfg.auto && find_sni(&first).is_some() {
+            let (up, reply) = self.auto_connect(Some(up), &host.to_ascii_lowercase(), port, &first)?;
+            client.write_all(&reply)?;
+            return relay(client, up);
+        }
+        self.send_variant(&mut up, &first, &self.primary())?;
         relay(client, up)
     }
 
@@ -709,7 +884,7 @@ impl Shared {
                 }
             };
             client.write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0])?;
-            return self.tunnel(client, up, Vec::new(), action);
+            return self.tunnel(client, up, Vec::new(), action, &host, port);
         }
         let (head, early) = read_head(&mut client)?;
         if let Some((user, pass)) = creds {
@@ -737,7 +912,7 @@ impl Shared {
                     }
                 };
                 client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")?;
-                self.tunnel(client, up, early, action)
+                self.tunnel(client, up, early, action, &host, port)
             }
             Request::Http { host, port, head } => {
                 if self.matcher.action(&host) == Action::Block {
@@ -760,11 +935,16 @@ impl Shared {
 /// так один «мёртвый» адрес не задерживает соединение на весь таймаут.
 pub fn connect_race(addrs: &[SocketAddr], timeout: Duration) -> std::io::Result<TcpStream> {
     let (tx, rx) = std::sync::mpsc::channel();
+    let won = Arc::new(AtomicBool::new(false));
     let n = addrs.len().min(6);
     for (i, a) in addrs.iter().take(n).enumerate() {
-        let (tx, a) = (tx.clone(), *a);
+        let (tx, a, won) = (tx.clone(), *a, won.clone());
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(250 * i as u64));
+            // Победитель уже есть — лишнее соединение не открываем.
+            if won.load(Ordering::SeqCst) {
+                return;
+            }
             let _ = tx.send(TcpStream::connect_timeout(&a, timeout));
         });
     }
@@ -772,7 +952,10 @@ pub fn connect_race(addrs: &[SocketAddr], timeout: Duration) -> std::io::Result<
     let mut last = std::io::Error::new(std::io::ErrorKind::TimedOut, "connection timed out");
     for r in rx {
         match r {
-            Ok(s) => return Ok(s),
+            Ok(s) => {
+                won.store(true, Ordering::SeqCst);
+                return Ok(s);
+            }
             Err(e) => last = e,
         }
     }
@@ -818,6 +1001,8 @@ impl Proxy {
             bypassed: AtomicU64::new(0),
             passed: AtomicU64::new(0),
             blocked: AtomicU64::new(0),
+            auto_cache: Mutex::new(std::collections::HashMap::new()),
+            auto_retries: AtomicU64::new(0),
             cfg,
             stop: AtomicBool::new(false),
             active: AtomicU64::new(0),
@@ -870,6 +1055,8 @@ impl Proxy {
             blocked: self.shared.blocked.load(Ordering::Relaxed),
             dns_cached: self.shared.resolver.as_ref().map(|r| r.len()).unwrap_or(0),
             bypass_domains: self.shared.matcher.bypass.len(),
+            auto_retries: self.shared.auto_retries.load(Ordering::Relaxed),
+            auto_sites: self.shared.auto_cache.lock().unwrap().len(),
             last_error: self.shared.last_error.lock().unwrap().clone(),
         }
     }
@@ -1136,6 +1323,97 @@ mod tests {
         assert_eq!(parse_socks_addr(&[9, 0]), None);
     }
 
+    #[test]
+    fn auto_order() {
+        let p = Variant::new("sni", "records", true, false);
+        let chain = default_chain();
+        let o = attempt_order(&p, None, &chain, 4);
+        assert_eq!(o[0], p);
+        assert_eq!(o.len(), 4);
+        assert_eq!(o.iter().filter(|v| **v == p).count(), 1, "без повторов");
+        let cached = Variant::new("chunk", "tcp", true, false);
+        let o = attempt_order(&p, Some(&cached), &chain, 4);
+        assert_eq!((o[0].clone(), o[1].clone()), (cached, p));
+        // Старые настройки без новых полей: автоматический режим включён, цепочка по умолчанию.
+        let mut c: Config = serde_json::from_str(r#"{"port":9000,"split":"chunk"}"#).unwrap();
+        c.normalize();
+        assert!(c.auto && !c.oob && c.auto_chain == default_chain());
+    }
+
+    /// OOB-байт не доходит до приложения на сервере: оно получает исходные данные.
+    #[test]
+    fn oob_byte_is_stripped() {
+        let server = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = server.local_addr().unwrap();
+        let h = hello("discord.com");
+        let expect = h.clone();
+        let srv = std::thread::spawn(move || {
+            let (mut s, _) = server.accept().unwrap();
+            s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+            let mut got = vec![0u8; expect.len()];
+            s.read_exact(&mut got).unwrap();
+            assert_eq!(got, expect);
+        });
+        let mut up = TcpStream::connect(addr).unwrap();
+        // TCP-сегменты одной записи: без OOB-байта склейка равна исходному.
+        let parts = split_with(&h, &SplitOpts { records: false, ..Default::default() });
+        send_parts(&mut up, &parts, false, true).unwrap();
+        srv.join().unwrap();
+    }
+
+    /// Автоматический режим: сервер сбрасывает первое соединение — прокси
+    /// переподключается другим способом и запоминает его для сайта.
+    #[test]
+    fn auto_retries_and_remembers() {
+        let server = TcpListener::bind("127.0.0.1:0").unwrap();
+        let sport = server.local_addr().unwrap().port();
+        let accepted = Arc::new(AtomicU64::new(0));
+        let acc = accepted.clone();
+        std::thread::spawn(move || {
+            for s in server.incoming() {
+                let mut s = s.unwrap();
+                let n = acc.fetch_add(1, Ordering::SeqCst);
+                std::thread::spawn(move || {
+                    let mut b = [0u8; 4096];
+                    let _ = s.read(&mut b);
+                    if n == 0 {
+                        return; // первое соединение — молча закрыть (как DPI)
+                    }
+                    let _ = s.write_all(&[0x16, 3, 3, 0, 1, 0]);
+                    // Дочитать до конца: закрытие с непрочитанными данными на Windows
+                    // шлёт RST, и клиент теряет уже пришедший ответ.
+                    let _ = s.set_read_timeout(Some(Duration::from_secs(3)));
+                    while matches!(s.read(&mut b), Ok(n) if n > 0) {}
+                });
+            }
+        });
+        let probe = TcpListener::bind("127.0.0.1:0").unwrap();
+        let pport = probe.local_addr().unwrap().port();
+        drop(probe);
+        let cfg = Config { port: pport, doh: false, system: false, auto_timeout: 2, ..Default::default() };
+        let proxy = Proxy::start(cfg, &[]).unwrap();
+        let fetch = || {
+            let mut c = TcpStream::connect(("127.0.0.1", pport)).unwrap();
+            c.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+            write!(c, "CONNECT localhost:{sport} HTTP/1.1\r\n\r\n").unwrap();
+            let mut resp = [0u8; 39];
+            c.read_exact(&mut resp).unwrap();
+            c.write_all(&hello("localhost.example")).unwrap();
+            let mut r = [0u8; 6];
+            if let Err(e) = c.read_exact(&mut r) {
+                panic!("read: {e}; accepted={}", accepted.load(Ordering::SeqCst));
+            }
+            assert_eq!(r[0], 0x16);
+        };
+        fetch();
+        assert_eq!(accepted.load(Ordering::SeqCst), 2, "второй способ после сброса");
+        assert_eq!(proxy.stats().auto_retries, 1);
+        assert_eq!(proxy.stats().auto_sites, 1);
+        fetch();
+        assert_eq!(accepted.load(Ordering::SeqCst), 3, "сразу запомненный способ");
+        assert_eq!(proxy.stats().auto_retries, 1);
+    }
+
     /// Первый живой адрес выигрывает, даже если перед ним «мёртвый».
     #[test]
     fn race_picks_working_address() {
@@ -1342,6 +1620,30 @@ mod tests {
                 .unwrap();
             println!("{method}: {} (exit {:?}) {:?}", String::from_utf8_lossy(&out.stdout), out.status.code(), _p.stats().last_error);
         }
+    }
+
+    /// Сеть: автоматический режим с заведомо нерабочим основным способом
+    /// («без нарезки»): сайты должны открыться запасными, повтор — из памяти.
+    #[test]
+    #[ignore]
+    fn live_auto() {
+        let probe = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = probe.local_addr().unwrap().port();
+        drop(probe);
+        let cfg = Config { port, split: "none".into(), disorder: false, system: false, ..Default::default() };
+        let p = Proxy::start(cfg, &[]).unwrap();
+        for round in 1..=2 {
+            for host in ["www.youtube.com", "x.com", "discord.com", "www.instagram.com"] {
+                let out = std::process::Command::new(crate::util::system32("curl.exe"))
+                    .args(["-s", "-o", "NUL", "-w", "%{http_code} %{time_total}", "--max-time", "25"])
+                    .args(["-x", &format!("http://127.0.0.1:{port}"), &format!("https://{host}/")])
+                    .output()
+                    .unwrap();
+                println!("round {round} {host:<20} {}", String::from_utf8_lossy(&out.stdout));
+            }
+        }
+        let s = p.stats();
+        println!("auto_retries {} auto_sites {}", s.auto_retries, s.auto_sites);
     }
 
     /// Сквозной тест на loopback: «сервер» получает три TLS-записи, склейка

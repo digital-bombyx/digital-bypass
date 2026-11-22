@@ -147,6 +147,10 @@ export type ProxyConfig = {
   unit: "records" | "tcp";
   chunk: number;
   disorder: boolean;
+  oob: boolean;
+  auto: boolean;
+  auto_chain: ProxyVariant[];
+  auto_timeout: number;
   ipv6: boolean;
   rules: ProxyRules;
   doh: boolean;
@@ -158,10 +162,10 @@ export type ProxyConfig = {
 export type ProxyStatus = {
   config: ProxyConfig;
   enabled: boolean;
-  stats: { running: boolean; port: number; active: number; total: number; failed: number; system: boolean; lan: boolean; auth: boolean; bypassed: number; passed: number; blocked: number; dns_cached: number; bypass_domains: number; last_error: string | null };
+  stats: { running: boolean; port: number; active: number; total: number; failed: number; system: boolean; lan: boolean; auth: boolean; bypassed: number; passed: number; blocked: number; dns_cached: number; bypass_domains: number; auto_retries: number; auto_sites: number; last_error: string | null };
 };
 
-export type ProxyVariant = { split: ProxyConfig["split"]; unit: ProxyConfig["unit"]; disorder: boolean };
+export type ProxyVariant = { split: ProxyConfig["split"]; unit: ProxyConfig["unit"]; disorder: boolean; oob: boolean };
 export type ProxyVariantResult = {
   variant: ProxyVariant;
   ok: number;

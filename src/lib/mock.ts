@@ -80,12 +80,19 @@ const dns: any = {
 const stub: any = { running: false, config: null, stats: null };
 const proxy: any = {
   config: {
-    port: 8881, split: "sni", unit: "records", chunk: 4, disorder: true, ipv6: false,
+    port: 8881, split: "sni", unit: "records", chunk: 4, disorder: true, oob: false, ipv6: false,
+    auto: true, auto_timeout: 4,
+    auto_chain: [
+      { split: "chunk", unit: "records", disorder: true, oob: false },
+      { split: "sni", unit: "records", disorder: true, oob: false },
+      { split: "chunk", unit: "tcp", disorder: true, oob: false },
+      { split: "sni", unit: "records", disorder: false, oob: true },
+    ],
     rules: { scope: "all", zapret_lists: true, bypass: [], skip: ["sberbank.ru"], block: [] },
     doh: true, system: true, lan: false, user: "", pass: "",
   },
   enabled: false,
-  stats: { running: false, port: 8881, active: 0, total: 0, failed: 0, system: false, lan: false, auth: false, bypassed: 0, passed: 0, blocked: 0, dns_cached: 0, bypass_domains: 0, last_error: null },
+  stats: { running: false, port: 8881, active: 0, total: 0, failed: 0, system: false, lan: false, auth: false, bypassed: 0, passed: 0, blocked: 0, dns_cached: 0, bypass_domains: 0, auto_retries: 0, auto_sites: 0, last_error: null },
 };
 const listPresets = [
   { id: "telegram", name: "Telegram", domains: ["telegram.org", "t.me", "telegram.me"], builtin: 0 },
@@ -191,21 +198,21 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
     case "proxy_start":
       proxy.config = args.config;
       proxy.enabled = true;
-      proxy.stats = { running: true, port: args.config.port, active: 3, total: 41, failed: 1, system: args.config.system, lan: args.config.lan, auth: !!args.config.user, bypassed: 30, passed: 9, blocked: 2, dns_cached: 17, bypass_domains: 1840, last_error: null };
+      proxy.stats = { running: true, port: args.config.port, active: 3, total: 41, failed: 1, system: args.config.system, lan: args.config.lan, auth: !!args.config.user, bypassed: 30, passed: 9, blocked: 2, dns_cached: 17, bypass_domains: 1840, auto_retries: 3, auto_sites: 2, last_error: null };
       return structuredClone(proxy);
     case "proxy_test_targets":
       return ["www.youtube.com", "x.com", "discord.com", "www.instagram.com"];
     case "proxy_test": {
       await new Promise((r) => setTimeout(r, 900));
       const hosts = ["www.youtube.com", "x.com", "discord.com", "www.instagram.com"];
-      const mk = (split: string, unit: string, disorder: boolean, ok: number, ms: number | null) => ({
-        variant: { split, unit, disorder },
+      const mk = (split: string, unit: string, disorder: boolean, ok: number, ms: number | null, oob = false) => ({
+        variant: { split, unit, disorder, oob },
         ok,
         total: 4,
         avg_ms: ms,
         targets: hosts.map((h, i) => ({ host: h, ok: i < ok, code: i < ok ? 200 : null, ms: i < ok ? ms : null, error: i < ok ? null : "tls reset" })),
       });
-      const results = [mk("none", "records", false, 0, null), mk("sni", "records", true, 2, 1360), mk("chunk", "records", true, 4, 1566), mk("chunk", "tcp", true, 3, 1264), mk("random", "tcp", true, 1, 857)];
+      const results = [mk("none", "records", false, 0, null), mk("sni", "records", true, 2, 1360), mk("chunk", "records", true, 4, 1566), mk("chunk", "tcp", true, 3, 1264), mk("random", "tcp", true, 1, 857), mk("sni", "tcp", false, 3, 1039, true)];
       return { results, best: results[2].variant, cancelled: false };
     }
     case "proxy_test_cancel":

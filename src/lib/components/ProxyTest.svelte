@@ -5,7 +5,7 @@
   import { t } from "$lib/i18n.svelte";
   import { FlaskConical, Loader, Square, Check } from "@lucide/svelte";
 
-  let { current, apply }: { current: ProxyVariant; apply: (v: ProxyVariant) => void } = $props();
+  let { current, apply }: { current: ProxyVariant; apply: (v: ProxyVariant, chain: ProxyVariant[]) => void } = $props();
 
   let targets = $state("");
   let timeout = $state(8);
@@ -43,12 +43,18 @@
     }
   }
 
-  const same = (a: ProxyVariant | null, b: ProxyVariant) => !!a && a.split === b.split && a.unit === b.unit && a.disorder === b.disorder;
+  const same = (a: ProxyVariant | null, b: ProxyVariant) =>
+    !!a && a.split === b.split && a.unit === b.unit && a.disorder === b.disorder && a.oob === b.oob;
   const name = (v: ProxyVariant) => {
     const split = ({ sni: "SNI", "first-byte": t("первый байт", "first byte"), chunk: t("куски", "chunks"), random: t("случайно", "random"), none: t("без нарезки", "no split") } as Record<string, string>)[v.split];
     if (v.split === "none") return split;
-    return `${split} · ${v.unit === "tcp" ? "TCP" : "TLS"}${v.disorder ? " · disorder" : ""}`;
+    return `${split} · ${v.unit === "tcp" ? "TCP" : "TLS"}${v.disorder ? " · disorder" : ""}${v.oob ? " · OOB" : ""}`;
   };
+  /** Выбранный способ — основной, следующие рабочие (до 4) — запасные для автоматического режима. */
+  function pick(v: ProxyVariant) {
+    const chain = sorted.filter((r) => r.ok > 0 && r.variant.split !== "none" && !same(v, r.variant)).slice(0, 4).map((r) => r.variant);
+    apply(v, chain);
+  }
   // Сначала лучшие: больше открытых, затем быстрее.
   const sorted = $derived(
     [...results].sort((a, b) => b.ok - a.ok || (a.avg_ms ?? 1e9) - (b.avg_ms ?? 1e9)),
@@ -96,7 +102,7 @@
           {#if same(current, r.variant)}
             <span class="chip sage"><Check size={10} /> {t("сейчас", "current")}</span>
           {:else if r.ok > 0 && !running}
-            <button class="btn sm" class:primary={same(best, r.variant)} onclick={() => apply(r.variant)}>{t("Применить", "Apply")}</button>
+            <button class="btn sm" class:primary={same(best, r.variant)} onclick={() => pick(r.variant)}>{t("Применить", "Apply")}</button>
           {:else}
             <span></span>
           {/if}
@@ -160,7 +166,7 @@
   }
   .it {
     display: grid;
-    grid-template-columns: minmax(180px, 1fr) auto 48px 70px 104px;
+    grid-template-columns: minmax(220px, 1fr) auto 48px 70px 104px;
     gap: 12px;
     align-items: center;
     font-size: 11.5px;

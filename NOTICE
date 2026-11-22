@@ -50,6 +50,9 @@ Rust and JavaScript dependencies (Tauri, rustls, Svelte and others) are used
 under their own licenses (MIT, Apache-2.0, ISC and similar), all compatible
 with GPL-3.0.
 
+The proxy auto mode and OOB technique are inspired by ByeDPI by hufrea (MIT),
+https://github.com/hufrea/byedpi; the code is original.
+
 The SNI scanner idea comes from sni-spoofing-rust by therealaleph (MIT),
 https://github.com/therealaleph/sni-spoofing-rust; the code is original.
 

@@ -5,6 +5,7 @@
 //! выбранные сайты. Системный прокси и рабочий прокси не трогаются. Лучший
 //! вариант — больше всего открытых сайтов, при равенстве — быстрее.
 
+pub use crate::proxy::Variant;
 use crate::proxy::{Config, Proxy};
 use serde::Serialize;
 use std::net::TcpListener;
@@ -14,14 +15,7 @@ use std::time::Instant;
 
 /// Сайты по умолчанию: заблокированные по DPI у большинства провайдеров.
 pub const DEFAULT_TARGETS: &[&str] = &["www.youtube.com", "x.com", "discord.com", "www.instagram.com"];
-const PARALLEL_VARIANTS: usize = 4;
-
-#[derive(Debug, Clone, Serialize, PartialEq)]
-pub struct Variant {
-    pub split: String,
-    pub unit: String,
-    pub disorder: bool,
-}
+const PARALLEL_VARIANTS: usize = 6;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TargetResult {
@@ -50,13 +44,14 @@ pub struct Progress {
     pub result: VariantResult,
 }
 
-/// Все варианты: сначала «без нарезки» для сравнения.
+/// Все варианты: сначала «без нарезки» для сравнения; дальше место разреза ×
+/// единица × (обычно, disorder, OOB, disorder+OOB).
 pub fn variants() -> Vec<Variant> {
-    let mut v = vec![Variant { split: "none".into(), unit: "records".into(), disorder: false }];
+    let mut v = vec![Variant::new("none", "records", false, false)];
     for split in ["sni", "first-byte", "chunk", "random"] {
         for unit in ["records", "tcp"] {
-            for disorder in [true, false] {
-                v.push(Variant { split: split.into(), unit: unit.into(), disorder });
+            for (disorder, oob) in [(true, false), (false, false), (false, true), (true, true)] {
+                v.push(Variant::new(split, unit, disorder, oob));
             }
         }
     }
@@ -141,6 +136,9 @@ fn run_variant(base: &Config, v: &Variant, targets: &[String], timeout: u64) -> 
     cfg.split = v.split.clone();
     cfg.unit = v.unit.clone();
     cfg.disorder = v.disorder;
+    cfg.oob = v.oob;
+    // Проверяется ровно этот способ — без автоматических переключений.
+    cfg.auto = false;
     cfg.system = false;
     cfg.lan = false;
     cfg.user.clear();
@@ -209,15 +207,16 @@ mod tests {
     use super::*;
 
     fn vr(split: &str, ok: usize, ms: Option<u64>) -> VariantResult {
-        VariantResult { variant: Variant { split: split.into(), unit: "records".into(), disorder: true }, ok, total: 4, avg_ms: ms, targets: vec![] }
+        VariantResult { variant: Variant::new(split, "records", true, false), ok, total: 4, avg_ms: ms, targets: vec![] }
     }
 
     #[test]
     fn variant_list() {
         let v = variants();
-        assert_eq!(v.len(), 17);
+        assert_eq!(v.len(), 33);
         assert_eq!(v[0].split, "none");
-        assert_eq!(v.iter().filter(|x| x.disorder).count(), 8);
+        assert_eq!(v.iter().filter(|x| x.disorder).count(), 16);
+        assert_eq!(v.iter().filter(|x| x.oob).count(), 16);
     }
 
     #[test]
@@ -250,7 +249,7 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let res = run(&Config::default(), &targets, 8, &cancel, |p| {
             let r = &p.result;
-            println!("{:>2}/{} {}/{}{} ok {}/{} avg {:?}", p.done, p.total, r.variant.split, r.variant.unit, if r.variant.disorder { "+disorder" } else { "" }, r.ok, r.total, r.avg_ms);
+            println!("{:>2}/{} {}/{}{}{} ok {}/{} avg {:?}", p.done, p.total, r.variant.split, r.variant.unit, if r.variant.disorder { "+disorder" } else { "" }, if r.variant.oob { "+oob" } else { "" }, r.ok, r.total, r.avg_ms);
         });
         println!("best: {:?}", best(&res).map(|b| &b.variant));
     }
