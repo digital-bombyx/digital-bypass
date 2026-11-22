@@ -12,17 +12,16 @@
   import Dns from "$lib/components/Dns.svelte";
   import Proxy from "$lib/components/Proxy.svelte";
   import Diag from "$lib/components/Diag.svelte";
-  import { Power, FlaskConical, ListChecks, Globe, Network, Settings2, ShieldAlert, Waypoints, Stethoscope } from "@lucide/svelte";
+  import { Power, ListChecks, Globe, Network, Settings2, ShieldAlert, Waypoints, Stethoscope } from "@lucide/svelte";
 
-  type Tab = "home" | "tests" | "lists" | "hosts" | "dns" | "proxy" | "diag" | "settings";
+  type Tab = "home" | "lists" | "hosts" | "dns" | "proxy" | "diag" | "settings";
   let tab = $state<Tab>("home");
   let dirInput = $state("");
   /** Вкладки, которым нужна папка zapret; DNS и настройки работают без неё. */
-  const needsZapret: Tab[] = ["home", "tests", "lists", "hosts"];
+  const needsZapret: Tab[] = ["home", "lists", "hosts"];
 
   const tabs: { id: Tab; label: () => string; icon: typeof Power; group?: () => string }[] = [
     { id: "home", label: () => "Zapret2", icon: Power, group: () => "zapret2" },
-    { id: "tests", label: () => t("Тесты", "Tests"), icon: FlaskConical },
     { id: "lists", label: () => t("Списки", "Lists"), icon: ListChecks },
     { id: "dns", label: () => "DNS", icon: Network, group: () => t("сеть", "network") },
     { id: "hosts", label: () => "Hosts", icon: Globe },
@@ -32,7 +31,6 @@
   ];
   const paths: Record<Tab, string> = {
     home: "zapret2",
-    tests: "zapret2/tests",
     lists: "zapret2/lists",
     hosts: "hosts",
     dns: "dns",
@@ -96,8 +94,7 @@
           <button class="btn primary" disabled={!dirInput.trim()} onclick={() => act(() => api.setZapretDir(dirInput))}
             >{t("Сохранить", "Save")}</button>
         </section>
-      {:else if tab === "home"}<Home />
-      {:else if tab === "tests"}<Tests />
+      {:else if tab === "home"}<div class="stack"><Home /><Tests /></div>
       {:else if tab === "lists"}<Lists />
       {:else if tab === "hosts"}<Hosts />
       {:else if tab === "dns"}<Dns />
@@ -247,6 +244,12 @@
     .page {
       padding: 12px 14px 16px;
     }
+  }
+  /* Вкладка zapret2: управление и подбор стратегии одной колонкой. */
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
   .setup {
     padding: 16px;

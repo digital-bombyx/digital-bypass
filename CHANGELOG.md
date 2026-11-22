@@ -23,6 +23,7 @@
 - **Лицензия GPL-3.0** с дополнительными условиями (NOTICE): сохранение авторства и пометка изменённых версий. Zapret2-RustGUI остаётся под MIT.
 - **Прокси, способы нарезки** (по мотивам SpoofDPI): по SNI, первый байт, куски, случайная точка; TLS-записи или TCP-сегменты; disorder отдельным переключателем. Правила по доменам: «только списки» (включая списки zapret2), «не резать», «блокировать». DoH с кэшем и параллельным опросом серверов, подключение сразу к нескольким адресам сайта, режим только IPv4.
 - **Подбор способа для прокси**: 17 вариантов нарезки на временных прокси, сайты на выбор, лучший — одной кнопкой.
+- Подбор стратегии zapret2 перенесён на вкладку zapret2, отдельной вкладки «Тесты» больше нет.
 
 ### What's new
 
@@ -41,5 +42,6 @@
 - **GPL-3.0 license** with additional terms (NOTICE): author attribution and marking of modified versions. Zapret2-RustGUI stays under MIT.
 - **Proxy split methods** (inspired by SpoofDPI): at SNI, first byte, chunks, random point; TLS records or TCP segments; disorder as a separate switch. Per-domain rules: listed only (including the zapret2 lists), do not split, block. Cached DoH with parallel servers, racing connections to several site addresses, IPv4-only mode.
 - **Proxy method finder**: 17 split variants on temporary proxies, sites of your choice, the best applied in one click.
+- The zapret2 strategy test moved to the zapret2 tab; the separate Tests tab is gone.
 
 [Unreleased]: https://github.com/digital-bombyx/digital-bypass/commits/main

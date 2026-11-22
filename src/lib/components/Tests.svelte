@@ -4,7 +4,7 @@
   import { app, act, toast, refresh } from "$lib/state.svelte";
   import Segmented from "./Segmented.svelte";
   import { t, locale } from "$lib/i18n.svelte";
-  import { Play, Square, Trophy, History, ChevronRight } from "@lucide/svelte";
+  import { Play, Square, Trophy, History, ChevronRight, FlaskConical } from "@lucide/svelte";
 
   const ov = $derived(app.ov!);
   let kind = $state<"standard" | "dpi">("standard");
@@ -75,6 +75,7 @@
 
 <div class="tests fade-in">
   <section class="card ctl">
+    <div class="label"><FlaskConical size={11} /> {t("подбор стратегии", "find the best strategy")}</div>
     <div class="row">
       <Segmented
         value={kind}
@@ -220,6 +221,11 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+  }
+  .ctl > .label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
   .ctl {
     padding: 12px 14px;
