@@ -217,7 +217,11 @@
     <div class="row">
       <div>
         <div class="label"><ListFilter size={11} /> {t("правила", "rules")}</div>
-        <div class="hint faint mono">{t("домен совпадает и со всеми поддоменами", "a domain also matches all its subdomains")}</div>
+        <div class="hint faint mono">
+          {cfg.rules.scope === "all"
+            ? t("режется любой сайт, кроме списка «не резать»", "every site is split except the \"do not split\" list")
+            : t("режутся только домены из списков; остальные идут без нарезки", "only listed domains are split; others pass without splitting")}
+        </div>
       </div>
       <Segmented
         small
@@ -229,11 +233,14 @@
           { value: "listed", label: t("Только списки", "Listed only") },
         ]} />
     </div>
-    <label class="check mono">
-      <input type="checkbox" checked={cfg.rules.zapret_lists} disabled={app.busy} onchange={(e) => change({ rules: { ...cfg.rules, zapret_lists: e.currentTarget.checked } })} />
-      {t("обходить и домены из списков zapret2", "also bypass domains from the zapret2 lists")}
-      {#if running && st}<span class="faint">· {st.stats.bypass_domains}</span>{/if}
-    </label>
+    {#if cfg.rules.scope === "listed"}
+      <label class="check mono">
+        <input type="checkbox" checked={cfg.rules.zapret_lists} disabled={app.busy} onchange={(e) => change({ rules: { ...cfg.rules, zapret_lists: e.currentTarget.checked } })} />
+        {t("добавить домены из списков zapret2", "include domains from the zapret2 lists")}
+        {#if running && st}<span class="faint">· {st.stats.bypass_domains}</span>{/if}
+      </label>
+    {/if}
+    <div class="hint faint mono">{t("Домен в правиле совпадает и со всеми поддоменами.", "A domain in a rule also matches all its subdomains.")}</div>
     <div class="rules">
       {#if cfg.rules.scope === "listed"}
         <label class="field">
