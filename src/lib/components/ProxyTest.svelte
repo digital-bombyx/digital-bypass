@@ -46,7 +46,7 @@
   const same = (a: ProxyVariant | null, b: ProxyVariant) =>
     !!a && a.split === b.split && a.unit === b.unit && a.disorder === b.disorder && a.oob === b.oob;
   const name = (v: ProxyVariant) => {
-    const split = ({ sni: "SNI", "first-byte": t("первый байт", "first byte"), chunk: t("куски", "chunks"), random: t("случайно", "random"), none: t("без нарезки", "no split") } as Record<string, string>)[v.split];
+    const split = ({ sni: "SNI", "first-byte": t("первый байт", "first byte"), chunk: t("куски", "chunks"), random: t("случайно", "random"), custom: t("свои позиции", "custom positions"), none: t("без нарезки", "no split") } as Record<string, string>)[v.split];
     if (v.split === "none") return split;
     return `${split} · ${v.unit === "tcp" ? "TCP" : "TLS"}${v.disorder ? " · disorder" : ""}${v.oob ? " · OOB" : ""}`;
   };
@@ -134,7 +134,7 @@
     gap: 6px;
   }
   .hint {
-    font-size: 10.5px;
+    font-size: 11px;
     margin-top: 3px;
   }
   .inputs {
@@ -148,7 +148,7 @@
     gap: 4px;
   }
   .k {
-    font-size: 10.5px;
+    font-size: 11px;
     color: var(--faint);
   }
   .progress {
@@ -169,7 +169,7 @@
     grid-template-columns: minmax(220px, 1fr) auto 48px 70px 104px;
     gap: 12px;
     align-items: center;
-    font-size: 11.5px;
+    font-size: 12px;
     padding: 5px 6px;
     border-bottom: 1px solid var(--border-soft);
   }

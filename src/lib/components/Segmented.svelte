@@ -36,7 +36,7 @@
     background: transparent;
     color: var(--muted);
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
     cursor: pointer;
     transition: background 0.18s, color 0.18s, box-shadow 0.18s;
     white-space: nowrap;
@@ -50,7 +50,7 @@
   }
   .small button {
     height: 22px;
-    font-size: 10.5px;
+    font-size: 11px;
     padding: 0 8px;
   }
   .disabled {

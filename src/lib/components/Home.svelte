@@ -189,7 +189,7 @@
   }
   .prompt {
     align-self: flex-start;
-    font-size: 11.5px;
+    font-size: 12px;
     color: var(--muted);
   }
   .power {
@@ -256,7 +256,7 @@
     border-color: var(--accent);
   }
   .state-line {
-    font-size: 11.5px;
+    font-size: 12px;
     height: 16px;
   }
   .state-line .on {
@@ -270,7 +270,7 @@
     text-align: center;
   }
   .methods {
-    font-size: 11px;
+    font-size: 11.5px;
     color: var(--muted);
     max-width: 100%;
     overflow: hidden;
@@ -294,7 +294,7 @@
   }
   .err-text {
     white-space: pre-wrap;
-    font-size: 11px;
+    font-size: 11.5px;
     color: var(--danger-text);
     max-height: 90px;
     overflow: auto;
@@ -303,7 +303,7 @@
   .log {
     margin: 0;
     padding: 10px 12px;
-    font-size: 10.5px;
+    font-size: 11px;
     max-height: 160px;
     overflow: auto;
     white-space: pre-wrap;
@@ -334,7 +334,7 @@
     white-space: nowrap;
   }
   .current .count {
-    font-size: 11px;
+    font-size: 11.5px;
   }
   .current :global(.chev) {
     color: var(--muted);
@@ -407,7 +407,7 @@
     border-top: 1px solid var(--border-soft);
   }
   .hint {
-    font-size: 10.5px;
+    font-size: 11px;
     margin-top: 3px;
   }
 </style>

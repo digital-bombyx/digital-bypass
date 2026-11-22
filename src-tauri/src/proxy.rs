@@ -38,6 +38,8 @@ pub struct Config {
     pub unit: String,
     /// Размер куска для `chunk`, байт.
     pub chunk: u16,
+    /// Свои позиции разреза для `custom` в синтаксисе ByeDPI, например `0+sm 1:3:5 -10`.
+    pub positions: String,
     /// Первая часть уходит с TTL=1 и доходит позже — поток не по порядку.
     pub disorder: bool,
     /// Первая часть уходит со «срочным» (OOB) байтом: его видит DPI, но не сервер.
@@ -74,6 +76,7 @@ impl Default for Config {
             split: "sni".into(),
             unit: "records".into(),
             chunk: 4,
+            positions: String::new(),
             disorder: true,
             oob: false,
             auto: true,
@@ -111,7 +114,92 @@ impl Default for Rules {
     }
 }
 
-pub const SPLITS: [&str; 5] = ["sni", "first-byte", "chunk", "random", "none"];
+pub const SPLITS: [&str; 6] = ["sni", "first-byte", "chunk", "random", "custom", "none"];
+
+// ---------- свои позиции разреза (синтаксис ByeDPI) ----------
+
+/// Одна позиция: `offset[:repeats[:skip]][+flags]`.
+/// Флаги: `s` — от начала имени сайта (SNI), `e` — от конца имени, `m` — от
+/// середины имени, `n` — от начала пакета. Отрицательное смещение без флагов
+/// считается от конца пакета.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Pos {
+    pub offset: i64,
+    pub repeats: u32,
+    pub skip: i64,
+    /// None — от начала (или конца для отрицательных); Some('s'|'e'|'m') — от имени сайта.
+    pub sni: Option<char>,
+    pub zero: bool,
+}
+
+pub fn parse_positions(text: &str) -> Result<Vec<Pos>, String> {
+    let mut out = Vec::new();
+    for tok in text.split(|c: char| c.is_whitespace() || c == ',' || c == ';').filter(|t| !t.is_empty()) {
+        let bad = || crate::tr!("позиция «{tok}» не разобрана: нужно offset[:повторы:шаг][+флаги]", "cannot parse position \"{tok}\": expected offset[:repeats:skip][+flags]");
+        let (num, flags) = tok.split_once('+').unwrap_or((tok, ""));
+        let mut parts = num.split(':');
+        let offset: i64 = parts.next().filter(|s| !s.is_empty()).ok_or_else(bad)?.parse().map_err(|_| bad())?;
+        let repeats: u32 = match parts.next() {
+            Some(r) => r.parse().map_err(|_| bad())?,
+            None => 1,
+        };
+        let skip: i64 = match parts.next() {
+            Some(k) => k.parse().map_err(|_| bad())?,
+            None => 1,
+        };
+        if parts.next().is_some() || repeats == 0 || repeats > 64 || offset.abs() > 65535 {
+            return Err(bad());
+        }
+        let mut sni = None;
+        let mut zero = false;
+        for f in flags.chars() {
+            match f {
+                's' => sni = sni.or(Some('s')),
+                'e' | 'm' => sni = Some(f),
+                'n' => zero = true,
+                'h' => {
+                    return Err(crate::tr!(
+                        "флаг +h (заголовок Host) — только для HTTP, а прокси режет TLS",
+                        "flag +h (Host header) is for HTTP only, the proxy splits TLS"
+                    ))
+                }
+                _ => return Err(bad()),
+            }
+        }
+        out.push(Pos { offset, repeats, skip, sni, zero });
+    }
+    if out.is_empty() {
+        return Err(crate::tr!("укажите хотя бы одну позицию, например 0+sm", "enter at least one position, e.g. 0+sm"));
+    }
+    if out.len() > 32 {
+        return Err(crate::tr!("не больше 32 позиций", "at most 32 positions"));
+    }
+    Ok(out)
+}
+
+/// Позиции → точки разреза в пределах 1..len. Позиции от имени сайта без SNI пропускаются.
+pub fn resolve_positions(positions: &[Pos], len: usize, sni: Option<(usize, usize)>) -> Vec<usize> {
+    let mut cuts = Vec::new();
+    for p in positions {
+        let base: i64 = match (p.sni, sni) {
+            (Some(_), None) => continue,
+            (Some('e'), Some((s, n))) => (s + n) as i64,
+            (Some('m'), Some((s, n))) => (s + n / 2) as i64,
+            (Some(_), Some((s, _))) => s as i64,
+            (None, _) if p.offset < 0 && !p.zero => len as i64,
+            (None, _) => 0,
+        };
+        for k in 0..p.repeats as i64 {
+            let c = base + p.offset + k * p.skip;
+            if c > 0 && (c as usize) < len {
+                cuts.push(c as usize);
+            }
+        }
+    }
+    cuts.sort_unstable();
+    cuts.dedup();
+    cuts
+}
 
 /// Один способ нарезки — то, что перебирают подбор и автоматический режим.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -337,11 +425,21 @@ pub struct SplitOpts {
     pub records: bool,
     pub chunk: usize,
     pub seed: u64,
+    /// Для `custom`.
+    pub positions: Vec<Pos>,
 }
 
 impl Default for SplitOpts {
     fn default() -> Self {
-        SplitOpts { split: "sni".into(), records: true, chunk: 4, seed: 0 }
+        SplitOpts { split: "sni".into(), records: true, chunk: 4, seed: 0, positions: Vec::new() }
+    }
+}
+
+fn cuts_for(len: usize, sni: (usize, usize), o: &SplitOpts) -> Vec<usize> {
+    if o.split == "custom" {
+        resolve_positions(&o.positions, len, Some(sni))
+    } else {
+        cut_points(len, Some(sni), &o.split, o.chunk, o.seed)
     }
 }
 
@@ -355,7 +453,7 @@ pub fn split_with(data: &[u8], o: &SplitOpts) -> Vec<Vec<u8>> {
         return vec![data.to_vec()];
     }
     if !o.records {
-        let cuts = cut_points(data.len(), Some((sni, sni_len)), &o.split, o.chunk, o.seed);
+        let cuts = cuts_for(data.len(), (sni, sni_len), o);
         let mut b = vec![0];
         b.extend(cuts);
         b.push(data.len());
@@ -365,7 +463,7 @@ pub fn split_with(data: &[u8], o: &SplitOpts) -> Vec<Vec<u8>> {
     let tail = &data[5 + rec_len..];
     // Точки разреза в координатах payload.
     let mut cuts = vec![0];
-    cuts.extend(cut_points(payload.len(), Some((sni - 5, sni_len)), &o.split, o.chunk, o.seed));
+    cuts.extend(cuts_for(payload.len(), (sni - 5, sni_len), o));
     cuts.push(payload.len());
     let mut out: Vec<Vec<u8>> = cuts
         .windows(2)
@@ -716,6 +814,8 @@ struct Shared {
     /// Сайт → способ, который сработал (если не основной), с отметкой времени.
     auto_cache: Mutex<std::collections::HashMap<String, (Variant, std::time::Instant)>>,
     auto_retries: AtomicU64,
+    /// Разобранные свои позиции (пусто, если не заданы).
+    positions: Vec<Pos>,
 }
 
 /// Сколько помнить способ для сайта.
@@ -747,7 +847,7 @@ impl Shared {
             return up.write_all(first);
         }
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(7);
-        let o = SplitOpts { split: v.split.clone(), records: v.unit != "tcp", chunk: self.cfg.chunk as usize, seed };
+        let o = SplitOpts { split: v.split.clone(), records: v.unit != "tcp", chunk: self.cfg.chunk as usize, seed, positions: self.positions.clone() };
         send_parts(up, &split_with(first, &o), v.disorder, v.oob)
     }
 
@@ -987,6 +1087,9 @@ impl Proxy {
     pub fn start(mut cfg: Config, extra_bypass: &[String]) -> Result<Proxy, String> {
         cfg.validate_auth()?;
         cfg.normalize();
+        // Свои позиции проверяются, только если они используются.
+        let uses_custom = cfg.split == "custom" || cfg.auto_chain.iter().any(|v| v.split == "custom");
+        let positions = if uses_custom { parse_positions(&cfg.positions)? } else { Vec::new() };
         let port = cfg.port;
         let host = if cfg.lan { "0.0.0.0" } else { "127.0.0.1" };
         let listener = TcpListener::bind((host, port))
@@ -1003,6 +1106,7 @@ impl Proxy {
             blocked: AtomicU64::new(0),
             auto_cache: Mutex::new(std::collections::HashMap::new()),
             auto_retries: AtomicU64::new(0),
+            positions,
             cfg,
             stop: AtomicBool::new(false),
             active: AtomicU64::new(0),
@@ -1430,6 +1534,36 @@ mod tests {
     }
 
     #[test]
+    fn custom_positions() {
+        let p = parse_positions("0+sm, 1:3:5 -10 2+se 0+n").unwrap();
+        assert_eq!(p.len(), 5);
+        assert_eq!(p[0], Pos { offset: 0, repeats: 1, skip: 1, sni: Some('m'), zero: false });
+        assert_eq!(p[1], Pos { offset: 1, repeats: 3, skip: 5, sni: None, zero: false });
+        // Длина 100, имя сайта на 40..50.
+        let sni = Some((40, 10));
+        assert_eq!(resolve_positions(&parse_positions("0+sm").unwrap(), 100, sni), vec![45]);
+        assert_eq!(resolve_positions(&parse_positions("1:3:5").unwrap(), 100, sni), vec![1, 6, 11]);
+        assert_eq!(resolve_positions(&parse_positions("-10").unwrap(), 100, sni), vec![90]);
+        assert_eq!(resolve_positions(&parse_positions("2+se").unwrap(), 100, sni), vec![52]);
+        assert_eq!(resolve_positions(&parse_positions("-2+s").unwrap(), 100, sni), vec![38]);
+        // Без SNI позиции от имени пропускаются; вне пакета — отбрасываются; повторы склеиваются.
+        assert!(resolve_positions(&parse_positions("0+s").unwrap(), 100, None).is_empty());
+        assert_eq!(resolve_positions(&parse_positions("0 200 5 5").unwrap(), 100, None), vec![5]);
+        for bad in ["", "x", "1:0", "1:2:3:4", "5+h", "5+q", "+s"] {
+            assert!(parse_positions(bad).is_err(), "{bad:?}");
+        }
+        // Нарезка своими позициями сохраняет данные.
+        let h = hello("www.youtube.com");
+        let o = SplitOpts { split: "custom".into(), records: false, positions: parse_positions("1 0+sm -3").unwrap(), ..Default::default() };
+        let parts = split_with(&h, &o);
+        assert_eq!(parts.len(), 4);
+        assert_eq!(parts.concat(), h);
+        // Неверные позиции не дают запустить прокси.
+        let cfg = Config { port: 1, split: "custom".into(), positions: "zzz".into(), system: false, ..Default::default() };
+        assert!(Proxy::start(cfg, &[]).is_err());
+    }
+
+    #[test]
     fn cut_points_modes() {
         assert_eq!(cut_points(100, Some((40, 10)), "sni", 4, 0), vec![40, 45]);
         assert_eq!(cut_points(100, None, "sni", 4, 0), vec![1]);
@@ -1448,7 +1582,7 @@ mod tests {
         let h = hello("www.youtube.com");
         for split in ["sni", "first-byte", "chunk", "random"] {
             // TCP-сегменты: склейка равна исходному.
-            let o = SplitOpts { split: split.into(), records: false, chunk: 7, seed: 99 };
+            let o = SplitOpts { split: split.into(), records: false, chunk: 7, seed: 99, ..Default::default() };
             let parts = split_with(&h, &o);
             assert!(parts.len() > 1, "{split}");
             assert_eq!(parts.concat(), h, "{split}");

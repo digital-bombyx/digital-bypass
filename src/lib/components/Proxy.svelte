@@ -14,6 +14,7 @@
     split: "sni",
     unit: "records",
     chunk: 4,
+    positions: "",
     disorder: true,
     oob: false,
     auto: true,
@@ -29,6 +30,7 @@
   });
   /** Списки правил в textarea — по домену в строке. */
   let ruleText = $state({ bypass: "", skip: "", block: "" });
+  let positionsText = $state("");
   const toLines = (v: string[]) => v.join("\n");
   const fromLines = (s: string) => s.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
   let lanIps = $state<string[]>([]);
@@ -40,6 +42,7 @@
       st = await api.proxyStatus();
       cfg = { ...st.config, rules: { ...st.config.rules } };
       ruleText = { bypass: toLines(cfg.rules.bypass), skip: toLines(cfg.rules.skip), block: toLines(cfg.rules.block) };
+      positionsText = cfg.positions;
       lanIps = await api.lanAddresses().catch(() => []);
     } catch (e) {
       toast(String(e));
@@ -68,7 +71,7 @@
     if (r) st = r;
   }
   function variantName(v: ProxyConfig["auto_chain"][number]) {
-    const split = ({ sni: "SNI", "first-byte": t("первый байт", "first byte"), chunk: t("куски", "chunks"), random: t("случайно", "random"), none: t("без нарезки", "no split") } as Record<string, string>)[v.split];
+    const split = ({ sni: "SNI", "first-byte": t("первый байт", "first byte"), chunk: t("куски", "chunks"), random: t("случайно", "random"), custom: t("свои позиции", "custom positions"), none: t("без нарезки", "no split") } as Record<string, string>)[v.split];
     return `${split} · ${v.unit === "tcp" ? "TCP" : "TLS"}${v.disorder ? " · disorder" : ""}${v.oob ? " · OOB" : ""}`;
   }
 
@@ -84,6 +87,7 @@
       "first-byte": t("отделить первый байт", "split off the first byte"),
       chunk: t("куски фиксированного размера", "fixed-size chunks"),
       random: t("одна случайная точка", "one random point"),
+      custom: t("свои позиции разреза — для знающих", "custom cut positions — for experts"),
       none: t("без нарезки", "no splitting"),
     })[cfg.split],
   );
@@ -152,15 +156,36 @@
         small
         disabled={app.busy}
         value={cfg.split}
-        onchange={(m) => change({ split: m })}
+        onchange={(m) => {
+          // Пустые позиции не сохранятся — подставляем пример: середина имени сайта.
+          if (m === "custom" && !cfg.positions.trim()) {
+            positionsText = "0+sm";
+            change({ split: m, positions: "0+sm" });
+          } else change({ split: m });
+        }}
         options={[
           { value: "sni", label: "SNI" },
           { value: "first-byte", label: t("Первый байт", "First byte") },
           { value: "chunk", label: t("Куски", "Chunks") },
           { value: "random", label: t("Случайно", "Random") },
+          { value: "custom", label: t("Свои", "Custom") },
           { value: "none", label: t("Нет", "None") },
         ]} />
     </div>
+    {#if cfg.split === "custom"}
+      <div class="positions">
+        <div class="prow">
+          <input class="input mono" spellcheck="false" placeholder="0+sm 1:3:5 -10" bind:value={positionsText} onkeydown={(e) => e.key === "Enter" && change({ positions: positionsText })} disabled={app.busy} />
+          <button class="btn sm" disabled={app.busy || positionsText === cfg.positions || !positionsText.trim()} onclick={() => change({ positions: positionsText })}>{t("Сохранить", "Save")}</button>
+        </div>
+        <div class="syntax mono">
+          <div><b>{t("смещение[:повторы:шаг][+флаги]", "offset[:repeats:skip][+flags]")}</b> {t("— через пробел или запятую, отсчёт в байтах", "— separated by spaces or commas, in bytes")}</div>
+          <div><b>+s</b> {t("от начала имени сайта", "from the start of the site name")} · <b>+e</b> {t("от конца имени", "from its end")} · <b>+m</b> {t("от середины", "from its middle")} · <b>+n</b> {t("от начала пакета", "from the packet start")}</div>
+          <div>{t("Без флагов: от начала, отрицательное — от конца пакета.", "No flags: from the start; negative — from the packet end.")}</div>
+          <div class="faint">0+sm — {t("середина имени", "middle of the name")} · 1:3:5 — {t("позиции 1, 6, 11", "positions 1, 6, 11")} · -10 — {t("за 10 байт до конца", "10 bytes before the end")} · 2+se — {t("через 2 байта после имени", "2 bytes after the name")}</div>
+        </div>
+      </div>
+    {/if}
     {#if cfg.split !== "none"}
       <div class="opt">
         <div>
@@ -378,7 +403,7 @@
     gap: 12px;
   }
   .hint {
-    font-size: 10.5px;
+    font-size: 11px;
     margin-top: 3px;
   }
   .text {
@@ -390,7 +415,7 @@
     display: flex;
     align-items: center;
     gap: 14px;
-    font-size: 11px;
+    font-size: 11.5px;
     color: var(--muted);
   }
   .stats b {
@@ -400,7 +425,7 @@
     margin-left: auto;
   }
   .err {
-    font-size: 10.5px;
+    font-size: 11px;
     color: var(--danger-text);
     word-break: break-all;
   }
@@ -415,6 +440,29 @@
   }
   .port {
     width: 96px;
+  }
+  .positions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 0 10px;
+  }
+  .prow {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px;
+  }
+  .syntax {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .syntax b {
+    color: var(--text);
+    font-weight: 600;
   }
   .chain {
     display: flex;
@@ -435,7 +483,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 11px;
+    font-size: 11.5px;
     color: var(--muted);
     cursor: pointer;
   }
@@ -454,7 +502,7 @@
     gap: 4px;
   }
   .field .k {
-    font-size: 10.5px;
+    font-size: 11px;
     color: var(--faint);
   }
   .actions {
@@ -475,7 +523,7 @@
     grid-template-columns: 74px 1fr;
     gap: 4px 8px;
     align-items: center;
-    font-size: 11.5px;
+    font-size: 12px;
   }
   .k {
     color: var(--faint);
@@ -489,7 +537,7 @@
     display: flex;
     gap: 6px;
     align-items: flex-start;
-    font-size: 10.5px;
+    font-size: 11px;
     color: var(--warn);
   }
   .auth {

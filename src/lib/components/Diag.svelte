@@ -172,7 +172,7 @@
     gap: 8px;
   }
   .hint {
-    font-size: 10.5px;
+    font-size: 11px;
   }
   .spin {
     display: inline-grid;
@@ -220,7 +220,7 @@
     display: grid;
     grid-template-columns: 64px 1fr;
     gap: 8px;
-    font-size: 11.5px;
+    font-size: 12px;
   }
   .k {
     color: var(--faint);
@@ -238,7 +238,7 @@
     grid-template-columns: 1fr auto auto;
     gap: 10px;
     align-items: center;
-    font-size: 11.5px;
+    font-size: 12px;
     padding-top: 6px;
     border-top: 1px solid var(--border-soft);
   }
@@ -248,7 +248,7 @@
     user-select: text;
   }
   .src {
-    font-size: 10.5px;
+    font-size: 11px;
   }
   .chip.ok {
     color: var(--ok);

@@ -131,7 +131,7 @@
   }
   .berr {
     margin-top: 8px;
-    font-size: 10.5px;
+    font-size: 11px;
     color: var(--danger-text);
     white-space: pre-wrap;
   }
@@ -141,7 +141,7 @@
     margin-top: 8px;
   }
   .hint {
-    font-size: 10.5px;
+    font-size: 11px;
     margin-top: 4px;
   }
   .line {
@@ -168,7 +168,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 10.5px;
+    font-size: 11px;
     color: var(--muted);
   }
   .quit {
@@ -180,6 +180,6 @@
   .foot {
     line-height: 1.6;
     text-align: center;
-    font-size: 10px;
+    font-size: 10.5px;
   }
 </style>

@@ -153,11 +153,11 @@
     gap: 4px;
   }
   .k {
-    font-size: 10.5px;
+    font-size: 11px;
     color: var(--faint);
   }
   .hint {
-    font-size: 10.5px;
+    font-size: 11px;
   }
   .actions,
   .head {
@@ -213,7 +213,7 @@
     background: transparent;
     color: var(--muted);
     font-family: var(--mono);
-    font-size: 10.5px;
+    font-size: 11px;
     cursor: pointer;
   }
   .seg button.on {
@@ -230,7 +230,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    font-size: 11.5px;
+    font-size: 12px;
     padding: 4px 0;
     border-bottom: 1px solid var(--border-soft);
   }

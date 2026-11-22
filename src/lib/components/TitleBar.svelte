@@ -39,7 +39,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 700;
     color: var(--text);
     white-space: nowrap;
@@ -63,7 +63,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 10.5px;
+    font-size: 11px;
     color: var(--faint);
     pointer-events: none;
   }

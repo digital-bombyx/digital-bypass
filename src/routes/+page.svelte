@@ -122,7 +122,7 @@
     align-items: center;
     gap: 8px;
     padding: 7px 14px;
-    font-size: 11px;
+    font-size: 11.5px;
     color: var(--yellow);
     background: rgba(210, 153, 34, 0.08);
     border-bottom: 1px solid rgba(210, 153, 34, 0.18);
@@ -146,7 +146,7 @@
   }
   .group {
     padding: 12px 10px 4px;
-    font-size: 10px;
+    font-size: 10.5px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--faint);
@@ -232,7 +232,7 @@
       align-items: center;
     }
     .tabs button span {
-      font-size: 9.5px;
+      font-size: 10px;
     }
     .tabs button:hover {
       background: transparent;
@@ -270,7 +270,7 @@
     max-width: calc(100% - 40px);
     padding: 9px 14px;
     border-radius: var(--radius);
-    font-size: 11.5px;
+    font-size: 12px;
     background: var(--panel-3);
     border: 1px solid var(--border);
     box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.8);

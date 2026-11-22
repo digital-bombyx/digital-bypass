@@ -239,7 +239,7 @@
     flex: 1;
   }
   .hint {
-    font-size: 10.5px;
+    font-size: 11px;
     margin: 8px 2px 4px;
   }
   .pickhead {
@@ -269,7 +269,7 @@
   .progline {
     display: flex;
     justify-content: space-between;
-    font-size: 11.5px;
+    font-size: 12px;
     margin-bottom: 8px;
   }
   .bar {
@@ -287,7 +287,7 @@
   }
   .msg {
     padding: 10px 12px;
-    font-size: 11.5px;
+    font-size: 12px;
     color: var(--danger-text);
     border-color: rgba(229, 83, 75, 0.35);
   }
@@ -371,7 +371,7 @@
   .tally {
     display: flex;
     gap: 10px;
-    font-size: 10.5px;
+    font-size: 11px;
   }
   .ok {
     color: var(--sage);
@@ -383,7 +383,7 @@
     color: var(--yellow);
   }
   .errtxt {
-    font-size: 10.5px;
+    font-size: 11px;
     color: var(--danger-text);
     margin-top: 6px;
     white-space: pre-wrap;
@@ -397,7 +397,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 10.5px;
+    font-size: 11px;
     padding: 3px 0;
   }
   .tk {
@@ -416,7 +416,7 @@
     text-align: center;
     padding: 1px 4px;
     border-radius: 6px;
-    font-size: 9.5px;
+    font-size: 10px;
   }
   .d.ok {
     background: var(--sage-soft);
@@ -462,7 +462,7 @@
     border-top: 1px solid var(--border-soft);
     background: transparent;
     color: var(--text);
-    font-size: 11px;
+    font-size: 11.5px;
     text-align: left;
     cursor: pointer;
   }

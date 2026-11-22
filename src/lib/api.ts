@@ -143,7 +143,8 @@ export type StubStatus = {
 export type ProxyRules = { scope: "all" | "listed"; zapret_lists: boolean; bypass: string[]; skip: string[]; block: string[] };
 export type ProxyConfig = {
   port: number;
-  split: "sni" | "first-byte" | "chunk" | "random" | "none";
+  split: "sni" | "first-byte" | "chunk" | "random" | "custom" | "none";
+  positions: string;
   unit: "records" | "tcp";
   chunk: number;
   disorder: boolean;

@@ -636,6 +636,9 @@ fn proxy_set_config(app: AppHandle, state: State<AppState>, config: proxy::Confi
     config.validate_auth()?;
     let mut config = config;
     config.normalize();
+    if config.split == "custom" {
+        proxy::parse_positions(&config.positions)?;
+    }
     if state.proxy.lock().unwrap().is_some() {
         let r = state.proxy_start(config);
         refresh_tray(&app);

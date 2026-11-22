@@ -25,6 +25,8 @@
 - **Подбор способа для прокси**: 17 вариантов нарезки на временных прокси, сайты на выбор, лучший — одной кнопкой.
 - Подбор стратегии zapret2 перенесён на вкладку zapret2, отдельной вкладки «Тесты» больше нет.
 - **Прокси, автоматический режим** (по мотивам ByeDPI): при сбросе или молчании после ClientHello — переподключение запасными способами, рабочий запоминается для сайта на 6 часов. Запасные способы задаются подбором. **OOB** как ещё одна техника; подбор проверяет 33 варианта.
+- **Свои позиции разреза** для прокси в синтаксисе ByeDPI: `смещение[:повторы:шаг][+s|e|m|n]`.
+- Текст ярче, мелкие подписи на полпикселя крупнее.
 
 ### What's new
 
@@ -45,5 +47,7 @@
 - **Proxy method finder**: 17 split variants on temporary proxies, sites of your choice, the best applied in one click.
 - The zapret2 strategy test moved to the zapret2 tab; the separate Tests tab is gone.
 - **Proxy auto mode** (inspired by ByeDPI): on a reset or silence after the ClientHello the proxy reconnects with fallback methods and remembers the working one per site for 6 hours; the finder sets the fallbacks. **OOB** as another technique; the finder tries 33 variants.
+- **Custom cut positions** for the proxy in ByeDPI syntax: `offset[:repeats:skip][+s|e|m|n]`.
+- Brighter text; small labels half a pixel larger.
 
 [Unreleased]: https://github.com/digital-bombyx/digital-bypass/commits/main

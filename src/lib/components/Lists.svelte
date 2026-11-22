@@ -138,7 +138,7 @@ ${t("Ещё во встроенных списках", "Already in built-in list
     align-items: flex-start;
   }
   .hint {
-    font-size: 10.5px;
+    font-size: 11px;
     margin-top: 3px;
   }
   textarea {
@@ -146,7 +146,7 @@ ${t("Ещё во встроенных списках", "Already in built-in list
     min-height: 220px;
   }
   .warn {
-    font-size: 10.5px;
+    font-size: 11px;
     color: var(--yellow);
   }
   .actions {
@@ -156,7 +156,7 @@ ${t("Ещё во встроенных списках", "Already in built-in list
   }
   .note {
     flex: 1;
-    font-size: 10px;
+    font-size: 10.5px;
   }
   .sets {
     padding: 12px 14px;
@@ -177,7 +177,7 @@ ${t("Ещё во встроенных списках", "Already in built-in list
     background: var(--bg);
     color: var(--muted);
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 11.5px;
     cursor: pointer;
   }
   .set:hover {

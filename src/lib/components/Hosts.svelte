@@ -154,13 +154,13 @@
     flex: 1;
   }
   .src {
-    font-size: 11.5px;
+    font-size: 12px;
     margin-top: 3px;
   }
   .warnbox {
     display: flex;
     gap: 8px;
-    font-size: 10.5px;
+    font-size: 11px;
     color: var(--muted);
     padding: 0 4px;
     align-items: flex-start;
@@ -205,13 +205,13 @@
     cursor: pointer;
   }
   .cnt {
-    font-size: 10.5px;
+    font-size: 11px;
   }
   .entry {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 11px;
+    font-size: 11.5px;
     padding: 4px 0 4px 26px;
     cursor: pointer;
   }
@@ -225,7 +225,7 @@
     white-space: nowrap;
   }
   .ip {
-    font-size: 10.5px;
+    font-size: 11px;
   }
   input[type="checkbox"] {
     accent-color: var(--amber);
