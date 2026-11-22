@@ -5,6 +5,7 @@
   import { t } from "$lib/i18n.svelte";
   import Segmented from "./Segmented.svelte";
   import Switch from "./Switch.svelte";
+  import ProxyTest from "./ProxyTest.svelte";
   import { Power, Copy, Wifi, KeyRound, ShieldAlert, ListFilter } from "@lucide/svelte";
 
   let st = $state<ProxyStatus | null>(null);
@@ -212,6 +213,10 @@
       <input class="input port" type="number" min="1024" max="65535" bind:value={cfg.port} disabled={app.busy || running} />
     </div>
   </section>
+
+  <ProxyTest
+    current={{ split: cfg.split, unit: cfg.unit, disorder: cfg.disorder }}
+    apply={(v) => change({ split: v.split, unit: v.unit, disorder: v.disorder })} />
 
   <section class="card block">
     <div class="row">

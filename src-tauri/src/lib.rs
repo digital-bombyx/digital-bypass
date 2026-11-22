@@ -9,6 +9,7 @@ mod i18n;
 mod ipset;
 mod lists;
 mod proxy;
+mod proxytest;
 mod runner;
 mod service;
 mod settings;
@@ -40,6 +41,8 @@ pub struct AppState {
     bundled_dir: Option<PathBuf>,
     bundle_error: Mutex<Option<String>>,
     proxy: Mutex<Option<proxy::Proxy>>,
+    proxy_testing: AtomicBool,
+    proxy_test_cancel: AtomicBool,
     stub: Mutex<Option<doh::Stub>>,
 }
 
@@ -584,6 +587,46 @@ fn proxy_start(app: AppHandle, state: State<AppState>, config: proxy::Config) ->
     Ok(proxy_status_of(&state))
 }
 
+#[derive(Serialize)]
+struct ProxyTestReport {
+    results: Vec<proxytest::VariantResult>,
+    best: Option<proxytest::Variant>,
+    cancelled: bool,
+}
+
+/// Сайты для подбора способа по умолчанию.
+#[tauri::command(async)]
+fn proxy_test_targets() -> &'static [&'static str] {
+    proxytest::DEFAULT_TARGETS
+}
+
+/// Подбор способа нарезки: каждый вариант на временном прокси, прогресс — событием
+/// `proxy-test-progress`. Рабочий и системный прокси не трогаются.
+#[tauri::command(async)]
+fn proxy_test(app: AppHandle, state: State<AppState>, targets: String, timeout: u64) -> R<ProxyTestReport> {
+    let targets = proxytest::parse_targets(&targets);
+    if targets.is_empty() {
+        return Err(tr!("укажите хотя бы один сайт", "enter at least one site"));
+    }
+    if state.proxy_testing.swap(true, Ordering::SeqCst) {
+        return Err(tr!("подбор уже идёт", "a test is already running"));
+    }
+    state.proxy_test_cancel.store(false, Ordering::SeqCst);
+    let base = state.settings.lock().unwrap().proxy.clone();
+    let emit = app.clone();
+    let results = proxytest::run(&base, &targets, timeout.clamp(3, 20), &state.proxy_test_cancel, move |p| {
+        let _ = emit.emit("proxy-test-progress", p);
+    });
+    state.proxy_testing.store(false, Ordering::SeqCst);
+    let best = proxytest::best(&results).map(|b| b.variant.clone());
+    Ok(ProxyTestReport { results, best, cancelled: state.proxy_test_cancel.load(Ordering::SeqCst) })
+}
+
+#[tauri::command]
+fn proxy_test_cancel(state: State<AppState>) {
+    state.proxy_test_cancel.store(true, Ordering::SeqCst);
+}
+
 /// Сохранить настройки прокси; работающий перезапустить с ними.
 #[tauri::command(async)]
 fn proxy_set_config(app: AppHandle, state: State<AppState>, config: proxy::Config) -> R<ProxyStatus> {
@@ -970,6 +1013,8 @@ pub fn run() {
                 cancel: AtomicBool::new(false),
                 last_test: Mutex::new(None),
                 proxy: Mutex::new(None),
+                proxy_testing: AtomicBool::new(false),
+                proxy_test_cancel: AtomicBool::new(false),
                 stub: Mutex::new(None),
             });
 
@@ -1107,6 +1152,9 @@ pub fn run() {
             proxy_start,
             proxy_stop,
             proxy_set_config,
+            proxy_test,
+            proxy_test_cancel,
+            proxy_test_targets,
             diag_run,
             lan_addresses,
             sni_defaults,

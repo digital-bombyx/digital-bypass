@@ -161,6 +161,15 @@ export type ProxyStatus = {
   stats: { running: boolean; port: number; active: number; total: number; failed: number; system: boolean; lan: boolean; auth: boolean; bypassed: number; passed: number; blocked: number; dns_cached: number; bypass_domains: number; last_error: string | null };
 };
 
+export type ProxyVariant = { split: ProxyConfig["split"]; unit: ProxyConfig["unit"]; disorder: boolean };
+export type ProxyVariantResult = {
+  variant: ProxyVariant;
+  ok: number;
+  total: number;
+  avg_ms: number | null;
+  targets: { host: string; ok: boolean; code: number | null; ms: number | null; error: string | null }[];
+};
+
 export type Probe = "ok" | "tcp_fail" | "tls_reset" | "tls_timeout" | "tls_cert" | "tls_error";
 export type Verdict = "ok" | "dns" | "dpi" | "ip" | "no_domain" | "unknown";
 export type DiagReport = {
@@ -222,6 +231,10 @@ export const api = {
   proxyStart: (config: ProxyConfig) => invoke<ProxyStatus>("proxy_start", { config }),
   proxyStop: () => invoke<ProxyStatus>("proxy_stop"),
   proxySetConfig: (config: ProxyConfig) => invoke<ProxyStatus>("proxy_set_config", { config }),
+  proxyTestTargets: () => invoke<string[]>("proxy_test_targets"),
+  proxyTest: (targets: string, timeout: number) =>
+    invoke<{ results: ProxyVariantResult[]; best: ProxyVariant | null; cancelled: boolean }>("proxy_test", { targets, timeout }),
+  proxyTestCancel: () => invoke<void>("proxy_test_cancel"),
   diagRun: (domain: string) => invoke<DiagReport>("diag_run", { domain }),
   lanAddresses: () => invoke<string[]>("lan_addresses"),
   sniDefaults: () => invoke<{ target: string; snis: string[] }>("sni_defaults"),

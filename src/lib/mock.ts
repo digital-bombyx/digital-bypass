@@ -193,6 +193,23 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
       proxy.enabled = true;
       proxy.stats = { running: true, port: args.config.port, active: 3, total: 41, failed: 1, system: args.config.system, lan: args.config.lan, auth: !!args.config.user, bypassed: 30, passed: 9, blocked: 2, dns_cached: 17, bypass_domains: 1840, last_error: null };
       return structuredClone(proxy);
+    case "proxy_test_targets":
+      return ["www.youtube.com", "x.com", "discord.com", "www.instagram.com"];
+    case "proxy_test": {
+      await new Promise((r) => setTimeout(r, 900));
+      const hosts = ["www.youtube.com", "x.com", "discord.com", "www.instagram.com"];
+      const mk = (split: string, unit: string, disorder: boolean, ok: number, ms: number | null) => ({
+        variant: { split, unit, disorder },
+        ok,
+        total: 4,
+        avg_ms: ms,
+        targets: hosts.map((h, i) => ({ host: h, ok: i < ok, code: i < ok ? 200 : null, ms: i < ok ? ms : null, error: i < ok ? null : "tls reset" })),
+      });
+      const results = [mk("none", "records", false, 0, null), mk("sni", "records", true, 2, 1360), mk("chunk", "records", true, 4, 1566), mk("chunk", "tcp", true, 3, 1264), mk("random", "tcp", true, 1, 857)];
+      return { results, best: results[2].variant, cancelled: false };
+    }
+    case "proxy_test_cancel":
+      return;
     case "proxy_set_config":
       proxy.config = args.config;
       return structuredClone(proxy);
