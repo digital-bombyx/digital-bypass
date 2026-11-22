@@ -83,8 +83,8 @@
     value={mode}
     onchange={(m) => (mode = m)}
     options={[
-      { value: "site", label: t("почему не открывается", "why it does not open") },
-      { value: "sni", label: t("сканер SNI", "SNI scanner") },
+      { value: "site", label: t("Почему не открывается", "Why it does not open") },
+      { value: "sni", label: t("Сканер SNI", "SNI scanner") },
     ]} />
   {#if mode === "sni"}
     <SniScan />
@@ -99,7 +99,7 @@
         onkeydown={(e) => e.key === "Enter" && run()} />
       <button class="btn primary" disabled={busy || !domain.trim()} onclick={run}>
         {#if busy}<span class="spin"><Loader size={13} /></span>{:else}<Search size={13} />{/if}
-        {t("проверить", "check")}
+        {t("Проверить", "Check")}
       </button>
     </div>
     <div class="hint faint mono">

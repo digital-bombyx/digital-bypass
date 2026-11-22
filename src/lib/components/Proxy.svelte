@@ -71,7 +71,7 @@
       </div>
       <button class="btn" class:primary={!running} class:danger={running} disabled={app.busy} onclick={running ? stop : start}>
         <Power size={13} />
-        {running ? t("выключить", "turn off") : t("включить", "turn on")}
+        {running ? t("Выключить", "Turn off") : t("Включить", "Turn on")}
       </button>
     </div>
     {#if st && running}
@@ -111,8 +111,8 @@
         value={cfg.method}
         onchange={(m) => change({ method: m })}
         options={[
-          { value: "disorder", label: "disorder" },
-          { value: "split", label: "split" },
+          { value: "disorder", label: "Disorder" },
+          { value: "split", label: "Split" },
         ]} />
     </div>
     <div class="opt">
@@ -171,8 +171,8 @@
       <div class="creds">
         <input class="input" placeholder={t("логин", "user")} autocomplete="off" bind:value={cfg.user} disabled={app.busy} />
         <input class="input" placeholder={t("пароль", "password")} autocomplete="off" type={showPass ? "text" : "password"} bind:value={cfg.pass} disabled={app.busy} />
-        <button class="btn sm" disabled={app.busy} onclick={genPass} title={t("Сгенерировать пароль", "Generate a password")}>{t("сгенерировать", "generate")}</button>
-        <button class="btn sm" disabled={app.busy || !authOk} onclick={() => change({})}>{t("сохранить", "save")}</button>
+        <button class="btn sm" disabled={app.busy} onclick={genPass} title={t("Сгенерировать пароль", "Generate a password")}>{t("Сгенерировать", "Generate")}</button>
+        <button class="btn sm" disabled={app.busy || !authOk} onclick={() => change({})}>{t("Сохранить", "Save")}</button>
       </div>
       {#if !authOk}
         <div class="err mono">{t("Нужны и логин, и пароль; в логине без «:».", "Both user and password are required; no ':' in the user.")}</div>

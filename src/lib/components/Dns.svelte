@@ -213,10 +213,10 @@
     </section>
 
     <div class="actions">
-      <button class="btn" disabled={app.busy} onclick={flush} title="ipconfig /flushdns"><Eraser size={13} /> {t("сброс кэша", "flush cache")}</button>
+      <button class="btn" disabled={app.busy} onclick={flush} title="ipconfig /flushdns"><Eraser size={13} /> {t("Сброс кэша", "Flush cache")}</button>
       <span class="grow"></span>
-      <button class="btn" disabled={app.busy || !admin || !adapter || (!useV4 && !useV6)} onclick={reset}><Undo2 size={13} /> dhcp</button>
-      <button class="btn primary" disabled={!canApply} onclick={apply}><Check size={13} /> {t("применить", "apply")}</button>
+      <button class="btn" disabled={app.busy || !admin || !adapter || (!useV4 && !useV6)} onclick={reset}><Undo2 size={13} /> DHCP</button>
+      <button class="btn primary" disabled={!canApply} onclick={apply}><Check size={13} /> {t("Применить", "Apply")}</button>
     </div>
     {#if !admin}
       <div class="faint mono small">{t("Смена DNS требует прав администратора.", "Changing DNS requires administrator rights.")}</div>
@@ -247,7 +247,7 @@
         {/if}
         <div class="actions">
           <span class="grow"></span>
-          <button class="btn danger" disabled={app.busy || !admin} onclick={stubDisable}><Undo2 size={13} /> {t("выключить и вернуть DNS", "turn off and restore DNS")}</button>
+          <button class="btn danger" disabled={app.busy || !admin} onclick={stubDisable}><Undo2 size={13} /> {t("Выключить и вернуть DNS", "Turn off and restore DNS")}</button>
         </div>
       {:else}
         <p class="muted text">
@@ -266,7 +266,7 @@
         <div class="actions">
           <span class="grow"></span>
           <button class="btn primary" disabled={app.busy || !admin || !adapter || !stubTemplate.startsWith("https://")} onclick={stubEnable}>
-            <ShieldCheck size={13} /> {t("включить на адаптере", "enable on adapter")}
+            <ShieldCheck size={13} /> {t("Включить на адаптере", "Enable on adapter")}
           </button>
         </div>
       {/if}

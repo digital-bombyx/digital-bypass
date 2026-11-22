@@ -82,7 +82,7 @@
   {#if st.last_error}
     <div class="note card err">
       <div class="err-text mono">{st.last_error}</div>
-      <button class="btn sm ghost" onclick={showLog}><TerminalSquare size={13} /> {t("лог", "log")}</button>
+      <button class="btn sm ghost" onclick={showLog}><TerminalSquare size={13} /> {t("Лог", "Log")}</button>
     </div>
   {/if}
   {#if log}
@@ -92,7 +92,7 @@
   <!-- Выбор стратегии -->
   <section class="card picker" class:open>
     <button class="current" onclick={() => (open = !open)}>
-      <span class="label">{t("стратегия", "strategy")}</span>
+      <span class="label">{t("Стратегия", "Strategy")}</span>
       <span class="mono name">{strategyName(ov.selected)}</span>
       <span class="count faint mono">{ov.strategies.length}</span>
       <ChevronDown size={16} class="chev" />
@@ -133,10 +133,10 @@
         value={ov.game_filter.mode}
         onchange={setGf}
         options={[
-          { value: "disabled", label: t("выкл", "off") },
-          { value: "all", label: "tcp+udp" },
-          { value: "tcp", label: "tcp" },
-          { value: "udp", label: "udp" },
+          { value: "disabled", label: t("Выкл", "Off") },
+          { value: "all", label: "TCP+UDP" },
+          { value: "tcp", label: "TCP" },
+          { value: "udp", label: "UDP" },
         ]} />
     </div>
     <div class="opt">
@@ -152,9 +152,9 @@
         value={ov.ipset}
         onchange={(m) => act(() => api.setIpset(m))}
         options={[
-          { value: "loaded", label: t("список", "list") },
-          { value: "none", label: t("выкл", "off") },
-          { value: "any", label: t("все", "all") },
+          { value: "loaded", label: t("Список", "List") },
+          { value: "none", label: t("Выкл", "Off") },
+          { value: "any", label: t("Все", "All") },
         ]} />
     </div>
     <div class="opt">
@@ -168,8 +168,8 @@
         value={ov.mode}
         onchange={(m) => act(() => api.setMode(m))}
         options={[
-          { value: "process", label: t("процесс", "process") },
-          { value: "service", label: t("служба", "service") },
+          { value: "process", label: t("Процесс", "Process") },
+          { value: "service", label: t("Служба", "Service") },
         ]} />
     </div>
   </section>

@@ -132,8 +132,8 @@
     </section>
 
     <div class="actions">
-      <button class="btn danger" disabled={app.busy || !st.block_present || !app.ov?.admin} onclick={remove}>{t("убрать блок", "remove block")}</button>
-      <button class="btn primary" disabled={app.busy || !app.ov?.admin} onclick={apply}>{t("записать в hosts", "write to hosts")}</button>
+      <button class="btn danger" disabled={app.busy || !st.block_present || !app.ov?.admin} onclick={remove}>{t("Убрать блок", "Remove block")}</button>
+      <button class="btn primary" disabled={app.busy || !app.ov?.admin} onclick={apply}>{t("Записать в hosts", "Write to hosts")}</button>
     </div>
   {/if}
 </div>

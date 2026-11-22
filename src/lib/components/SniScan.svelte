@@ -85,7 +85,7 @@
       <span class="grow"></span>
       <button class="btn primary" disabled={busy || !target.trim() || !count} onclick={run}>
         {#if busy}<span class="spin"><Loader size={13} /></span>{:else}<Radar size={13} />{/if}
-        {busy ? t("сканирую…", "scanning…") : t("сканировать", "scan")}
+        {busy ? t("Сканирую…", "Scanning…") : t("Сканировать", "Scan")}
       </button>
     </div>
   </section>
@@ -107,11 +107,11 @@
     <section class="card block">
       <div class="head">
         <div class="seg mono">
-          <button class:on={filter === "all"} onclick={() => (filter = "all")}>{t("все", "all")}</button>
-          <button class:on={filter === "pass"} onclick={() => (filter = "pass")}>{t("проходят", "pass")}</button>
-          <button class:on={filter === "blocked"} onclick={() => (filter = "blocked")}>{t("режутся", "blocked")}</button>
+          <button class:on={filter === "all"} onclick={() => (filter = "all")}>{t("Все", "All")}</button>
+          <button class:on={filter === "pass"} onclick={() => (filter = "pass")}>{t("Проходят", "Pass")}</button>
+          <button class:on={filter === "blocked"} onclick={() => (filter = "blocked")}>{t("Режутся", "Blocked")}</button>
         </div>
-        <button class="btn sm ghost" disabled={!report.passed} onclick={copyPassed}><Copy size={12} /> {t("копировать проходящие", "copy passing")}</button>
+        <button class="btn sm ghost" disabled={!report.passed} onclick={copyPassed}><Copy size={12} /> {t("Копировать проходящие", "Copy passing")}</button>
       </div>
       <div class="grid mono">
         {#each shown as i (i.sni)}

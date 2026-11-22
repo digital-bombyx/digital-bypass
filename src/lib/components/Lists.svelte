@@ -69,9 +69,9 @@
       if (!dirty || confirm(t("Есть несохранённые изменения. Переключиться?", "You have unsaved changes. Switch anyway?"))) kind = v;
     }}
     options={[
-      { value: "general", label: t("обходить", "bypass") },
-      { value: "exclude", label: t("исключить", "exclude") },
-      { value: "ipset-exclude", label: t("ip-исключения", "ip exclude") },
+      { value: "general", label: t("Обходить", "Bypass") },
+      { value: "exclude", label: t("Исключить", "Exclude") },
+      { value: "ipset-exclude", label: t("IP-исключения", "IP exclude") },
     ]} />
 
   {#if kind === "general" && presets.length}
@@ -80,14 +80,14 @@
       <div class="chips">
         {#each presets as p (p.id)}
           <button class="set" class:on={picked.has(p.id)} title={p.domains.join(", ") + (p.builtin ? `
-${t("ещё во встроенных списках", "already in built-in lists")}: ${p.builtin}` : "")} onclick={() => togglePreset(p.id)}>
+${t("Ещё во встроенных списках", "Already in built-in lists")}: ${p.builtin}` : "")} onclick={() => togglePreset(p.id)}>
             {p.name} <span class="faint">{p.domains.length}</span>
           </button>
         {/each}
       </div>
       <div class="actions">
         <span class="faint mono note">{t("YouTube и Discord уже во встроенных списках; новые домены добавятся в конец list-general-user.txt без дублей", "YouTube and Discord are already in the built-in lists; new domains are appended to list-general-user.txt without duplicates")}</span>
-        <button class="btn sm" disabled={!picked.size || app.busy || app.ov?.testing} onclick={addPresets}><Plus size={12} /> {t("добавить", "add")}</button>
+        <button class="btn sm" disabled={!picked.size || app.busy || app.ov?.testing} onclick={addPresets}><Plus size={12} /> {t("Добавить", "Add")}</button>
       </div>
     </section>
   {/if}
@@ -112,7 +112,7 @@ ${t("ещё во встроенных списках", "already in built-in list
       <span class="faint mono note">{t("пустой файл заменится заглушкой; работающий обход перезапустится", "an empty file gets a placeholder; a running bypass restarts")}</span>
       <button class="btn ghost sm" disabled={!dirty} onclick={() => (text = saved)}><RotateCcw size={12} /></button>
       <button class="btn primary" disabled={!dirty || app.busy || app.ov?.testing} onclick={save}
-        ><Save size={13} /> {t("сохранить", "save")}</button>
+        ><Save size={13} /> {t("Сохранить", "Save")}</button>
     </div>
   </section>
 </div>

@@ -42,7 +42,7 @@
     {#if ov.dir_source !== "bundled" && ov.bundled_version}
       <button class="btn sm ghost back" disabled={app.busy}
         onclick={() => act(() => api.setZapretDir("").then(() => (dir = "")), t("Используется встроенная сборка", "Using the bundled build"))}
-        >← {t("вернуться к встроенной", "back to bundled")}</button>
+        >← {t("Вернуться к встроенной", "Back to bundled")}</button>
     {/if}
     {#if ov.bundle_error}
       <div class="berr mono">{ov.bundle_error}</div>
@@ -63,8 +63,8 @@
           api.setLanguage(l);
         }}
         options={[
-          { value: "ru", label: "русский" },
-          { value: "en", label: "english" },
+          { value: "ru", label: "Русский" },
+          { value: "en", label: "English" },
         ]} />
     </div>
     <div class="line">
@@ -90,7 +90,7 @@
       </div>
       {#if ov.status.service_installed}
         <button class="btn sm danger" disabled={app.busy || !ov.admin} onclick={() => act(() => api.disable(), t("Служба удалена", "Service removed"))}
-          >{t("удалить", "remove")}</button>
+          >{t("Удалить", "Remove")}</button>
       {/if}
     </div>
   </section>
@@ -104,7 +104,7 @@
     </div>
   </section>
 
-  <button class="btn ghost quit" onclick={() => api.quit()}><Power size={13} /> {t("выйти из приложения", "quit the app")}</button>
+  <button class="btn ghost quit" onclick={() => api.quit()}><Power size={13} /> {t("Выйти из приложения", "Quit the app")}</button>
   <!-- Сведения об авторстве (GPL-3.0, NOTICE: дополнительное условие 7b). Не удалять в форках. -->
   <div class="foot faint mono">
     digital-bypass by digital-bombyx · GPL-3.0<br />

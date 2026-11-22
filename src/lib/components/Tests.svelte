@@ -81,15 +81,15 @@
         disabled={testing}
         onchange={(v) => (kind = v)}
         options={[
-          { value: "standard", label: t("стандартный", "standard") },
-          { value: "dpi", label: "dpi 16-20" },
+          { value: "standard", label: t("Стандартный", "Standard") },
+          { value: "dpi", label: "DPI 16-20" },
         ]} />
       {#if testing}
         <button class="btn danger" onclick={() => api.testCancel().then(() => toast(t("Останавливаю после текущих проверок", "Stopping after the current checks"), "ok"))}
-          ><Square size={13} /> {t("стоп", "stop")}</button>
+          ><Square size={13} /> {t("Стоп", "Stop")}</button>
       {:else}
         <button class="btn primary" disabled={!ov.admin || picked.size === 0 || app.busy} onclick={start}
-          ><Play size={13} /> {t("запуск", "run")}</button>
+          ><Play size={13} /> {t("Запуск", "Run")}</button>
       {/if}
     </div>
     <div class="hint faint mono">
@@ -102,8 +102,8 @@
       <span class="label">{t("стратегии", "strategies")} · {picked.size}/{ov.strategies.length}</span>
       <span class="links">
         <button class="btn sm ghost" disabled={testing} onclick={() => (picked = new Set(ov.strategies.map((s) => s.file)))}
-          >{t("все", "all")}</button>
-        <button class="btn sm ghost" disabled={testing} onclick={() => (picked = new Set())}>{t("ничего", "none")}</button>
+          >{t("Все", "All")}</button>
+        <button class="btn sm ghost" disabled={testing} onclick={() => (picked = new Set())}>{t("Ничего", "None")}</button>
       </span>
     </div>
     <div class="picks">
@@ -140,7 +140,7 @@
           class="btn primary"
           disabled={app.busy || ov.selected === run.best}
           onclick={() => act(() => api.selectStrategy(run!.best!), t("Стратегия выбрана", "Strategy selected"))}
-          >{ov.selected === run.best ? t("выбрана", "selected") : t("применить", "apply")}</button>
+          >{ov.selected === run.best ? t("Выбрана", "Selected") : t("Применить", "Apply")}</button>
       </section>
     {/if}
 
@@ -153,7 +153,7 @@
             <ChevronRight size={14} class={expanded === r.file ? "rot" : ""} />
             <span class="mono rname">{strategyName(r.file)}</span>
             {#if r.error}
-              <span class="chip red">{t("не запустилась", "failed to start")}</span>
+              <span class="chip red">{t("Не запустилась", "Failed to start")}</span>
             {:else}
               <span class="score mono">{r.ok}<span class="faint">/{checksTotal(r)}</span></span>
             {/if}
@@ -199,7 +199,7 @@
   {#if history.length}
     <section class="card hist">
       <button class="histhead" onclick={() => (showHistory = !showHistory)}>
-        <History size={14} /> <span class="label">{t("история", "history")}</span>
+        <History size={14} /> <span class="label">{t("История", "History")}</span>
         <span class="faint mono">{history.length}</span>
       </button>
       {#if showHistory}

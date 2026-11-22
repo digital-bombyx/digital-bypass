@@ -21,14 +21,14 @@
   const needsZapret: Tab[] = ["home", "tests", "lists", "hosts"];
 
   const tabs: { id: Tab; label: () => string; icon: typeof Power; group?: () => string }[] = [
-    { id: "home", label: () => "zapret2", icon: Power, group: () => "zapret2" },
-    { id: "tests", label: () => t("тесты", "tests"), icon: FlaskConical },
-    { id: "lists", label: () => t("списки", "lists"), icon: ListChecks },
-    { id: "dns", label: () => "dns", icon: Network, group: () => t("сеть", "network") },
-    { id: "hosts", label: () => "hosts", icon: Globe },
-    { id: "proxy", label: () => t("прокси", "proxy"), icon: Waypoints },
-    { id: "diag", label: () => t("проверка", "check"), icon: Stethoscope, group: () => t("инструменты", "tools") },
-    { id: "settings", label: () => t("настройки", "settings"), icon: Settings2, group: () => "" },
+    { id: "home", label: () => "Zapret2", icon: Power, group: () => "zapret2" },
+    { id: "tests", label: () => t("Тесты", "Tests"), icon: FlaskConical },
+    { id: "lists", label: () => t("Списки", "Lists"), icon: ListChecks },
+    { id: "dns", label: () => "DNS", icon: Network, group: () => t("сеть", "network") },
+    { id: "hosts", label: () => "Hosts", icon: Globe },
+    { id: "proxy", label: () => t("Прокси", "Proxy"), icon: Waypoints },
+    { id: "diag", label: () => t("Проверка", "Check"), icon: Stethoscope, group: () => t("инструменты", "tools") },
+    { id: "settings", label: () => t("Настройки", "Settings"), icon: Settings2, group: () => "" },
   ];
   const paths: Record<Tab, string> = {
     home: "zapret2",
@@ -94,7 +94,7 @@
           <p class="muted">{t("Укажите папку со сборкой zapret-discord-youtube (в ней bin\\winws2.exe, lua\\ и lists\\).", "Set the zapret-discord-youtube build folder (it contains bin\\winws2.exe, lua\\ and lists\\).")}</p>
           <input class="input" placeholder="D:\zapret-discord-youtube" bind:value={dirInput} />
           <button class="btn primary" disabled={!dirInput.trim()} onclick={() => act(() => api.setZapretDir(dirInput))}
-            >{t("сохранить", "save")}</button>
+            >{t("Сохранить", "Save")}</button>
         </section>
       {:else if tab === "home"}<Home />
       {:else if tab === "tests"}<Tests />
