@@ -195,8 +195,8 @@
     min-height: 0;
     min-width: 0;
   }
+  /* Блоки растягиваются на всю ширину окна. */
   .page {
-    max-width: 880px;
     padding: 16px 20px 20px;
     min-height: calc(100% - 36px);
     display: flex;
