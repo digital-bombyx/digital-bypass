@@ -17,7 +17,8 @@ export default defineConfig(async () => ({
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
+    // Явно IPv4: иначе Vite слушает только [::1], а WebView2 идёт на 127.0.0.1.
+    host: host || "127.0.0.1",
     hmr: host
       ? {
           protocol: "ws",
