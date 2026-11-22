@@ -559,18 +559,21 @@ fn proxy_status(state: State<AppState>) -> ProxyStatus {
 }
 
 #[tauri::command(async)]
-fn proxy_start(state: State<AppState>, config: proxy::Config) -> R<ProxyStatus> {
+fn proxy_start(app: AppHandle, state: State<AppState>, config: proxy::Config) -> R<ProxyStatus> {
     if config.port < 1024 {
         return Err(tr!("порт должен быть от 1024 до 65535", "port must be 1024–65535"));
     }
-    state.proxy_start(config)?;
+    let r = state.proxy_start(config);
+    refresh_tray(&app);
+    r?;
     Ok(proxy_status_of(&state))
 }
 
 #[tauri::command(async)]
-fn proxy_stop(state: State<AppState>) -> ProxyStatus {
+fn proxy_stop(app: AppHandle, state: State<AppState>) -> ProxyStatus {
     state.proxy_stop_inner();
     state.update(|s| s.proxy_enabled = false);
+    refresh_tray(&app);
     proxy_status_of(&state)
 }
 
@@ -580,8 +583,8 @@ fn diag_run(domain: String) -> R<diag::Report> {
 }
 
 #[tauri::command(async)]
-fn list_presets() -> &'static [lists::Preset] {
-    lists::PRESETS
+fn list_presets(state: State<AppState>) -> Vec<lists::PresetView> {
+    state.dir().map(|d| lists::presets_for(&d)).unwrap_or_default()
 }
 
 #[tauri::command(async)]
@@ -658,39 +661,60 @@ fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let selected = state.settings.lock().unwrap().strategy.clone();
     let dir = state.dir().ok();
     let strategies = dir.as_deref().map(strategy::list).unwrap_or_default();
-    let label = if st.running { tr!("Выключить обход", "Turn bypass off") } else { tr!("Включить обход", "Turn bypass on") };
-    let toggle = MenuItem::with_id(app, "toggle", label, true, None::<&str>)?;
-    let sub = Submenu::with_id(app, "strategies", tr!("Стратегия", "Strategy"), true)?;
+    let toggle = CheckMenuItem::with_id(app, "toggle", "zapret2", dir.is_some(), st.running, None::<&str>)?;
+    let sub = Submenu::with_id(app, "strategies", tr!("Стратегия zapret2", "zapret2 strategy"), dir.is_some())?;
     for s in &strategies {
         let checked = selected.as_deref() == Some(s.file.as_str());
         sub.append(&CheckMenuItem::with_id(app, format!("s:{}", s.file), &s.name, true, checked, None::<&str>)?)?;
     }
+    let proxy_on = state.proxy.lock().unwrap().is_some();
+    let port = state.settings.lock().unwrap().proxy.port;
+    let proxy = CheckMenuItem::with_id(app, "proxy", tr!("Прокси-обходчик (:{port})", "Bypass proxy (:{port})"), true, proxy_on, None::<&str>)?;
+    // DoH-резолвер меняет DNS адаптера (нужны права) — в трее только состояние.
+    let stub_label = match state.stub.lock().unwrap().as_ref() {
+        Some(s) => {
+            let a = s.addr();
+            tr!("DoH-резолвер: работает ({a})", "DoH resolver: running ({a})")
+        }
+        None if state.settings.lock().unwrap().dns_stub.is_some() => tr!("DoH-резолвер: не запущен", "DoH resolver: not running"),
+        None => tr!("DoH-резолвер: выключен", "DoH resolver: off"),
+    };
+    let stub = MenuItem::with_id(app, "stub", stub_label, false, None::<&str>)?;
     let open = MenuItem::with_id(app, "open", tr!("Открыть", "Open"), true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", tr!("Выход", "Quit"), true, None::<&str>)?;
-    Menu::with_items(app, &[&toggle, &sub, &PredefinedMenuItem::separator(app)?, &open, &quit])
+    let sep = || PredefinedMenuItem::separator(app);
+    Menu::with_items(app, &[&toggle, &sub, &sep()?, &proxy, &stub, &sep()?, &open, &quit])
 }
 
 fn refresh_tray(app: &AppHandle) {
     let Some(tray) = app.tray_by_id("main") else { return };
-    let st = app.state::<AppState>().runner.status();
-    let _ = tray.set_icon(Some(tray_icon(st.running)));
-    let tip = match (&st.running, &st.strategy) {
+    let state = app.state::<AppState>();
+    let st = state.runner.status();
+    let proxy_on = state.proxy.lock().unwrap().is_some();
+    let stub_on = state.stub.lock().unwrap().is_some();
+    // Значок «включён», если работает хоть один обход.
+    let _ = tray.set_icon(Some(tray_icon(st.running || proxy_on)));
+    let mut tip = vec!["digital-bypass".to_string()];
+    tip.push(match (&st.running, &st.strategy) {
         (true, Some(s)) => {
             let s = s.trim_end_matches(".bat");
-            tr!("digital-bypass · zapret2 — включён\n{s}", "digital-bypass · zapret2 — on\n{s}")
+            tr!("zapret2: {s}", "zapret2: {s}")
         }
-        (true, None) => tr!("digital-bypass · zapret2 — включён", "digital-bypass · zapret2 — on"),
-        _ => tr!("digital-bypass · zapret2 — выключен", "digital-bypass · zapret2 — off"),
-    };
-    let _ = tray.set_tooltip(Some(tip));
+        (true, None) => tr!("zapret2: включён", "zapret2: on"),
+        _ => tr!("zapret2: выключен", "zapret2: off"),
+    });
+    if proxy_on {
+        tip.push(tr!("прокси: включён", "proxy: on"));
+    }
+    if stub_on {
+        tip.push(tr!("DoH-резолвер: включён", "DoH resolver: on"));
+    }
+    let _ = tray.set_tooltip(Some(tip.join("\n")));
     if let Ok(menu) = build_tray_menu(app) {
         let _ = tray.set_menu(Some(menu));
     }
 }
 
-/// Показать окно. Если оно было закрыто в трей (уничтожено вместе с WebView2),
-/// создать заново из конфигурации. Создание — в отдельном потоке: на Windows
-/// построение окна из обработчика событий главного потока может зависнуть.
 /// Вернуть окну сохранённые размер и положение (если монитор на месте).
 fn restore_geometry(app: &AppHandle, w: &tauri::WebviewWindow) {
     let Some(g) = app.state::<AppState>().settings.lock().unwrap().window else { return };
@@ -736,6 +760,9 @@ fn save_settings(app: &AppHandle) {
     settings::save(&st.config_dir, &s);
 }
 
+/// Показать окно. Если оно было закрыто в трей (уничтожено вместе с WebView2),
+/// создать заново из конфигурации. Создание — в отдельном потоке: на Windows
+/// построение окна из обработчика событий главного потока может зависнуть.
 fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         // Первый показ окна, созданного из конфигурации при старте.
@@ -799,6 +826,24 @@ fn webview_low_memory(app: &AppHandle, low: bool) {
 fn on_tray_menu(app: &AppHandle, id: &str) {
     match id {
         "open" => show_main(app),
+        "proxy" => {
+            let app = app.clone();
+            std::thread::spawn(move || {
+                let st = app.state::<AppState>();
+                if st.proxy.lock().unwrap().is_some() {
+                    st.proxy_stop_inner();
+                    st.update(|s| s.proxy_enabled = false);
+                } else {
+                    let cfg = st.settings.lock().unwrap().proxy.clone();
+                    if let Err(e) = st.proxy_start(cfg) {
+                        let _ = app.emit("error", e);
+                        show_main(&app);
+                    }
+                }
+                let _ = app.emit("proxy-changed", ());
+                refresh_tray(&app);
+            });
+        }
         "quit" => app.exit(0),
         "toggle" => {
             let app = app.clone();

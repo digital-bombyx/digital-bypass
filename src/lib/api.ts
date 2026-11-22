@@ -160,7 +160,7 @@ export type DiagReport = {
   verdict: Verdict;
 };
 
-export type ListPreset = { id: string; name: string; domains: string[] };
+export type ListPreset = { id: string; name: string; domains: string[]; builtin: number };
 
 export const api = {
   overview: () => invoke<Overview>("overview"),

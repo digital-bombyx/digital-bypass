@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, type ProxyConfig, type ProxyStatus } from "$lib/api";
+  import { api, on, type ProxyConfig, type ProxyStatus } from "$lib/api";
   import { app, act, toast } from "$lib/state.svelte";
   import { t } from "$lib/i18n.svelte";
   import Segmented from "./Segmented.svelte";
@@ -25,7 +25,12 @@
     const id = setInterval(async () => {
       if (running) st = await api.proxyStatus().catch(() => st);
     }, 2000);
-    return () => clearInterval(id);
+    // Прокси переключили из трея.
+    const un = on("proxy-changed", load);
+    return () => {
+      clearInterval(id);
+      un.then((f) => f());
+    };
   });
 
   async function start() {

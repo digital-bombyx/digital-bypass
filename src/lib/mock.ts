@@ -84,12 +84,10 @@ const proxy: any = {
   stats: { running: false, port: 8881, active: 0, total: 0, failed: 0, system: false, last_error: null },
 };
 const listPresets = [
-  { id: "youtube", name: "YouTube", domains: ["youtube.com", "youtu.be", "googlevideo.com", "ytimg.com"] },
-  { id: "discord", name: "Discord", domains: ["discord.com", "discord.gg", "discordapp.com", "discordapp.net", "discord.media"] },
-  { id: "telegram", name: "Telegram", domains: ["telegram.org", "t.me", "telegram.me"] },
-  { id: "meta", name: "Instagram / Facebook / WhatsApp", domains: ["instagram.com", "facebook.com", "whatsapp.com"] },
-  { id: "twitter", name: "X / Twitter", domains: ["x.com", "twitter.com", "twimg.com", "t.co"] },
-  { id: "roblox", name: "Roblox", domains: ["roblox.com", "rbxcdn.com", "rbx.com"] },
+  { id: "telegram", name: "Telegram", domains: ["telegram.org", "t.me", "telegram.me"], builtin: 0 },
+  { id: "meta", name: "Instagram / Facebook / WhatsApp", domains: ["instagram.com", "facebook.com", "whatsapp.com"], builtin: 0 },
+  { id: "twitter", name: "X / Twitter", domains: ["x.com", "twitter.com", "twimg.com", "t.co"], builtin: 0 },
+  { id: "roblox", name: "Roblox", domains: ["roblox.com", "rbxcdn.com", "rbx.com"], builtin: 0 },
 ];
 const diagSample = (domain: string) => ({
   domain,

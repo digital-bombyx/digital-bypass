@@ -70,7 +70,8 @@ pub fn write(dir: &Path, kind: &str, content: &str) -> Result<SaveResult, String
 }
 
 /// Тематические наборы доменов для list-general-user.txt.
-/// В hostlist zapret домен покрывает и все поддомены.
+/// В hostlist zapret домен покрывает и все поддомены. YouTube (list-google.txt)
+/// и Discord (list-general.txt) уже есть во встроенных списках — их тут нет.
 #[derive(Serialize)]
 pub struct Preset {
     pub id: &'static str,
@@ -79,19 +80,6 @@ pub struct Preset {
 }
 
 pub const PRESETS: &[Preset] = &[
-    Preset {
-        id: "youtube",
-        name: "YouTube",
-        domains: &["youtube.com", "youtu.be", "googlevideo.com", "ytimg.com", "ggpht.com", "youtube-nocookie.com", "youtubei.googleapis.com", "youtubekids.com"],
-    },
-    Preset {
-        id: "discord",
-        name: "Discord",
-        domains: &[
-            "discord.com", "discord.gg", "discordapp.com", "discordapp.net", "discord.media", "discordcdn.com",
-            "discord.dev", "discord.new", "discord.gift", "discordstatus.com", "dis.gd",
-        ],
-    },
     Preset {
         id: "telegram",
         name: "Telegram",
@@ -117,11 +105,50 @@ pub const PRESETS: &[Preset] = &[
     },
 ];
 
-/// Добавить наборы в list-general-user.txt без дублей. Возвращает число новых доменов.
+/// Встроенные списки сборки, которые стратегии подключают и так.
+const BUILTIN: [&str; 2] = ["list-general.txt", "list-google.txt"];
+
+fn domains_in(text: &str) -> impl Iterator<Item = String> + '_ {
+    text.lines().map(|l| l.trim().to_lowercase()).filter(|l| !l.is_empty() && !l.starts_with('#'))
+}
+
+/// Домены встроенных списков.
+pub fn builtin_domains(dir: &Path) -> std::collections::HashSet<String> {
+    BUILTIN
+        .iter()
+        .filter_map(|f| crate::util::read_text(&dir.join("lists").join(f)).ok())
+        .flat_map(|t| domains_in(&t).collect::<Vec<_>>())
+        .collect()
+}
+
+/// Набор для интерфейса: только домены, которых ещё нет во встроенных списках.
+#[derive(Serialize)]
+pub struct PresetView {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub domains: Vec<&'static str>,
+    /// Сколько доменов набора уже есть во встроенных списках.
+    pub builtin: usize,
+}
+
+pub fn presets_for(dir: &Path) -> Vec<PresetView> {
+    let b = builtin_domains(dir);
+    PRESETS
+        .iter()
+        .map(|p| {
+            let domains: Vec<&'static str> = p.domains.iter().copied().filter(|d| !b.contains(*d)).collect();
+            PresetView { id: p.id, name: p.name, builtin: p.domains.len() - domains.len(), domains }
+        })
+        .filter(|p| !p.domains.is_empty())
+        .collect()
+}
+
+/// Добавить наборы в list-general-user.txt без дублей (и без доменов встроенных
+/// списков). Возвращает число новых доменов.
 pub fn add_presets(dir: &Path, ids: &[String]) -> Result<usize, String> {
     let current = read(dir, "general")?;
-    let mut existing: std::collections::HashSet<String> =
-        current.lines().map(|l| l.trim().to_lowercase()).filter(|l| !l.is_empty() && !l.starts_with('#')).collect();
+    let mut existing: std::collections::HashSet<String> = domains_in(&current).collect();
+    existing.extend(builtin_domains(dir));
     let mut add = Vec::new();
     for id in ids {
         let p = PRESETS.iter().find(|p| p.id == id).ok_or_else(|| crate::tr!("неизвестный набор: {id}", "unknown set: {id}"))?;
@@ -200,11 +227,23 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("digital-bypass-lists-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("lists")).unwrap();
         ensure(&dir);
-        let n = add_presets(&dir, &["discord".into(), "twitter".into()]).unwrap();
-        assert_eq!(n, PRESETS[1].domains.len() + PRESETS[4].domains.len());
-        assert_eq!(add_presets(&dir, &["discord".into()]).unwrap(), 0);
+        // Встроенный список уже содержит t.me — его набор Telegram не добавит.
+        std::fs::write(dir.join("lists").join("list-general.txt"), "t.me\r\n").unwrap();
+        let tg = PRESETS.iter().find(|p| p.id == "telegram").unwrap();
+        let tw = PRESETS.iter().find(|p| p.id == "twitter").unwrap();
+        let view = presets_for(&dir);
+        let v = view.iter().find(|p| p.id == "telegram").unwrap();
+        assert_eq!((v.builtin, v.domains.len()), (1, tg.domains.len() - 1));
+        let n = add_presets(&dir, &["telegram".into(), "twitter".into()]).unwrap();
+        assert_eq!(n, tg.domains.len() - 1 + tw.domains.len());
+        assert_eq!(add_presets(&dir, &["telegram".into()]).unwrap(), 0);
         let t = read(&dir, "general").unwrap();
-        assert!(t.contains("# Discord") && t.contains("x.com") && !t.contains("domain.example.abc"));
+        assert!(t.contains("# Telegram") && t.contains("x.com") && !t.contains("domain.example.abc"));
+        assert!(!t.lines().any(|l| l == "t.me"));
+        // Набор, целиком покрытый встроенными списками, не показывается.
+        let all_x: String = tw.domains.iter().map(|d| format!("{d}\n")).collect();
+        std::fs::write(dir.join("lists").join("list-google.txt"), all_x).unwrap();
+        assert!(!presets_for(&dir).iter().any(|p| p.id == "twitter"));
         assert!(add_presets(&dir, &["nope".into()]).is_err());
         let _ = std::fs::remove_dir_all(&dir);
     }

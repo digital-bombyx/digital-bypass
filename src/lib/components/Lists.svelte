@@ -79,13 +79,14 @@
       <div class="label">{t("наборы", "sets")}</div>
       <div class="chips">
         {#each presets as p (p.id)}
-          <button class="set" class:on={picked.has(p.id)} title={p.domains.join(", ")} onclick={() => togglePreset(p.id)}>
+          <button class="set" class:on={picked.has(p.id)} title={p.domains.join(", ") + (p.builtin ? `
+${t("ещё во встроенных списках", "already in built-in lists")}: ${p.builtin}` : "")} onclick={() => togglePreset(p.id)}>
             {p.name} <span class="faint">{p.domains.length}</span>
           </button>
         {/each}
       </div>
       <div class="actions">
-        <span class="faint mono note">{t("домены добавятся в конец list-general-user.txt без дублей", "domains are appended to list-general-user.txt without duplicates")}</span>
+        <span class="faint mono note">{t("YouTube и Discord уже во встроенных списках; новые домены добавятся в конец list-general-user.txt без дублей", "YouTube and Discord are already in the built-in lists; new domains are appended to list-general-user.txt without duplicates")}</span>
         <button class="btn sm" disabled={!picked.size || app.busy || app.ov?.testing} onclick={addPresets}><Plus size={12} /> {t("добавить", "add")}</button>
       </div>
     </section>
