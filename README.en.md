@@ -28,7 +28,7 @@ One-click zapret2 (winws2 + Lua), a bypass proxy without admin rights, DNS switc
 - **Strategies as-is.** Arguments are read straight from `general*.bat`.
 - **Strategy tests** modelled on `utils\test zapret.ps1`: HTTP / TLS 1.2 / TLS 1.3 + ping and the "16-20 KB" DPI test, best pick and history.
 - **Game Filter, IPSet, user lists** — the same files `service.bat` writes.
-- **Domain sets**: Telegram, Instagram/Facebook/WhatsApp, X, Roblox are added to the list in one click (YouTube and Discord are already in the built-in lists).
+- **Domain sets**: Telegram, Instagram/Facebook/WhatsApp, X, Roblox, SoundCloud are added to the list in one click (YouTube and Discord are already in the built-in lists).
 
 ### DNS
 

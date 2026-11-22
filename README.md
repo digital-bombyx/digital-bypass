@@ -28,7 +28,7 @@ zapret2 (winws2 + Lua) в один клик, прокси-обходчик бе�
 - **Стратегии без переделок.** Аргументы берутся прямо из `general*.bat`.
 - **Тесты стратегий** по образцу `utils\test zapret.ps1`: HTTP / TLS 1.2 / TLS 1.3 + ping и DPI-тест «16-20 КБ», выбор лучшей, история.
 - **Game Filter, IPSet, пользовательские списки** — те же файлы, что пишет `service.bat`.
-- **Наборы доменов**: Telegram, Instagram/Facebook/WhatsApp, X, Roblox добавляются в список одним кликом (YouTube и Discord уже есть во встроенных списках).
+- **Наборы доменов**: Telegram, Instagram/Facebook/WhatsApp, X, Roblox, SoundCloud добавляются в список одним кликом (YouTube и Discord уже есть во встроенных списках).
 
 ### DNS
 

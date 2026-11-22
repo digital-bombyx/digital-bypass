@@ -88,6 +88,7 @@ const listPresets = [
   { id: "meta", name: "Instagram / Facebook / WhatsApp", domains: ["instagram.com", "facebook.com", "whatsapp.com"], builtin: 0 },
   { id: "twitter", name: "X / Twitter", domains: ["x.com", "twitter.com", "twimg.com", "t.co"], builtin: 0 },
   { id: "roblox", name: "Roblox", domains: ["roblox.com", "rbxcdn.com", "rbx.com"], builtin: 0 },
+  { id: "soundcloud", name: "SoundCloud", domains: ["soundcloud.com", "soundcloud.cloud", "sndcdn.com"], builtin: 0 },
 ];
 const diagSample = (domain: string) => ({
   domain,

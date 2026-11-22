@@ -103,6 +103,11 @@ pub const PRESETS: &[Preset] = &[
         name: "Roblox",
         domains: &["roblox.com", "rbxcdn.com", "rbx.com"],
     },
+    Preset {
+        id: "soundcloud",
+        name: "SoundCloud",
+        domains: &["soundcloud.com", "soundcloud.cloud", "sndcdn.com"],
+    },
 ];
 
 /// Встроенные списки сборки, которые стратегии подключают и так.
