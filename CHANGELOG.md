@@ -27,6 +27,7 @@
 - **Прокси, автоматический режим** (по мотивам ByeDPI): при сбросе или молчании после ClientHello — переподключение запасными способами, рабочий запоминается для сайта на 6 часов. Запасные способы задаются подбором. **OOB** как ещё одна техника; подбор проверяет 33 варианта.
 - **Свои позиции разреза** для прокси в синтаксисе ByeDPI: `смещение[:повторы:шаг][+s|e|m|n]`.
 - Текст ярче, мелкие подписи на полпикселя крупнее.
+- **DoT для локального резолвера**: DNS поверх TLS (порт 853), по умолчанию. Наш DoH работает по HTTP/1.1, и Quad9, Яндекс, AdGuard Unfiltered и Mullvad по нему не отвечали; по DoT отвечают все пресеты, кроме OpenDNS.
 
 ### What's new
 
@@ -49,5 +50,6 @@
 - **Proxy auto mode** (inspired by ByeDPI): on a reset or silence after the ClientHello the proxy reconnects with fallback methods and remembers the working one per site for 6 hours; the finder sets the fallbacks. **OOB** as another technique; the finder tries 33 variants.
 - **Custom cut positions** for the proxy in ByeDPI syntax: `offset[:repeats:skip][+s|e|m|n]`.
 - Brighter text; small labels half a pixel larger.
+- **DoT for the local resolver**: DNS over TLS (port 853), the default. Our DoH speaks HTTP/1.1, and Quad9, Yandex, AdGuard Unfiltered and Mullvad did not answer it; over DoT every preset except OpenDNS works.
 
 [Unreleased]: https://github.com/digital-bombyx/digital-bypass/commits/main

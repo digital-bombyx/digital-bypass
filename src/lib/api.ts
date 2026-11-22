@@ -114,6 +114,8 @@ export type DnsPreset = {
   v4: string[];
   v6: string[];
   doh: string | null;
+  /** Имя сервера DNS over TLS (порт 853). */
+  dot: string | null;
 };
 export type DnsApplyReq = {
   index: number;

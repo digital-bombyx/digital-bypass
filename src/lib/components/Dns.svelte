@@ -4,6 +4,7 @@
   import { app, act, toast } from "$lib/state.svelte";
   import { t, i18n } from "$lib/i18n.svelte";
   import Switch from "./Switch.svelte";
+  import Segmented from "./Segmented.svelte";
   import { RefreshCw, Eraser, Undo2, Check, Lock, Cable, Wifi, Network, ShieldCheck } from "@lucide/svelte";
 
   let info = $state<DnsInfo | null>(null);
@@ -19,6 +20,9 @@
   let fallback = $state(false);
   let stub = $state<StubStatus | null>(null);
   let stubFallback = $state(true);
+  /** DoT работает у большего числа провайдеров (Quad9, Яндекс требуют HTTP/2 для DoH). */
+  let stubProto = $state<"dot" | "doh">("dot");
+  let stubCustom = $state("");
 
   const adapter = $derived(info?.adapters.find((a) => a.index === index) ?? null);
   const current = $derived(
@@ -86,7 +90,18 @@
   }
 
   /** Резолвер берёт шаблон и адреса выбранного сервера; адреса — bootstrap (без системного DNS). */
-  const stubTemplate = $derived(template.trim() || presets.find((x) => x.id === preset)?.doh || "");
+  const presetObj = $derived(presets.find((x) => x.id === preset));
+  /** Адрес сервера резолвера: tls://имя для DoT, https://… для DoH; для «Своего» — ввод. */
+  const stubTemplate = $derived(
+    preset === "custom"
+      ? stubCustom.trim()
+      : stubProto === "dot"
+        ? presetObj?.dot
+          ? `tls://${presetObj.dot}`
+          : ""
+        : template.trim() || presetObj?.doh || "",
+  );
+  const stubOk = $derived(stubTemplate.startsWith("https://") || stubTemplate.startsWith("tls://"));
   async function stubEnable() {
     if (index === null) return;
     const boot = [...v4, ...v6].map((x) => x.trim()).filter(Boolean);
@@ -252,12 +267,33 @@
       {:else}
         <p class="muted text">
           {t(
-            "Приложение само отвечает на DNS-запросы и пересылает их выбранному серверу по HTTPS. Пока оно запущено (и в трее), провайдер не видит и не подменяет DNS. При выходе прежний DNS адаптера возвращается.",
-            "The app answers DNS queries itself and forwards them to the chosen server over HTTPS. While it runs (also in the tray), the ISP cannot see or spoof DNS. On exit the adapter's previous DNS is restored.",
+            "Приложение само отвечает на DNS-запросы и пересылает их выбранному серверу в зашифрованном виде (DoT или DoH). Пока оно запущено (и в трее), провайдер не видит и не подменяет DNS. При выходе прежний DNS адаптера возвращается.",
+            "The app answers DNS queries itself and forwards them encrypted (DoT or DoH) to the chosen server. While it runs (also in the tray), the ISP cannot see or spoof DNS. On exit the adapter's previous DNS is restored.",
           )}
         </p>
+        <div class="row">
+          <div class="hint faint mono">
+            {stubProto === "dot"
+              ? t("DoT — DNS поверх TLS, порт 853: работает у всех пресетов, кроме OpenDNS", "DoT — DNS over TLS, port 853: works for every preset except OpenDNS")
+              : t("DoH — DNS поверх HTTPS: часть провайдеров (Quad9, Яндекс) требует HTTP/2 и не ответит", "DoH — DNS over HTTPS: some providers (Quad9, Yandex) require HTTP/2 and will not answer")}
+          </div>
+          <Segmented
+            small
+            disabled={app.busy || preset === "custom"}
+            value={stubProto}
+            onchange={(v) => (stubProto = v)}
+            options={[
+              { value: "dot", label: "DoT" },
+              { value: "doh", label: "DoH" },
+            ]} />
+        </div>
         <div class="kv2 mono">
-          <span class="k">{t("сервер", "server")}</span><span class="wrap">{stubTemplate || t("выберите сервер с DoH", "pick a server with DoH")}</span>
+          <span class="k">{t("сервер", "server")}</span>
+          {#if preset === "custom"}
+            <input class="input" placeholder="tls://dns.example  ·  https://dns.example/dns-query" bind:value={stubCustom} />
+          {:else}
+            <span class="wrap">{stubTemplate || t("у этого провайдера нет DoT — выберите DoH", "this provider has no DoT — choose DoH")}</span>
+          {/if}
         </div>
         <label class="check mono">
           <input type="checkbox" bind:checked={stubFallback} />
@@ -265,7 +301,7 @@
         </label>
         <div class="actions">
           <span class="grow"></span>
-          <button class="btn primary" disabled={app.busy || !admin || !adapter || !stubTemplate.startsWith("https://")} onclick={stubEnable}>
+          <button class="btn primary" disabled={app.busy || !admin || !adapter || !stubOk} onclick={stubEnable}>
             <ShieldCheck size={13} /> {t("Включить на адаптере", "Enable on adapter")}
           </button>
         </div>

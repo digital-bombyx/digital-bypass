@@ -60,12 +60,12 @@ const run = {
 };
 
 const dnsPresets = [
-  { id: "cloudflare", name: "Cloudflare", note_ru: "без фильтрации, быстрый", note_en: "no filtering, fast", v4: ["1.1.1.1", "1.0.0.1"], v6: ["2606:4700:4700::1111", "2606:4700:4700::1001"], doh: "https://cloudflare-dns.com/dns-query" },
-  { id: "google", name: "Google", note_ru: "без фильтрации", note_en: "no filtering", v4: ["8.8.8.8", "8.8.4.4"], v6: ["2001:4860:4860::8888", "2001:4860:4860::8844"], doh: "https://dns.google/dns-query" },
-  { id: "quad9", name: "Quad9", note_ru: "блокирует вредоносные домены, DNSSEC", note_en: "blocks malware domains, DNSSEC", v4: ["9.9.9.9", "149.112.112.112"], v6: ["2620:fe::fe", "2620:fe::9"], doh: "https://dns.quad9.net/dns-query" },
-  { id: "adguard", name: "AdGuard", note_ru: "режет рекламу и трекеры", note_en: "blocks ads and trackers", v4: ["94.140.14.14", "94.140.15.15"], v6: ["2a10:50c0::ad1:ff", "2a10:50c0::ad2:ff"], doh: "https://dns.adguard-dns.com/dns-query" },
-  { id: "yandex", name: "Яндекс", note_ru: "базовый, доступен при белых списках", note_en: "basic, reachable under whitelists", v4: ["77.88.8.8", "77.88.8.1"], v6: ["2a02:6b8::feed:0ff", "2a02:6b8:0:1::feed:0ff"], doh: "https://common.dot.dns.yandex.net/dns-query" },
-  { id: "mullvad", name: "Mullvad", note_ru: "без логов и фильтрации", note_en: "no logs, no filtering", v4: ["194.242.2.2"], v6: ["2a07:e340::2"], doh: "https://dns.mullvad.net/dns-query" },
+  { id: "cloudflare", name: "Cloudflare", note_ru: "без фильтрации, быстрый", note_en: "no filtering, fast", v4: ["1.1.1.1", "1.0.0.1"], v6: ["2606:4700:4700::1111", "2606:4700:4700::1001"], doh: "https://cloudflare-dns.com/dns-query", dot: "cloudflare-dns.com" },
+  { id: "google", name: "Google", note_ru: "без фильтрации", note_en: "no filtering", v4: ["8.8.8.8", "8.8.4.4"], v6: ["2001:4860:4860::8888", "2001:4860:4860::8844"], doh: "https://dns.google/dns-query", dot: "dns.google" },
+  { id: "quad9", name: "Quad9", note_ru: "блокирует вредоносные домены, DNSSEC", note_en: "blocks malware domains, DNSSEC", v4: ["9.9.9.9", "149.112.112.112"], v6: ["2620:fe::fe", "2620:fe::9"], doh: "https://dns.quad9.net/dns-query", dot: "dns.quad9.net" },
+  { id: "adguard", name: "AdGuard", note_ru: "режет рекламу и трекеры", note_en: "blocks ads and trackers", v4: ["94.140.14.14", "94.140.15.15"], v6: ["2a10:50c0::ad1:ff", "2a10:50c0::ad2:ff"], doh: "https://dns.adguard-dns.com/dns-query", dot: "dns.adguard-dns.com" },
+  { id: "yandex", name: "Яндекс", note_ru: "базовый, доступен при белых списках", note_en: "basic, reachable under whitelists", v4: ["77.88.8.8", "77.88.8.1"], v6: ["2a02:6b8::feed:0ff", "2a02:6b8:0:1::feed:0ff"], doh: "https://common.dot.dns.yandex.net/dns-query", dot: "common.dot.dns.yandex.net" },
+  { id: "mullvad", name: "Mullvad", note_ru: "без логов и фильтрации", note_en: "no logs, no filtering", v4: ["194.242.2.2"], v6: ["2a07:e340::2"], doh: "https://dns.mullvad.net/dns-query", dot: "dns.mullvad.net" },
 ];
 const dns: any = {
   doh_supported: true,

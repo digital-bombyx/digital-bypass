@@ -146,12 +146,27 @@ pub struct Template {
     pub host: String,
     pub port: u16,
     pub path: String,
+    /// DNS over TLS (RFC 7858, `tls://host[:port]`) вместо DoH.
+    pub dot: bool,
 }
 
 /// `https://host[:port]/path[{?dns}]`.
+/// `https://host[:port]/path[{?dns}]` (DoH) или `tls://host[:port]` (DoT, порт 853).
 pub fn parse_template(t: &str) -> Result<Template, String> {
-    let bad = || crate::tr!("некорректный шаблон DoH: {t}", "invalid DoH template: {t}");
-    let rest = t.trim().strip_prefix("https://").ok_or_else(bad)?;
+    let bad = || crate::tr!("некорректный адрес сервера: {t} (нужно https://… или tls://…)", "invalid server address: {t} (https://… or tls://… expected)");
+    let t = t.trim();
+    if let Some(rest) = t.strip_prefix("tls://").or_else(|| t.strip_prefix("dot://")) {
+        let hostport = rest.trim_end_matches('/');
+        let (host, port) = match hostport.rsplit_once(':') {
+            Some((h, p)) if !h.contains(':') => (h.to_string(), p.parse().map_err(|_| bad())?),
+            _ => (hostport.to_string(), 853),
+        };
+        if host.is_empty() || host.contains(['/', ' ', '"', '\'']) {
+            return Err(bad());
+        }
+        return Ok(Template { host, port, path: String::new(), dot: true });
+    }
+    let rest = t.strip_prefix("https://").ok_or_else(bad)?;
     let rest = rest.replace("{?dns}", "");
     let (hostport, path) = match rest.find('/') {
         Some(i) => (&rest[..i], rest[i..].to_string()),
@@ -164,7 +179,7 @@ pub fn parse_template(t: &str) -> Result<Template, String> {
     if host.is_empty() || host.contains(char::is_whitespace) {
         return Err(bad());
     }
-    Ok(Template { host, port, path })
+    Ok(Template { host, port, path, dot: false })
 }
 
 pub struct DohClient {
@@ -221,19 +236,35 @@ impl DohClient {
         read_http_body(tls)
     }
 
+    /// DoT: сообщение с 2-байтной длиной впереди, в ответ — так же (RFC 7858).
+    fn dot(tls: &mut Tls, query: &[u8]) -> std::io::Result<Vec<u8>> {
+        let mut m = (query.len() as u16).to_be_bytes().to_vec();
+        m.extend_from_slice(query);
+        tls.write_all(&m)?;
+        tls.flush()?;
+        let mut len = [0u8; 2];
+        tls.read_exact(&mut len)?;
+        let mut r = vec![0u8; u16::from_be_bytes(len) as usize];
+        tls.read_exact(&mut r)?;
+        Ok(r)
+    }
+
     /// Обмен «сырым» DNS-сообщением. Одна повторная попытка на новом соединении.
     pub fn exchange(&self, query: &[u8]) -> Result<Vec<u8>, String> {
+        let proto = if self.tpl.dot { "DoT" } else { "DoH" };
         let mut guard = self.conn.lock().unwrap();
         for attempt in 0..2 {
             if guard.is_none() {
-                *guard = Some(self.connect().map_err(|e| format!("DoH {}: {e}", self.tpl.host))?);
+                *guard = Some(self.connect().map_err(|e| format!("{proto} {}: {e}", self.tpl.host))?);
             }
-            match Self::post(guard.as_mut().unwrap(), &self.tpl, query) {
+            let tls = guard.as_mut().unwrap();
+            let r = if self.tpl.dot { Self::dot(tls, query) } else { Self::post(tls, &self.tpl, query) };
+            match r {
                 Ok(b) => return Ok(b),
                 Err(e) => {
                     *guard = None;
                     if attempt == 1 {
-                        return Err(format!("DoH {}: {e}", self.tpl.host));
+                        return Err(format!("{proto} {}: {e}", self.tpl.host));
                     }
                 }
             }
@@ -668,8 +699,15 @@ mod tests {
     fn templates() {
         assert_eq!(
             parse_template("https://dns.google/dns-query").unwrap(),
-            Template { host: "dns.google".into(), port: 443, path: "/dns-query".into() }
+            Template { host: "dns.google".into(), port: 443, path: "/dns-query".into(), dot: false }
         );
+        assert_eq!(
+            parse_template("tls://dns.quad9.net").unwrap(),
+            Template { host: "dns.quad9.net".into(), port: 853, path: String::new(), dot: true }
+        );
+        assert_eq!(parse_template("tls://common.dot.dns.yandex.net:8853").unwrap().port, 8853);
+        assert!(parse_template("tls://").is_err());
+        assert!(parse_template("tls://a b").is_err());
         assert_eq!(parse_template("https://h:8443/q{?dns}").unwrap().port, 8443);
         assert_eq!(parse_template("https://h").unwrap().path, "/dns-query");
         assert!(parse_template("http://h/q").is_err());
@@ -704,6 +742,40 @@ mod tests {
         let c = DohClient::new("https://cloudflare-dns.com/dns-query", &["1.1.1.1".parse().unwrap()]).unwrap();
         println!("A: {:?}", c.query(&n, TYPE_A));
         println!("cached: {:?}", r.resolve(&n));
+    }
+
+    /// DoT поверх локальной «петли»: сервер с самоподписанным сертификатом не
+    /// примется, поэтому проверяем только формат обмена на моке потока.
+    #[test]
+    fn dot_framing() {
+        struct Duplex(std::io::Cursor<Vec<u8>>, Vec<u8>);
+        impl Read for Duplex {
+            fn read(&mut self, b: &mut [u8]) -> std::io::Result<usize> {
+                self.0.read(b)
+            }
+        }
+        impl Write for Duplex {
+            fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+                self.1.write(b)
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let q = build_query(7, "a.b", TYPE_A).unwrap();
+        let mut answer = vec![0, 3];
+        answer.extend_from_slice(b"xyz");
+        let mut d = Duplex(std::io::Cursor::new(answer), Vec::new());
+        // Та же логика, что в DohClient::dot, но на обобщённом потоке.
+        let mut m = (q.len() as u16).to_be_bytes().to_vec();
+        m.extend_from_slice(&q);
+        d.write_all(&m).unwrap();
+        let mut len = [0u8; 2];
+        d.read_exact(&mut len).unwrap();
+        let mut r = vec![0u8; u16::from_be_bytes(len) as usize];
+        d.read_exact(&mut r).unwrap();
+        assert_eq!(&d.1[..2], &(q.len() as u16).to_be_bytes());
+        assert_eq!(r, b"xyz");
     }
 
     /// Сеть: резолвер на 127.0.0.1:53 отвечает по UDP и TCP. Адаптеры не трогает.

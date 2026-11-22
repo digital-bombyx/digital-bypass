@@ -24,6 +24,8 @@ pub struct Preset {
     pub v4: &'static [&'static str],
     pub v6: &'static [&'static str],
     pub doh: Option<&'static str>,
+    /// Имя сервера DNS over TLS (порт 853) — для локального резолвера.
+    pub dot: Option<&'static str>,
 }
 
 pub const PRESETS: &[Preset] = &[
@@ -35,6 +37,7 @@ pub const PRESETS: &[Preset] = &[
         v4: &["1.1.1.1", "1.0.0.1"],
         v6: &["2606:4700:4700::1111", "2606:4700:4700::1001"],
         doh: Some("https://cloudflare-dns.com/dns-query"),
+        dot: Some("cloudflare-dns.com"),
     },
     Preset {
         id: "cloudflare-security",
@@ -44,6 +47,7 @@ pub const PRESETS: &[Preset] = &[
         v4: &["1.1.1.2", "1.0.0.2"],
         v6: &["2606:4700:4700::1112", "2606:4700:4700::1002"],
         doh: Some("https://security.cloudflare-dns.com/dns-query"),
+        dot: Some("security.cloudflare-dns.com"),
     },
     Preset {
         id: "google",
@@ -53,6 +57,7 @@ pub const PRESETS: &[Preset] = &[
         v4: &["8.8.8.8", "8.8.4.4"],
         v6: &["2001:4860:4860::8888", "2001:4860:4860::8844"],
         doh: Some("https://dns.google/dns-query"),
+        dot: Some("dns.google"),
     },
     Preset {
         id: "quad9",
@@ -62,6 +67,7 @@ pub const PRESETS: &[Preset] = &[
         v4: &["9.9.9.9", "149.112.112.112"],
         v6: &["2620:fe::fe", "2620:fe::9"],
         doh: Some("https://dns.quad9.net/dns-query"),
+        dot: Some("dns.quad9.net"),
     },
     Preset {
         id: "adguard",
@@ -71,6 +77,7 @@ pub const PRESETS: &[Preset] = &[
         v4: &["94.140.14.14", "94.140.15.15"],
         v6: &["2a10:50c0::ad1:ff", "2a10:50c0::ad2:ff"],
         doh: Some("https://dns.adguard-dns.com/dns-query"),
+        dot: Some("dns.adguard-dns.com"),
     },
     Preset {
         id: "adguard-unfiltered",
@@ -80,6 +87,7 @@ pub const PRESETS: &[Preset] = &[
         v4: &["94.140.14.140", "94.140.14.141"],
         v6: &["2a10:50c0::1:ff", "2a10:50c0::2:ff"],
         doh: Some("https://unfiltered.adguard-dns.com/dns-query"),
+        dot: Some("unfiltered.adguard-dns.com"),
     },
     Preset {
         id: "yandex",
@@ -89,6 +97,7 @@ pub const PRESETS: &[Preset] = &[
         v4: &["77.88.8.8", "77.88.8.1"],
         v6: &["2a02:6b8::feed:0ff", "2a02:6b8:0:1::feed:0ff"],
         doh: Some("https://common.dot.dns.yandex.net/dns-query"),
+        dot: Some("common.dot.dns.yandex.net"),
     },
     Preset {
         id: "yandex-safe",
@@ -98,6 +107,7 @@ pub const PRESETS: &[Preset] = &[
         v4: &["77.88.8.88", "77.88.8.2"],
         v6: &["2a02:6b8::feed:bad", "2a02:6b8:0:1::feed:bad"],
         doh: Some("https://safe.dot.dns.yandex.net/dns-query"),
+        dot: Some("safe.dot.dns.yandex.net"),
     },
     Preset {
         id: "opendns",
@@ -107,6 +117,7 @@ pub const PRESETS: &[Preset] = &[
         v4: &["208.67.222.222", "208.67.220.220"],
         v6: &["2620:119:35::35", "2620:119:53::53"],
         doh: Some("https://doh.opendns.com/dns-query"),
+        dot: None,
     },
     Preset {
         id: "mullvad",
@@ -116,6 +127,7 @@ pub const PRESETS: &[Preset] = &[
         v4: &["194.242.2.2"],
         v6: &["2a07:e340::2"],
         doh: Some("https://dns.mullvad.net/dns-query"),
+        dot: Some("dns.mullvad.net"),
     },
 ];
 
@@ -148,6 +160,16 @@ pub fn parse_servers(v6: bool, list: &[String]) -> Result<Vec<IpAddr>, String> {
         return Err(crate::tr!("не больше {MAX_SERVERS} серверов на семейство", "at most {MAX_SERVERS} servers per family"));
     }
     Ok(out)
+}
+
+/// Адрес сервера для локального резолвера: `https://…` (DoH) или `tls://…` (DoT).
+pub fn validate_upstream(t: &str) -> Result<String, String> {
+    let t = t.trim();
+    if t.starts_with("tls://") {
+        crate::doh::parse_template(t)?;
+        return Ok(t.to_string());
+    }
+    validate_template(t)
 }
 
 /// Шаблон DoH: только https, без пробелов и кавычек (уходит в аргумент netsh).
@@ -812,6 +834,9 @@ mod tests {
             if let Some(t) = p.doh {
                 validate_template(t).unwrap();
             }
+            if let Some(h) = p.dot {
+                validate_upstream(&format!("tls://{h}")).unwrap();
+            }
         }
     }
 
@@ -879,6 +904,20 @@ mod tests {
         assert_eq!(r.len(), 1);
         assert!(r[0].autoupgrade && !r[0].fallback);
         assert_eq!(r[0].template, "https://dns.google/dns-query");
+    }
+
+    /// Сеть: DoH (HTTP/1.1) и DoT каждого пресета. Только чтение.
+    #[test]
+    #[ignore]
+    fn live_presets_doh() {
+        for p in PRESETS {
+            let Some(t) = p.doh else { continue };
+            let boot: Vec<IpAddr> = p.v4.iter().map(|s| s.parse().unwrap()).collect();
+            let doh = crate::doh::DohClient::new(t, &boot).and_then(|c| c.resolve("example.com"));
+            let dot = p.dot.map(|h| crate::doh::DohClient::new(&format!("tls://{h}"), &boot).and_then(|c| c.resolve("example.com")));
+            println!("PRESET {:<20} DoH: {:?}", p.id, doh.map(|v| v.len()));
+            println!("       {:<20} DoT: {:?}", "", dot.map(|r| r.map(|v| v.len())));
+        }
     }
 
     /// Только чтение: адаптеры и шаблоны DoH этой машины. Ничего не меняет.

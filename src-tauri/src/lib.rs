@@ -529,7 +529,7 @@ fn dns_stub_status(state: State<AppState>) -> StubStatus {
 #[tauri::command(async)]
 fn dns_stub_enable(state: State<AppState>, index: u32, template: String, bootstrap: Vec<String>, fallback: bool) -> R<StubStatus> {
     state.require_admin()?;
-    let template = dns::validate_template(&template)?;
+    let template = dns::validate_upstream(&template)?;
     if state.settings.lock().unwrap().dns_stub.is_some() {
         state.stub_disable()?;
     }
