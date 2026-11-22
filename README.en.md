@@ -47,11 +47,15 @@ DPI bypass **without admin rights and without a driver** — for work PCs and wh
 - A local HTTP proxy splits the TLS ClientHello so the site name is torn between records; the `disorder` method sends the first part with TTL=1.
 - Site addresses are resolved via DoH, so DNS spoofing does not matter.
 - The proxy is set in Windows settings and removed when turned off.
+- HTTP and SOCKS5 on one port.
+- **Local network sharing**: a phone on the same Wi-Fi uses the PC as its proxy. Only local network addresses are allowed, and the firewall rule is added automatically (with admin rights). An optional user and password are asked from network devices but not from the PC itself.
 - HTTPS through the proxy only: UDP, QUIC and Discord voice still need zapret2.
 
 ### Check
 
 Enter a domain: the app compares the system DNS with DoH, tries TCP and TLS to each address and tells what is wrong — DNS spoofing, DPI by site name or IP blocking — and which module helps.
+
+The **SNI scanner** sends a TLS hello with different site names to one address and shows which names DPI lets through. It helps to tell whether whitelists are on and to pick a name for VLESS Reality or a fake SNI for strategies. The idea comes from [sni-spoofing-rust](https://github.com/therealaleph/sni-spoofing-rust).
 
 ### hosts
 

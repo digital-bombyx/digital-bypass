@@ -12,6 +12,7 @@ mod proxy;
 mod runner;
 mod service;
 mod settings;
+mod sniscan;
 mod strategy;
 mod tester;
 mod util;
@@ -132,6 +133,13 @@ impl AppState {
         self.proxy_stop_inner();
         let p = proxy::Proxy::start(cfg.clone())?;
         *self.proxy.lock().unwrap() = Some(p);
+        // Раздача в LAN: правило брандмауэра (только с правами администратора).
+        if cfg.lan && winapi::is_admin() {
+            if let Err(e) = proxy::firewall_allow(cfg.port) {
+                *self.proxy.lock().unwrap() = None;
+                return Err(e);
+            }
+        }
         if cfg.system {
             let prev = proxy::system_set(cfg.port)?;
             self.update(|s| s.proxy_prev = Some(prev));
@@ -145,7 +153,10 @@ impl AppState {
 
     /// Остановить прокси и вернуть системные настройки; флаг «включён» не трогает.
     fn proxy_stop_inner(&self) {
-        self.proxy.lock().unwrap().take();
+        let was_lan = self.proxy.lock().unwrap().take().is_some_and(|p| p.stats().lan);
+        if was_lan && winapi::is_admin() {
+            proxy::firewall_remove();
+        }
         let (prev, port) = {
             let s = self.settings.lock().unwrap();
             (s.proxy_prev.clone(), s.proxy.port)
@@ -563,9 +574,27 @@ fn proxy_start(app: AppHandle, state: State<AppState>, config: proxy::Config) ->
     if config.port < 1024 {
         return Err(tr!("порт должен быть от 1024 до 65535", "port must be 1024–65535"));
     }
+    config.validate_auth()?;
     let r = state.proxy_start(config);
     refresh_tray(&app);
     r?;
+    Ok(proxy_status_of(&state))
+}
+
+/// Сохранить настройки прокси; работающий перезапустить с ними.
+#[tauri::command(async)]
+fn proxy_set_config(app: AppHandle, state: State<AppState>, config: proxy::Config) -> R<ProxyStatus> {
+    if config.port < 1024 {
+        return Err(tr!("порт должен быть от 1024 до 65535", "port must be 1024–65535"));
+    }
+    config.validate_auth()?;
+    if state.proxy.lock().unwrap().is_some() {
+        let r = state.proxy_start(config);
+        refresh_tray(&app);
+        r?;
+    } else {
+        state.update(|s| s.proxy = config);
+    }
     Ok(proxy_status_of(&state))
 }
 
@@ -575,6 +604,34 @@ fn proxy_stop(app: AppHandle, state: State<AppState>) -> ProxyStatus {
     state.update(|s| s.proxy_enabled = false);
     refresh_tray(&app);
     proxy_status_of(&state)
+}
+
+#[derive(Serialize)]
+struct SniDefaults {
+    target: &'static str,
+    snis: &'static [&'static str],
+}
+
+#[tauri::command(async)]
+fn sni_defaults() -> SniDefaults {
+    SniDefaults { target: sniscan::DEFAULT_TARGET, snis: sniscan::DEFAULT_SNIS }
+}
+
+#[tauri::command(async)]
+fn sni_scan(target: String, snis: String, timeout: u64) -> R<sniscan::Report> {
+    sniscan::run(&target, &sniscan::parse_snis(&snis), timeout)
+}
+
+/// IPv4-адреса ПК в локальной сети — их указывают на телефоне при раздаче.
+#[tauri::command(async)]
+fn lan_addresses() -> Vec<String> {
+    dns::info()
+        .adapters
+        .into_iter()
+        .filter(|a| a.up && a.gateway)
+        .flat_map(|a| a.addresses)
+        .filter(|s| s.parse::<std::net::Ipv4Addr>().is_ok_and(|ip| ip.is_private()))
+        .collect()
 }
 
 #[tauri::command(async)]
@@ -1044,7 +1101,11 @@ pub fn run() {
             proxy_status,
             proxy_start,
             proxy_stop,
+            proxy_set_config,
             diag_run,
+            lan_addresses,
+            sni_defaults,
+            sni_scan,
             list_presets,
             list_add_presets,
             set_autostart,

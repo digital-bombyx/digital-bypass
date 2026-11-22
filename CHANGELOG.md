@@ -18,6 +18,8 @@
 - **Проверка домена**: системный DNS против DoH, TCP и TLS по адресам, вердикт «подмена DNS / DPI / блокировка по IP» и подсказка модуля.
 - **Наборы доменов** для списка обхода: Telegram, Instagram/Facebook/WhatsApp, X, Roblox. Домены, которые уже есть во встроенных списках (YouTube, Discord), не дублируются.
 - **Трей**: переключатель прокси-обходчика, состояние DoH-резолвера, в подсказке — все включённые модули.
+- **Прокси**: SOCKS5 на том же порту, раздача в локальную сеть с правилом брандмауэра и логином/паролем для устройств из сети.
+- **Сканер SNI** во вкладке «проверка»: какие имена сайтов DPI пропускает к заданному адресу, признак белых списков.
 
 ### What's new
 
@@ -31,5 +33,7 @@
 - **Domain check**: system DNS vs DoH, TCP and TLS per address, a "DNS spoofing / DPI / IP block" verdict and the module to use.
 - **Domain sets** for the bypass list: Telegram, Instagram/Facebook/WhatsApp, X, Roblox. Domains already in the built-in lists (YouTube, Discord) are not duplicated.
 - **Tray**: bypass proxy toggle, DoH resolver state, all active modules in the tooltip.
+- **Proxy**: SOCKS5 on the same port, local network sharing with a firewall rule and a user/password for network devices.
+- **SNI scanner** in the Check tab: which site names DPI lets through to a given address, with a whitelist hint.
 
 [Unreleased]: https://github.com/digital-bombyx/digital-bypass/commits/main

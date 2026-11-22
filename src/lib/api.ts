@@ -140,11 +140,19 @@ export type StubStatus = {
   stats: { queries: number; cached: number; errors: number; last_error: string | null; ipv6: boolean; addr: string; template: string } | null;
 };
 
-export type ProxyConfig = { port: number; method: "split" | "disorder"; doh: boolean; system: boolean };
+export type ProxyConfig = {
+  port: number;
+  method: "split" | "disorder";
+  doh: boolean;
+  system: boolean;
+  lan: boolean;
+  user: string;
+  pass: string;
+};
 export type ProxyStatus = {
   config: ProxyConfig;
   enabled: boolean;
-  stats: { running: boolean; port: number; active: number; total: number; failed: number; system: boolean; last_error: string | null };
+  stats: { running: boolean; port: number; active: number; total: number; failed: number; system: boolean; lan: boolean; auth: boolean; last_error: string | null };
 };
 
 export type Probe = "ok" | "tcp_fail" | "tls_reset" | "tls_timeout" | "tls_cert" | "tls_error";
@@ -158,6 +166,15 @@ export type DiagReport = {
   system_bogus: boolean;
   checks: { ip: string; source: "system" | "doh" | "both"; result: Probe; ms: number | null; detail: string | null }[];
   verdict: Verdict;
+};
+
+export type SniOutcome = "pass" | "reset" | "timeout" | "no_tcp";
+export type SniReport = {
+  target: string;
+  items: { sni: string; outcome: SniOutcome; ms: number | null; detail: string | null }[];
+  passed: number;
+  blocked: number;
+  whitelist_suspected: boolean;
 };
 
 export type ListPreset = { id: string; name: string; domains: string[]; builtin: number };
@@ -198,7 +215,11 @@ export const api = {
   proxyStatus: () => invoke<ProxyStatus>("proxy_status"),
   proxyStart: (config: ProxyConfig) => invoke<ProxyStatus>("proxy_start", { config }),
   proxyStop: () => invoke<ProxyStatus>("proxy_stop"),
+  proxySetConfig: (config: ProxyConfig) => invoke<ProxyStatus>("proxy_set_config", { config }),
   diagRun: (domain: string) => invoke<DiagReport>("diag_run", { domain }),
+  lanAddresses: () => invoke<string[]>("lan_addresses"),
+  sniDefaults: () => invoke<{ target: string; snis: string[] }>("sni_defaults"),
+  sniScan: (target: string, snis: string, timeout: number) => invoke<SniReport>("sni_scan", { target, snis, timeout }),
   listPresets: () => invoke<ListPreset[]>("list_presets"),
   listAddPresets: (ids: string[]) => invoke<number>("list_add_presets", { ids }),
   setAutostart: (enabled: boolean) => invoke<boolean>("set_autostart", { enabled }),

@@ -79,9 +79,9 @@ const dns: any = {
 
 const stub: any = { running: false, config: null, stats: null };
 const proxy: any = {
-  config: { port: 8881, method: "disorder", doh: true, system: true },
+  config: { port: 8881, method: "disorder", doh: true, system: true, lan: false, user: "", pass: "" },
   enabled: false,
-  stats: { running: false, port: 8881, active: 0, total: 0, failed: 0, system: false, last_error: null },
+  stats: { running: false, port: 8881, active: 0, total: 0, failed: 0, system: false, lan: false, auth: false, last_error: null },
 };
 const listPresets = [
   { id: "telegram", name: "Telegram", domains: ["telegram.org", "t.me", "telegram.me"], builtin: 0 },
@@ -186,7 +186,10 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
     case "proxy_start":
       proxy.config = args.config;
       proxy.enabled = true;
-      proxy.stats = { running: true, port: args.config.port, active: 3, total: 41, failed: 1, system: args.config.system, last_error: null };
+      proxy.stats = { running: true, port: args.config.port, active: 3, total: 41, failed: 1, system: args.config.system, lan: args.config.lan, auth: !!args.config.user, last_error: null };
+      return structuredClone(proxy);
+    case "proxy_set_config":
+      proxy.config = args.config;
       return structuredClone(proxy);
     case "proxy_stop":
       proxy.enabled = false;
@@ -195,6 +198,26 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
     case "diag_run":
       await new Promise((r) => setTimeout(r, 700));
       return diagSample(args.domain);
+    case "lan_addresses":
+      return ["192.168.0.3"];
+    case "sni_defaults":
+      return { target: "104.16.132.229:443", snis: ["ya.ru", "vk.com", "gosuslugi.ru", "www.google.com", "www.youtube.com", "discord.com", "github.com", "x.com"] };
+    case "sni_scan":
+      await new Promise((r) => setTimeout(r, 600));
+      return {
+        target: args.target,
+        items: [
+          { sni: "ya.ru", outcome: "pass", ms: 171, detail: null },
+          { sni: "vk.com", outcome: "pass", ms: 162, detail: null },
+          { sni: "www.google.com", outcome: "pass", ms: 139, detail: null },
+          { sni: "www.youtube.com", outcome: "reset", ms: null, detail: "os error 10054" },
+          { sni: "discord.com", outcome: "timeout", ms: null, detail: "os error 10060" },
+          { sni: "github.com", outcome: "pass", ms: 136, detail: null },
+        ],
+        passed: 4,
+        blocked: 2,
+        whitelist_suspected: false,
+      };
     case "list_presets":
       return listPresets;
     case "list_add_presets":

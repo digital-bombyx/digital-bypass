@@ -1,7 +1,10 @@
-//! Обход DPI без прав администратора и без драйвера: локальный HTTP-прокси.
+//! Обход DPI без прав администратора и без драйвера: локальный прокси.
 //!
-//! Браузер (или вся система через настройки прокси Windows) открывает через
-//! него туннели CONNECT. Первый пакет туннеля — TLS ClientHello — режется на
+//! Один порт принимает и HTTP (CONNECT и обычные запросы), и SOCKS5 — протокол
+//! определяется по первому байту. Браузер (или вся система через настройки
+//! прокси Windows) открывает через него туннели. С `lan` прокси слушает все
+//! интерфейсы и пускает только адреса локальной сети — телефон в той же Wi-Fi
+//! может пользоваться обходом ПК. Первый пакет туннеля — TLS ClientHello — режется на
 //! несколько TLS-записей так, что имя сайта (SNI) оказывается разорвано между
 //! ними. Простые DPI собирают только первую запись и имя не видят.
 //!
@@ -32,11 +35,18 @@ pub struct Config {
     pub doh: bool,
     /// Прописать прокси в настройки Windows (HKCU).
     pub system: bool,
+    /// Раздавать в локальную сеть (слушать 0.0.0.0, пускать только частные адреса).
+    pub lan: bool,
+    /// Логин и пароль для клиентов из сети (пустой логин — без пароля).
+    /// С самого ПК (127.0.0.1) пароль не спрашивается: системный прокси Windows
+    /// не умеет его передавать.
+    pub user: String,
+    pub pass: String,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Config { port: 8881, method: "disorder".into(), doh: true, system: true }
+        Config { port: 8881, method: "disorder".into(), doh: true, system: true, lan: false, user: String::new(), pass: String::new() }
     }
 }
 
@@ -173,6 +183,174 @@ pub fn parse_request(head: &[u8]) -> Option<Request> {
     Some(Request::Http { host, port, head: new_head })
 }
 
+// ---------- авторизация ----------
+
+impl Config {
+    /// Проверка логина и пароля перед запуском.
+    pub fn validate_auth(&self) -> Result<(), String> {
+        if self.user.is_empty() && self.pass.is_empty() {
+            return Ok(());
+        }
+        let ok_chars = |s: &str| !s.is_empty() && s.len() <= 255 && !s.chars().any(char::is_control);
+        if !ok_chars(&self.user) || self.user.contains(':') || !ok_chars(&self.pass) {
+            return Err(crate::tr!(
+                "логин и пароль: оба непустые, до 255 символов, в логине без «:»",
+                "user and password: both non-empty, up to 255 characters, no ':' in the user"
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Base64 (стандартный алфавит) — только для заголовка Proxy-Authorization.
+pub fn b64_decode(s: &str) -> Option<Vec<u8>> {
+    let val = |c: u8| -> Option<u32> {
+        Some(match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        } as u32)
+    };
+    let s = s.trim().trim_end_matches('=').as_bytes();
+    let mut out = Vec::with_capacity(s.len() * 3 / 4);
+    for chunk in s.chunks(4) {
+        if chunk.len() == 1 {
+            return None;
+        }
+        let mut n = 0u32;
+        for (i, &c) in chunk.iter().enumerate() {
+            n |= val(c)? << (18 - 6 * i);
+        }
+        out.push((n >> 16) as u8);
+        if chunk.len() > 2 {
+            out.push((n >> 8) as u8);
+        }
+        if chunk.len() > 3 {
+            out.push(n as u8);
+        }
+    }
+    Some(out)
+}
+
+/// Сравнение без раннего выхода — чтобы по времени ответа нельзя было подбирать.
+fn same(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+/// Заголовок `Proxy-Authorization: Basic …` совпадает с логином и паролем.
+pub fn check_basic(head: &[u8], user: &str, pass: &str) -> bool {
+    let Ok(text) = std::str::from_utf8(head) else { return false };
+    let expected = format!("{user}:{pass}");
+    text.lines().any(|l| {
+        let Some((name, value)) = l.split_once(':') else { return false };
+        if !name.trim().eq_ignore_ascii_case("proxy-authorization") {
+            return false;
+        }
+        let mut it = value.trim().splitn(2, ' ');
+        let scheme = it.next().unwrap_or("");
+        let token = it.next().unwrap_or("");
+        scheme.eq_ignore_ascii_case("basic") && b64_decode(token).is_some_and(|d| same(&d, expected.as_bytes()))
+    })
+}
+
+// ---------- SOCKS5 ----------
+
+/// Адрес из запроса SOCKS5 (ATYP + адрес + порт), начиная с байта ATYP.
+/// Возвращает (хост, порт, длина разобранного).
+pub fn parse_socks_addr(b: &[u8]) -> Option<(String, u16, usize)> {
+    let (host, n) = match *b.first()? {
+        1 => (IpAddr::from([*b.get(1)?, *b.get(2)?, *b.get(3)?, *b.get(4)?]).to_string(), 5),
+        3 => {
+            let len = *b.get(1)? as usize;
+            (String::from_utf8(b.get(2..2 + len)?.to_vec()).ok()?, 2 + len)
+        }
+        4 => {
+            let mut a = [0u8; 16];
+            a.copy_from_slice(b.get(1..17)?);
+            (IpAddr::from(a).to_string(), 17)
+        }
+        _ => return None,
+    };
+    let port = u16::from_be_bytes([*b.get(n)?, *b.get(n + 1)?]);
+    Some((host, port, n + 2))
+}
+
+/// Рукопожатие SOCKS5 (без пароля или с логином/паролем по RFC 1929) и запрос
+/// CONNECT. Возвращает цель.
+fn socks5_handshake(c: &mut (impl Read + Write), creds: Option<(&str, &str)>) -> std::io::Result<(String, u16)> {
+    let mut hdr = [0u8; 2];
+    c.read_exact(&mut hdr)?;
+    let mut methods = vec![0u8; hdr[1] as usize];
+    c.read_exact(&mut methods)?;
+    match creds {
+        None if methods.contains(&0) => c.write_all(&[5, 0])?,
+        Some((user, pass)) if methods.contains(&2) => {
+            c.write_all(&[5, 2])?;
+            let mut v = [0u8; 2];
+            c.read_exact(&mut v)?;
+            let mut u = vec![0u8; v[1] as usize];
+            c.read_exact(&mut u)?;
+            let mut pl = [0u8; 1];
+            c.read_exact(&mut pl)?;
+            let mut p = vec![0u8; pl[0] as usize];
+            c.read_exact(&mut p)?;
+            // Сравниваем обе части всегда, без раннего выхода.
+            let ok = same(&u, user.as_bytes()) & same(&p, pass.as_bytes());
+            c.write_all(&[1, if ok { 0 } else { 1 }])?;
+            if !ok {
+                return Err(std::io::Error::other("socks5: wrong user or password"));
+            }
+        }
+        _ => {
+            c.write_all(&[5, 0xFF])?;
+            return Err(std::io::Error::other("socks5: no acceptable auth method"));
+        }
+    }
+    let mut req = [0u8; 4];
+    c.read_exact(&mut req)?;
+    if req[1] != 1 {
+        // Только CONNECT: BIND и UDP ASSOCIATE не поддерживаем.
+        c.write_all(&[5, 7, 0, 1, 0, 0, 0, 0, 0, 0])?;
+        return Err(std::io::Error::other("socks5: only CONNECT is supported"));
+    }
+    let mut addr = vec![req[3]];
+    let rest = match req[3] {
+        1 => 6,
+        4 => 18,
+        3 => {
+            let mut l = [0u8; 1];
+            c.read_exact(&mut l)?;
+            addr.push(l[0]);
+            l[0] as usize + 2
+        }
+        _ => {
+            c.write_all(&[5, 8, 0, 1, 0, 0, 0, 0, 0, 0])?;
+            return Err(std::io::Error::other("socks5: bad address type"));
+        }
+    };
+    let mut tail = vec![0u8; rest];
+    c.read_exact(&mut tail)?;
+    addr.extend_from_slice(&tail);
+    let (host, port, _) = parse_socks_addr(&addr).ok_or_else(|| std::io::Error::other("socks5: bad address"))?;
+    Ok((host, port))
+}
+
+/// Можно ли пускать клиента: петля и частные сети (для раздачи в LAN).
+pub fn is_lan_peer(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(a) => a.is_loopback() || a.is_private() || a.is_link_local(),
+        IpAddr::V6(a) => {
+            if let Some(v4) = a.to_ipv4_mapped() {
+                return is_lan_peer(IpAddr::V4(v4));
+            }
+            a.is_loopback() || (a.segments()[0] & 0xfe00) == 0xfc00 || (a.segments()[0] & 0xffc0) == 0xfe80
+        }
+    }
+}
+
 fn read_head(s: &mut TcpStream) -> std::io::Result<(Vec<u8>, Vec<u8>)> {
     let mut buf = Vec::new();
     let mut tmp = [0u8; 4096];
@@ -202,6 +380,8 @@ pub struct Stats {
     pub total: u64,
     pub failed: u64,
     pub system: bool,
+    pub lan: bool,
+    pub auth: bool,
     pub last_error: Option<String>,
 }
 
@@ -246,13 +426,59 @@ impl Shared {
         Err(last)
     }
 
+    /// Туннель: первый пакет клиента (обычно ClientHello) режется, дальше — пересылка.
+    fn tunnel(&self, mut client: TcpStream, mut up: TcpStream, early: Vec<u8>) -> std::io::Result<()> {
+        let mut first = early;
+        if first.is_empty() {
+            let mut tmp = [0u8; 16 * 1024];
+            let n = client.read(&mut tmp)?;
+            if n == 0 {
+                return Ok(());
+            }
+            first.extend_from_slice(&tmp[..n]);
+        }
+        send_parts(&mut up, &split_client_hello(&first), &self.cfg.method)?;
+        relay(client, up)
+    }
+
+    /// Логин и пароль, если они нужны этому клиенту (не с самого ПК).
+    fn creds_for(&self, peer: IpAddr) -> Option<(&str, &str)> {
+        let local = match peer {
+            IpAddr::V4(a) => a.is_loopback(),
+            IpAddr::V6(a) => a.is_loopback() || a.to_ipv4_mapped().is_some_and(|v| v.is_loopback()),
+        };
+        (!self.cfg.user.is_empty() && !local).then_some((self.cfg.user.as_str(), self.cfg.pass.as_str()))
+    }
+
     fn handle(&self, mut client: TcpStream) -> std::io::Result<()> {
         client.set_read_timeout(Some(FIRST_DATA_TIMEOUT))?;
+        let creds = self.creds_for(client.peer_addr()?.ip());
+        let mut b = [0u8; 1];
+        if client.peek(&mut b)? == 1 && b[0] == 5 {
+            let (host, port) = socks5_handshake(&mut client, creds)?;
+            let up = match self.connect(&host, port) {
+                Ok(u) => u,
+                Err(e) => {
+                    let _ = client.write_all(&[5, 4, 0, 1, 0, 0, 0, 0, 0, 0]);
+                    return Err(e);
+                }
+            };
+            client.write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0])?;
+            return self.tunnel(client, up, Vec::new());
+        }
         let (head, early) = read_head(&mut client)?;
+        if let Some((user, pass)) = creds {
+            if !check_basic(&head, user, pass) {
+                client.write_all(
+                    b"HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"digital-bypass\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )?;
+                return Err(std::io::Error::other("proxy auth failed"));
+            }
+        }
         let req = parse_request(&head).ok_or_else(|| std::io::Error::other("bad request"))?;
         match req {
             Request::Connect { host, port } => {
-                let mut up = match self.connect(&host, port) {
+                let up = match self.connect(&host, port) {
                     Ok(u) => u,
                     Err(e) => {
                         let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
@@ -260,18 +486,7 @@ impl Shared {
                     }
                 };
                 client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")?;
-                // Первый пакет туннеля — обычно ClientHello.
-                let mut first = early;
-                if first.is_empty() {
-                    let mut tmp = [0u8; 16 * 1024];
-                    let n = client.read(&mut tmp)?;
-                    if n == 0 {
-                        return Ok(());
-                    }
-                    first.extend_from_slice(&tmp[..n]);
-                }
-                send_parts(&mut up, &split_client_hello(&first), &self.cfg.method)?;
-                relay(client, up)
+                self.tunnel(client, up, early)
             }
             Request::Http { host, port, head } => {
                 let mut up = self.connect(&host, port)?;
@@ -305,12 +520,14 @@ pub struct Proxy {
 
 impl Proxy {
     pub fn start(cfg: Config) -> Result<Proxy, String> {
+        cfg.validate_auth()?;
         if cfg.method != "split" && cfg.method != "disorder" {
             let m = &cfg.method;
             return Err(crate::tr!("неизвестный способ: {m}", "unknown method: {m}"));
         }
         let port = cfg.port;
-        let listener = TcpListener::bind(("127.0.0.1", port))
+        let host = if cfg.lan { "0.0.0.0" } else { "127.0.0.1" };
+        let listener = TcpListener::bind((host, port))
             .map_err(|e| crate::tr!("порт {port} занят: {e}", "port {port} is busy: {e}"))?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
         let doh = if cfg.doh {
@@ -340,7 +557,11 @@ impl Proxy {
         std::thread::spawn(move || {
             while !sh.stop.load(Ordering::SeqCst) {
                 match listener.accept() {
-                    Ok((s, _)) => {
+                    Ok((s, peer)) => {
+                        // Раздача в LAN: чужие (публичные) адреса не пускаем.
+                        if !is_lan_peer(peer.ip()) {
+                            continue;
+                        }
                         let sh = sh.clone();
                         std::thread::spawn(move || {
                             let _ = s.set_nonblocking(false);
@@ -370,6 +591,8 @@ impl Proxy {
             total: self.shared.total.load(Ordering::Relaxed),
             failed: self.shared.failed.load(Ordering::Relaxed),
             system: self.shared.cfg.system,
+            lan: self.shared.cfg.lan,
+            auth: !self.shared.cfg.user.is_empty(),
             last_error: self.shared.last_error.lock().unwrap().clone(),
         }
     }
@@ -379,6 +602,42 @@ impl Drop for Proxy {
     fn drop(&mut self) {
         self.shared.stop.store(true, Ordering::SeqCst);
     }
+}
+
+// ---------- брандмауэр Windows для раздачи в LAN (нужны права администратора) ----------
+
+const FW_RULE: &str = "digital-bypass proxy";
+
+/// Разрешить входящие на порт прокси из частной сети. Без прав — ошибка.
+pub fn firewall_allow(port: u16) -> Result<(), String> {
+    firewall_remove();
+    let netsh = crate::util::system32("netsh.exe");
+    let args = [
+        "advfirewall".to_string(),
+        "firewall".into(),
+        "add".into(),
+        "rule".into(),
+        format!("name={FW_RULE}"),
+        "dir=in".into(),
+        "action=allow".into(),
+        "protocol=TCP".into(),
+        format!("localport={port}"),
+        "profile=private,domain".into(),
+        "remoteip=localsubnet".into(),
+    ];
+    let out = crate::util::hidden(&netsh).args(&args).output().map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(crate::tr!("правило брандмауэра не добавлено", "firewall rule was not added"))
+    }
+}
+
+pub fn firewall_remove() {
+    let netsh = crate::util::system32("netsh.exe");
+    let _ = crate::util::hidden(&netsh)
+        .args(["advfirewall", "firewall", "delete", "rule", &format!("name={FW_RULE}")])
+        .output();
 }
 
 // ---------- системный прокси Windows (HKCU, без прав администратора) ----------
@@ -585,6 +844,117 @@ mod tests {
         assert!(parse_request(b"GET /relative HTTP/1.1\r\n\r\n").is_none());
     }
 
+    #[test]
+    fn socks_addresses() {
+        assert_eq!(parse_socks_addr(&[1, 93, 184, 216, 34, 1, 187]), Some(("93.184.216.34".into(), 443, 7)));
+        let mut d = vec![3, 11];
+        d.extend_from_slice(b"example.com");
+        d.extend_from_slice(&[0, 80]);
+        assert_eq!(parse_socks_addr(&d), Some(("example.com".into(), 80, 15)));
+        let mut v6 = vec![4];
+        v6.extend_from_slice(&"2001:db8::1".parse::<std::net::Ipv6Addr>().unwrap().octets());
+        v6.extend_from_slice(&[0x20, 0xFB]);
+        assert_eq!(parse_socks_addr(&v6), Some(("2001:db8::1".into(), 8443, 19)));
+        assert_eq!(parse_socks_addr(&[3, 5, b'a']), None);
+        assert_eq!(parse_socks_addr(&[9, 0]), None);
+    }
+
+    #[test]
+    fn basic_auth() {
+        assert_eq!(b64_decode("dXNlcjpwYXNz").unwrap(), b"user:pass");
+        assert_eq!(b64_decode("YQ==").unwrap(), b"a");
+        assert_eq!(b64_decode("YWI=").unwrap(), b"ab");
+        assert!(b64_decode("!!!!").is_none());
+        let head = b"CONNECT x:443 HTTP/1.1\r\nproxy-authorization: Basic dXNlcjpwYXNz\r\n\r\n";
+        assert!(check_basic(head, "user", "pass"));
+        assert!(!check_basic(head, "user", "pas"));
+        assert!(!check_basic(b"CONNECT x:443 HTTP/1.1\r\n\r\n", "user", "pass"));
+        let ok = |u: &str, p: &str| Config { user: u.into(), pass: p.into(), ..Default::default() }.validate_auth().is_ok();
+        assert!(ok("", "") && ok("phone", "s3cret"));
+        assert!(!ok("phone", "") && !ok("", "x") && !ok("a:b", "x"));
+    }
+
+    /// SOCKS5 с логином и паролем (RFC 1929): верный пускает, неверный — нет.
+    #[test]
+    fn socks5_user_pass() {
+        let run = |user: &[u8], pass: &[u8]| {
+            let mut req = vec![5, 1, 2, 1, user.len() as u8];
+            req.extend_from_slice(user);
+            req.push(pass.len() as u8);
+            req.extend_from_slice(pass);
+            req.extend_from_slice(&[5, 1, 0, 1, 1, 2, 3, 4, 0, 80]);
+            let mut io = std::io::Cursor::new(req);
+            let mut sink = Vec::new();
+            struct Duplex<'a>(&'a mut std::io::Cursor<Vec<u8>>, &'a mut Vec<u8>);
+            impl Read for Duplex<'_> {
+                fn read(&mut self, b: &mut [u8]) -> std::io::Result<usize> {
+                    self.0.read(b)
+                }
+            }
+            impl Write for Duplex<'_> {
+                fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+                    self.1.write(b)
+                }
+                fn flush(&mut self) -> std::io::Result<()> {
+                    Ok(())
+                }
+            }
+            let r = socks5_handshake(&mut Duplex(&mut io, &mut sink), Some(("phone", "s3cret")));
+            (r.ok(), sink)
+        };
+        let (ok, out) = run(b"phone", b"s3cret");
+        assert_eq!(ok, Some(("1.2.3.4".into(), 80)));
+        assert_eq!(&out[..4], &[5, 2, 1, 0]);
+        let (bad, out) = run(b"phone", b"nope");
+        assert!(bad.is_none());
+        assert_eq!(&out[..4], &[5, 2, 1, 1]);
+    }
+
+    #[test]
+    fn lan_peers() {
+        for ok in ["127.0.0.1", "192.168.0.10", "10.1.2.3", "172.20.0.5", "169.254.1.1", "::1", "fe80::1", "fd00::1", "::ffff:192.168.1.5"] {
+            assert!(is_lan_peer(ok.parse().unwrap()), "{ok}");
+        }
+        for bad in ["8.8.8.8", "100.64.0.1", "2a00:1450::1", "::ffff:8.8.8.8"] {
+            assert!(!is_lan_peer(bad.parse().unwrap()), "{bad}");
+        }
+    }
+
+    /// SOCKS5 на том же порту: имя сайта — «удалённое» (ATYP=3), туннель работает.
+    #[test]
+    fn socks5_loopback() {
+        let server = TcpListener::bind("127.0.0.1:0").unwrap();
+        let sport = server.local_addr().unwrap().port();
+        let srv = std::thread::spawn(move || {
+            let (mut s, _) = server.accept().unwrap();
+            let mut b = [0u8; 4];
+            s.read_exact(&mut b).unwrap();
+            assert_eq!(&b, b"ping");
+            s.write_all(b"pong").unwrap();
+        });
+        let probe = TcpListener::bind("127.0.0.1:0").unwrap();
+        let pport = probe.local_addr().unwrap().port();
+        drop(probe);
+        let _proxy = Proxy::start(Config { port: pport, method: "split".into(), doh: false, system: false, lan: false, user: String::new(), pass: String::new() }).unwrap();
+        let mut c = TcpStream::connect(("127.0.0.1", pport)).unwrap();
+        c.write_all(&[5, 1, 0]).unwrap();
+        let mut r = [0u8; 2];
+        c.read_exact(&mut r).unwrap();
+        assert_eq!(r, [5, 0]);
+        let mut req = vec![5, 1, 0, 3, 9];
+        req.extend_from_slice(b"localhost");
+        req.extend_from_slice(&sport.to_be_bytes());
+        c.write_all(&req).unwrap();
+        let mut rep = [0u8; 10];
+        c.read_exact(&mut rep).unwrap();
+        assert_eq!(rep[1], 0, "socks reply {rep:?}");
+        c.write_all(b"ping").unwrap();
+        let mut pong = [0u8; 4];
+        c.read_exact(&mut pong).unwrap();
+        assert_eq!(&pong, b"pong");
+        srv.join().unwrap();
+    }
+
     /// Сеть: curl через прокси до PROXY_URL (по умолчанию YouTube) обоими способами.
     /// Системный прокси не трогается.
     #[test]
@@ -595,7 +965,7 @@ mod tests {
             let probe = TcpListener::bind("127.0.0.1:0").unwrap();
             let port = probe.local_addr().unwrap().port();
             drop(probe);
-            let _p = Proxy::start(Config { port, method: method.into(), doh: true, system: false }).unwrap();
+            let _p = Proxy::start(Config { port, method: method.into(), doh: true, system: false, lan: false, user: String::new(), pass: String::new() }).unwrap();
             let out = std::process::Command::new(crate::util::system32("curl.exe"))
                 .args(["-s", "-o", "NUL", "-w", "%{http_code} %{time_total}", "--max-time", "12"])
                 .args(["-x", &format!("http://127.0.0.1:{port}"), &url])
@@ -634,7 +1004,7 @@ mod tests {
         let probe = TcpListener::bind("127.0.0.1:0").unwrap();
         let pport = probe.local_addr().unwrap().port();
         drop(probe);
-        let _proxy = Proxy::start(Config { port: pport, method: "split".into(), doh: false, system: false }).unwrap();
+        let _proxy = Proxy::start(Config { port: pport, method: "split".into(), doh: false, system: false, lan: false, user: String::new(), pass: String::new() }).unwrap();
         let mut c = TcpStream::connect(("127.0.0.1", pport)).unwrap();
         write!(c, "CONNECT 127.0.0.1:{sport} HTTP/1.1\r\n\r\n").unwrap();
         let mut resp = [0u8; 39];

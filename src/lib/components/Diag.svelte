@@ -3,9 +3,12 @@
   import { toast } from "$lib/state.svelte";
   import { t } from "$lib/i18n.svelte";
   import { Search, Loader } from "@lucide/svelte";
+  import Segmented from "./Segmented.svelte";
+  import SniScan from "./SniScan.svelte";
 
   let { go }: { go: (tab: string) => void } = $props();
 
+  let mode = $state<"site" | "sni">("site");
   let domain = $state("");
   let busy = $state(false);
   let report = $state<DiagReport | null>(null);
@@ -76,6 +79,16 @@
 </script>
 
 <div class="diag fade-in">
+  <Segmented
+    value={mode}
+    onchange={(m) => (mode = m)}
+    options={[
+      { value: "site", label: t("почему не открывается", "why it does not open") },
+      { value: "sni", label: t("сканер SNI", "SNI scanner") },
+    ]} />
+  {#if mode === "sni"}
+    <SniScan />
+  {:else}
   <section class="card block">
     <div class="label">{t("почему не открывается сайт", "why a site does not open")}</div>
     <div class="row">
@@ -138,6 +151,7 @@
         {/each}
       </section>
     {/if}
+  {/if}
   {/if}
 </div>
 
