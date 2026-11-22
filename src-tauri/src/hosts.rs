@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const BEGIN: &str = "# >>> Zapret2-RustGUI (managed block, do not edit)";
-const END: &str = "# <<< Zapret2-RustGUI";
+const BEGIN: &str = "# >>> digital-bypass (managed block, do not edit)";
+const END: &str = "# <<< digital-bypass";
 pub const UPSTREAM_URL: &str =
     "https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/refs/heads/main/.service/hosts";
 
@@ -143,7 +143,7 @@ pub fn status(dir: &Path, cache: &Path, custom: &[Entry]) -> Status {
 pub fn apply(entries: &[Entry]) -> Result<(), String> {
     let hosts = system_hosts();
     let text = crate::util::read_text(&hosts).unwrap_or_default();
-    let backup = hosts.with_file_name("hosts.zapret-gui.bak");
+    let backup = hosts.with_file_name("hosts.digital-bypass.bak");
     std::fs::write(&backup, text.as_bytes()).map_err(|e| crate::tr!("бэкап hosts: {e}", "hosts backup: {e}"))?;
     let (mut outside, _, _) = split(&text);
     while outside.last().is_some_and(|l| l.trim().is_empty()) {

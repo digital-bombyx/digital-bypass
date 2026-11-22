@@ -53,7 +53,7 @@
     await load();
   }
   async function remove() {
-    if (!confirm(t("Убрать блок Zapret2-RustGUI из системного hosts?", "Remove the Zapret2-RustGUI block from the system hosts?"))) return;
+    if (!confirm(t("Убрать блок digital-bypass из системного hosts?", "Remove the digital-bypass block from the system hosts?"))) return;
     await act(() => api.hostsRemove(), t("Блок удалён", "Block removed"));
     await load();
   }
@@ -82,7 +82,7 @@
 
     <div class="warnbox mono">
       <ShieldAlert size={14} />
-      <span>{t("Defender может отметить правку hosts как угрозу (HostsFileHijack). Перед записью делается копия hosts.zapret-gui.bak.", "Defender may flag hosts edits as a threat (HostsFileHijack). A hosts.zapret-gui.bak copy is made before writing.")}</span>
+      <span>{t("Defender может отметить правку hosts как угрозу (HostsFileHijack). Перед записью делается копия hosts.digital-bypass.bak.", "Defender may flag hosts edits as a threat (HostsFileHijack). A hosts.digital-bypass.bak copy is made before writing.")}</span>
     </div>
 
     <section class="card groups">

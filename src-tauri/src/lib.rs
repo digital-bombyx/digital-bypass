@@ -1,5 +1,6 @@
 mod autostart;
 mod bundled;
+mod dns;
 mod game_filter;
 mod hosts;
 mod i18n;
@@ -392,6 +393,39 @@ fn hosts_update(state: State<AppState>) -> R<usize> {
 }
 
 #[tauri::command(async)]
+fn dns_info() -> dns::Info {
+    dns::info()
+}
+
+#[tauri::command(async)]
+fn dns_presets() -> &'static [dns::Preset] {
+    dns::PRESETS
+}
+
+#[tauri::command(async)]
+fn dns_apply(state: State<AppState>, req: dns::ApplyReq) -> R<dns::Info> {
+    state.require_admin()?;
+    dns::apply(&req)?;
+    Ok(dns::info())
+}
+
+#[tauri::command(async)]
+fn dns_reset(state: State<AppState>, index: u32, v4: bool, v6: bool) -> R<dns::Info> {
+    state.require_admin()?;
+    dns::reset(index, v4, v6)?;
+    Ok(dns::info())
+}
+
+#[tauri::command(async)]
+fn dns_flush() -> R<()> {
+    if dns::flush() {
+        Ok(())
+    } else {
+        Err(tr!("не удалось сбросить кэш DNS", "failed to flush the DNS cache"))
+    }
+}
+
+#[tauri::command(async)]
 fn set_autostart(enabled: bool) -> R<bool> {
     autostart::set(enabled)?;
     Ok(autostart::is_enabled())
@@ -428,14 +462,14 @@ fn quit_app(app: AppHandle) {
 
 fn tray_icon(on: bool) -> tauri::image::Image<'static> {
     const S: usize = 32;
-    let (r, g, b) = if on { (0xd9, 0xa2, 0x5b) } else { (0x7e, 0x84, 0x66) };
+    let (r, g, b) = if on { (0x58, 0xa6, 0xff) } else { (0x73, 0x7d, 0x8a) };
     let mut px = vec![0u8; S * S * 4];
     let c = (S as f32 - 1.0) / 2.0;
     for y in 0..S {
         for x in 0..S {
             let d = ((x as f32 - c).powi(2) + (y as f32 - c).powi(2)).sqrt();
             let i = (y * S + x) * 4;
-            // Кольцо + точка: «спиннинг»-индикатор из профиля.
+            // Кольцо + точка: индикатор состояния zapret2.
             let ring = (d - 12.5).abs();
             let a_ring = (1.6 - ring).clamp(0.0, 1.0);
             let a_dot = (6.5 - d).clamp(0.0, 1.0);
@@ -474,10 +508,10 @@ fn refresh_tray(app: &AppHandle) {
     let tip = match (&st.running, &st.strategy) {
         (true, Some(s)) => {
             let s = s.trim_end_matches(".bat");
-            tr!("Zapret2 — включён\n{s}", "Zapret2 — on\n{s}")
+            tr!("digital-bypass · zapret2 — включён\n{s}", "digital-bypass · zapret2 — on\n{s}")
         }
-        (true, None) => tr!("Zapret2 — включён", "Zapret2 — on"),
-        _ => tr!("Zapret2 — выключен", "Zapret2 — off"),
+        (true, None) => tr!("digital-bypass · zapret2 — включён", "digital-bypass · zapret2 — on"),
+        _ => tr!("digital-bypass · zapret2 — выключен", "digital-bypass · zapret2 — off"),
     };
     let _ = tray.set_tooltip(Some(tip));
     if let Ok(menu) = build_tray_menu(app) {
@@ -583,7 +617,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .setup(move |app| {
-            let config_dir = app.path().app_config_dir().unwrap_or_else(|_| std::env::temp_dir().join("Zapret2-RustGUI"));
+            let config_dir = app.path().app_config_dir().unwrap_or_else(|_| std::env::temp_dir().join("digital-bypass"));
             let settings = settings::load(&config_dir);
             i18n::set_lang(&settings.language);
 
@@ -620,7 +654,7 @@ pub fn run() {
 
             TrayIconBuilder::with_id("main")
                 .icon(tray_icon(false))
-                .tooltip("Zapret2")
+                .tooltip("digital-bypass")
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, e| on_tray_menu(app, e.id().as_ref()))
                 .on_tray_icon_event(|tray, e| {
@@ -699,6 +733,11 @@ pub fn run() {
             hosts_apply,
             hosts_remove,
             hosts_update,
+            dns_info,
+            dns_presets,
+            dns_apply,
+            dns_reset,
+            dns_flush,
             set_autostart,
             set_close_to_tray,
             set_language,

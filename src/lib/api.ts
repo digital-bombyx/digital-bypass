@@ -86,6 +86,43 @@ export type HostsStatus = {
   hosts_path: string;
 };
 
+export type DnsAdapter = {
+  index: number;
+  ipv6_index: number;
+  guid: string;
+  name: string;
+  description: string;
+  up: boolean;
+  gateway: boolean;
+  internet: boolean;
+  metric: number;
+  kind: "ethernet" | "wifi" | "other";
+  addresses: string[];
+  dns_v4: string[];
+  dns_v6: string[];
+  static_v4: boolean;
+  static_v6: boolean;
+  doh: string[];
+};
+export type DohTemplate = { server: string; template: string; autoupgrade: boolean; fallback: boolean };
+export type DnsInfo = { adapters: DnsAdapter[]; doh_supported: boolean; templates: DohTemplate[] };
+export type DnsPreset = {
+  id: string;
+  name: string;
+  note_ru: string;
+  note_en: string;
+  v4: string[];
+  v6: string[];
+  doh: string | null;
+};
+export type DnsApplyReq = {
+  index: number;
+  v4: string[] | null;
+  v6: string[] | null;
+  doh_template: string | null;
+  doh_fallback: boolean;
+};
+
 export const api = {
   overview: () => invoke<Overview>("overview"),
   status: () => invoke<Status>("status"),
@@ -110,6 +147,11 @@ export const api = {
   hostsApply: (entries: HostEntry[], custom: HostEntry[]) => invoke<void>("hosts_apply", { entries, custom }),
   hostsRemove: () => invoke<void>("hosts_remove"),
   hostsUpdate: () => invoke<number>("hosts_update"),
+  dnsInfo: () => invoke<DnsInfo>("dns_info"),
+  dnsPresets: () => invoke<DnsPreset[]>("dns_presets"),
+  dnsApply: (req: DnsApplyReq) => invoke<DnsInfo>("dns_apply", { req }),
+  dnsReset: (index: number, v4: boolean, v6: boolean) => invoke<DnsInfo>("dns_reset", { index, v4, v6 }),
+  dnsFlush: () => invoke<void>("dns_flush"),
   setAutostart: (enabled: boolean) => invoke<boolean>("set_autostart", { enabled }),
   setCloseToTray: (enabled: boolean) => invoke<void>("set_close_to_tray", { enabled }),
   setLanguage: (lang: string) => invoke<void>("set_language", { lang }),

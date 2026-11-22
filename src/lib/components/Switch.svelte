@@ -13,7 +13,7 @@
     width: 38px;
     height: 22px;
     flex: none;
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     background: var(--bg);
     cursor: pointer;
@@ -25,13 +25,13 @@
     left: 2px;
     width: 16px;
     height: 16px;
-    border-radius: 50%;
+    border-radius: 2px;
     background: var(--faint);
-    transition: transform 0.22s cubic-bezier(0.3, 1.4, 0.5, 1), background 0.2s;
+    transition: transform 0.12s linear, background 0.12s;
   }
   .sw.on {
-    background: var(--amber-soft);
-    border-color: rgba(217, 162, 91, 0.55);
+    background: var(--accent-soft);
+    border-color: var(--accent);
   }
   .sw.on span {
     transform: translateX(16px);

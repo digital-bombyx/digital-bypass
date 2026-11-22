@@ -2,7 +2,7 @@
 //! их не даёт, поэтому используется задача планировщика с наивысшими правами.
 //! XML нужен, чтобы снять ограничения по питанию от батареи и лимит времени.
 
-const TASK: &str = "Zapret2-RustGUI";
+const TASK: &str = "digital-bypass";
 
 fn schtasks() -> String {
     crate::util::system32("schtasks.exe")
@@ -55,7 +55,7 @@ pub fn set(enabled: bool) -> Result<(), String> {
     for u in xml.encode_utf16() {
         bytes.extend_from_slice(&u.to_le_bytes());
     }
-    let path = std::env::temp_dir().join("zapret2gui-task.xml");
+    let path = std::env::temp_dir().join("digital-bypass-task.xml");
     std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
     let out = crate::util::run_hidden(&schtasks(), &["/create", "/tn", TASK, "/xml", &path.to_string_lossy(), "/f"])
         .map_err(|e| e.to_string())?;

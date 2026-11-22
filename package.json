@@ -1,7 +1,7 @@
 {
-  "name": "zapret2-rustgui",
-  "version": "0.1.1",
-  "description": "Lightweight GUI for zapret-discord-youtube (zapret2 / winws2)",
+  "name": "digital-bypass",
+  "version": "0.1.0",
+  "description": "Multitool for bypassing network blocks: zapret2 (winws2), DNS and more",
   "type": "module",
   "private": true,
   "scripts": {

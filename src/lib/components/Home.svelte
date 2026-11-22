@@ -42,7 +42,7 @@
 <div class="home fade-in">
   <!-- Герой: тумблер -->
   <section class="card hero">
-    <div class="prompt mono"><span class="faint">$</span> zapret --status</div>
+    <div class="prompt mono">zapret2 · winws2</div>
     <button
       class="power"
       class:on={running}
@@ -216,9 +216,8 @@
   .dial .dash {
     fill: none;
     stroke: var(--faint);
-    stroke-width: 2.2;
-    stroke-dasharray: 2 6.5;
-    stroke-linecap: round;
+    stroke-width: 1;
+    stroke-dasharray: 1 5.4;
     opacity: 0.6;
     transform-origin: 60px 60px;
     transition: stroke 0.3s, opacity 0.3s;
@@ -226,21 +225,15 @@
   .dial .track {
     fill: none;
     stroke: var(--border);
-    stroke-width: 5;
-    transition: stroke 0.3s;
+    stroke-width: 3;
+    transition: stroke 0.2s;
   }
   .power.on .dash {
-    stroke: var(--sage);
-    opacity: 1;
-    animation: spin 14s linear infinite;
+    stroke: var(--accent);
+    opacity: 0.8;
   }
   .power.on .track {
     stroke: var(--amber);
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
   .core {
     width: 76px;
@@ -254,13 +247,13 @@
     transition: color 0.3s, background 0.3s, transform 0.15s;
   }
   .power:not(:disabled):hover .core {
-    transform: scale(1.04);
     color: var(--text);
+    border-color: var(--border-strong);
   }
   .power.on .core {
-    color: #1f2317;
-    background: var(--sage);
-    border-color: var(--sage);
+    color: #06121f;
+    background: var(--accent);
+    border-color: var(--accent);
   }
   .state-line {
     font-size: 11.5px;
@@ -278,7 +271,7 @@
   }
   .methods {
     font-size: 11px;
-    color: var(--sage);
+    color: var(--muted);
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -296,13 +289,13 @@
   }
   .note.err {
     align-items: flex-start;
-    border-color: rgba(208, 112, 92, 0.35);
+    border-color: rgba(229, 83, 75, 0.35);
     background: var(--red-soft);
   }
   .err-text {
     white-space: pre-wrap;
     font-size: 11px;
-    color: #e8a594;
+    color: var(--danger-text);
     max-height: 90px;
     overflow: auto;
     user-select: text;
@@ -381,7 +374,7 @@
     justify-content: space-between;
     padding: 8px 10px;
     border: 0;
-    border-radius: 9px;
+    border-radius: var(--radius);
     background: transparent;
     color: var(--text);
     font-size: 12px;

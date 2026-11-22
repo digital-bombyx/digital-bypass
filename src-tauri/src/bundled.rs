@@ -99,7 +99,7 @@ mod tests {
     use super::*;
 
     fn tmp(name: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!("zapret2gui-test-{name}-{}", std::process::id()));
+        let p = std::env::temp_dir().join(format!("digital-bypass-test-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&p);
         p
     }

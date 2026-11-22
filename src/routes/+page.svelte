@@ -9,24 +9,29 @@
   import Lists from "$lib/components/Lists.svelte";
   import Hosts from "$lib/components/Hosts.svelte";
   import Settings from "$lib/components/Settings.svelte";
-  import { House, FlaskConical, ListChecks, Globe, Settings2, ShieldAlert } from "@lucide/svelte";
+  import Dns from "$lib/components/Dns.svelte";
+  import { Power, FlaskConical, ListChecks, Globe, Network, Settings2, ShieldAlert } from "@lucide/svelte";
 
-  type Tab = "home" | "tests" | "lists" | "hosts" | "settings";
+  type Tab = "home" | "tests" | "lists" | "hosts" | "dns" | "settings";
   let tab = $state<Tab>("home");
   let dirInput = $state("");
+  /** Вкладки, которым нужна папка zapret; DNS и настройки работают без неё. */
+  const needsZapret: Tab[] = ["home", "tests", "lists", "hosts"];
 
-  const tabs: { id: Tab; label: () => string; icon: typeof House }[] = [
-    { id: "home", label: () => t("главная", "home"), icon: House },
+  const tabs: { id: Tab; label: () => string; icon: typeof Power }[] = [
+    { id: "home", label: () => "zapret2", icon: Power },
     { id: "tests", label: () => t("тесты", "tests"), icon: FlaskConical },
     { id: "lists", label: () => t("списки", "lists"), icon: ListChecks },
     { id: "hosts", label: () => "hosts", icon: Globe },
+    { id: "dns", label: () => "dns", icon: Network },
     { id: "settings", label: () => t("настройки", "settings"), icon: Settings2 },
   ];
   const paths: Record<Tab, string> = {
-    home: "",
-    tests: "tests",
-    lists: "lists",
+    home: "zapret2",
+    tests: "zapret2/tests",
+    lists: "zapret2/lists",
     hosts: "hosts",
+    dns: "dns",
     settings: "settings",
   };
 
@@ -64,33 +69,30 @@
       <div class="banner mono"><ShieldAlert size={14} /> {t("нет прав администратора — только просмотр", "no administrator rights — view only")}</div>
     {/if}
 
-    {#if !app.ov.dir}
-      <main class="content">
+    <nav class="tabs">
+      {#each tabs as tb (tb.id)}
+        <button class:active={tab === tb.id} onclick={() => (tab = tb.id)} title={tb.label()}>
+          <tb.icon size={14} />
+          <span class="mono">{tb.label()}</span>
+        </button>
+      {/each}
+    </nav>
+    <main class="content">
+      {#if !app.ov.dir && needsZapret.includes(tab)}
         <section class="card setup fade-in">
-          <div class="label">{t("первый запуск", "first run")}</div>
+          <div class="label">zapret2</div>
           <p class="muted">{t("Укажите папку со сборкой zapret-discord-youtube (в ней bin\\winws2.exe, lua\\ и lists\\).", "Set the zapret-discord-youtube build folder (it contains bin\\winws2.exe, lua\\ and lists\\).")}</p>
           <input class="input" placeholder="D:\zapret-discord-youtube" bind:value={dirInput} />
           <button class="btn primary" disabled={!dirInput.trim()} onclick={() => act(() => api.setZapretDir(dirInput))}
             >{t("сохранить", "save")}</button>
         </section>
-      </main>
-    {:else}
-      <nav class="tabs">
-        {#each tabs as tb (tb.id)}
-          <button class:active={tab === tb.id} onclick={() => (tab = tb.id)} title={tb.label()}>
-            <tb.icon size={15} />
-            <span class="mono">{tb.label()}</span>
-          </button>
-        {/each}
-      </nav>
-      <main class="content">
-        {#if tab === "home"}<Home />
-        {:else if tab === "tests"}<Tests />
-        {:else if tab === "lists"}<Lists />
-        {:else if tab === "hosts"}<Hosts />
-        {:else}<Settings />{/if}
-      </main>
-    {/if}
+      {:else if tab === "home"}<Home />
+      {:else if tab === "tests"}<Tests />
+      {:else if tab === "lists"}<Lists />
+      {:else if tab === "hosts"}<Hosts />
+      {:else if tab === "dns"}<Dns />
+      {:else}<Settings />{/if}
+    </main>
   {/if}
 
   {#if app.toast}
@@ -112,13 +114,15 @@
     padding: 7px 14px;
     font-size: 11px;
     color: var(--yellow);
-    background: rgba(217, 194, 94, 0.08);
-    border-bottom: 1px solid rgba(217, 194, 94, 0.18);
+    background: rgba(210, 153, 34, 0.08);
+    border-bottom: 1px solid rgba(210, 153, 34, 0.18);
   }
   .tabs {
     display: flex;
-    gap: 4px;
-    padding: 10px 14px 2px;
+    gap: 0;
+    padding: 0 8px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg);
   }
   .tabs button {
     flex: 1;
@@ -126,13 +130,14 @@
     flex-direction: column;
     align-items: center;
     gap: 3px;
-    padding: 7px 0 6px;
-    border: 1px solid transparent;
-    border-radius: 12px;
+    padding: 8px 0 7px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
     background: transparent;
     color: var(--faint);
     cursor: pointer;
-    transition: background 0.18s, color 0.18s, border-color 0.18s;
+    transition: color 0.12s, border-color 0.12s;
   }
   .tabs button span {
     font-size: 10px;
@@ -141,14 +146,13 @@
     color: var(--muted);
   }
   .tabs button.active {
-    background: var(--panel);
-    border-color: var(--border-soft);
-    color: var(--amber-2);
+    border-bottom-color: var(--accent);
+    color: var(--text);
   }
   .content {
     flex: 1;
     overflow-y: auto;
-    padding: 10px 14px 16px;
+    padding: 12px 14px 16px;
     min-height: 0;
   }
   .setup {
@@ -169,7 +173,7 @@
     transform: translateX(-50%);
     max-width: calc(100% - 40px);
     padding: 9px 14px;
-    border-radius: 12px;
+    border-radius: var(--radius);
     font-size: 11.5px;
     background: var(--panel-3);
     border: 1px solid var(--border);
@@ -179,8 +183,8 @@
     user-select: text;
   }
   .toast.error {
-    color: #f0b3a4;
-    border-color: rgba(208, 112, 92, 0.5);
+    color: var(--danger-text);
+    border-color: rgba(229, 83, 75, 0.5);
   }
   .toast.ok {
     color: var(--sage);

@@ -23,7 +23,7 @@
     display: flex;
     gap: 2px;
     padding: 3px;
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     background: var(--bg);
     border: 1px solid var(--border-soft);
   }
@@ -32,7 +32,7 @@
     height: 26px;
     padding: 0 10px;
     border: 0;
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--muted);
     font-family: var(--mono);

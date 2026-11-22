@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { X, Minus, Maximize2 } from "@lucide/svelte";
+  import { X, Minus, Square } from "@lucide/svelte";
   import { isTauri } from "$lib/api";
   import { t } from "$lib/i18n.svelte";
 
@@ -10,117 +10,96 @@
 </script>
 
 <header class="bar" data-tauri-drag-region>
-  <div class="state mono" class:on={running} data-tauri-drag-region>
-    <span class="dot"></span>{running ? "spinning" : "idle"}
+  <div class="brand mono" data-tauri-drag-region>
+    <span class="mark" aria-hidden="true"></span>digital-bypass<span class="path">/{path}</span>
   </div>
-  <div class="title mono" data-tauri-drag-region>digital-bombyx/Zapret2-RustGUI: ~/{path}</div>
-  <div class="lights">
-    <button class="l min" title={t("Свернуть", "Minimize")} onclick={() => win.minimize()}
-      ><span class="v"><Minus size={8} strokeWidth={3.5} /></span></button>
-    <button class="l max" title={t("Развернуть", "Maximize")} onclick={() => win.toggleMaximize()}
-      ><span class="v"><Maximize2 size={7} strokeWidth={3.5} /></span></button>
-    <button class="l close" title={t("Закрыть", "Close")} onclick={() => win.close()}
-      ><span class="v"><X size={8} strokeWidth={3.5} /></span></button>
+  <div class="state mono" class:on={running} data-tauri-drag-region title={t("Состояние zapret2", "zapret2 state")}>
+    <span class="dot"></span>zapret2 {running ? "on" : "off"}
+  </div>
+  <div class="ctl">
+    <button title={t("Свернуть", "Minimize")} onclick={() => win.minimize()}><Minus size={14} /></button>
+    <button title={t("Развернуть", "Maximize")} onclick={() => win.toggleMaximize()}><Square size={11} /></button>
+    <button class="close" title={t("Закрыть", "Close")} onclick={() => win.close()}><X size={15} /></button>
   </div>
 </header>
 
 <style>
   .bar {
-    height: 40px;
+    height: 36px;
     flex: none;
     display: grid;
-    grid-template-columns: auto 1fr auto;
-    column-gap: 8px;
+    grid-template-columns: 1fr auto auto;
+    column-gap: 12px;
     align-items: center;
-    padding: 0 14px;
+    padding-left: 12px;
     border-bottom: 1px solid var(--border-soft);
-    background: var(--bg-2);
+    background: var(--bg);
   }
-  /* Хитбоксы как у кнопок Windows: прямоугольник на всю высоту шапки,
-     видимая часть — прежний кружок по центру. */
-  .lights {
+  .brand {
     display: flex;
-    justify-self: end;
-    align-self: stretch;
-    margin-right: -14px;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    pointer-events: none;
   }
-  .l {
-    width: 34px;
+  .mark {
+    width: 9px;
+    height: 9px;
+    flex: none;
+    background: var(--accent);
+  }
+  .path {
+    margin-left: -6px;
+    font-weight: 400;
+    color: var(--faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .state {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10.5px;
+    color: var(--faint);
+    pointer-events: none;
+  }
+  .dot {
+    width: 6px;
+    height: 6px;
+    background: var(--faint);
+  }
+  .state.on {
+    color: var(--ok);
+  }
+  .state.on .dot {
+    background: var(--ok);
+  }
+  .ctl {
+    display: flex;
+    align-self: stretch;
+  }
+  .ctl button {
+    width: 40px;
     height: 100%;
     border: 0;
     padding: 0;
     display: grid;
     place-items: center;
     background: transparent;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .l:hover {
-    background: rgba(243, 227, 195, 0.06);
-  }
-  .l.close:hover {
-    background: rgba(217, 162, 91, 0.14);
-  }
-  .v {
-    width: 13px;
-    height: 13px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    color: transparent;
-    transition: filter 0.15s, transform 0.15s;
-  }
-  .lights:hover .v {
-    color: rgba(22, 26, 19, 0.75);
-  }
-  .l:hover .v {
-    filter: brightness(1.12);
-    transform: scale(1.08);
-  }
-  .close .v {
-    background: #d9a25b;
-  }
-  .min .v {
-    background: #f3e3c3;
-  }
-  .max .v {
-    background: #9db07f;
-  }
-  .title {
-    text-align: center;
-    font-size: 11px;
     color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    pointer-events: none;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
   }
-  .state {
-    justify-self: start;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: var(--faint);
-    pointer-events: none;
+  .ctl button:hover {
+    background: var(--panel-2);
+    color: var(--text);
   }
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--faint);
-  }
-  .state.on {
-    color: var(--sage);
-  }
-  .state.on .dot {
-    background: var(--sage);
-    box-shadow: 0 0 0 3px var(--sage-soft);
-    animation: pulse 2s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    50% {
-      box-shadow: 0 0 0 5px rgba(157, 176, 127, 0.05);
-    }
+  .ctl button.close:hover {
+    background: #c42b1c;
+    color: #fff;
   }
 </style>

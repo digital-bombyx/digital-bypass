@@ -1,12 +1,12 @@
 # Как помочь проекту
 
-Спасибо, что хотите помочь Zapret2-RustGUI! Ниже — короткие правила, чтобы ваш вклад было легко принять.
+Спасибо, что хотите помочь digital-bypass! Ниже — короткие правила, чтобы ваш вклад было легко принять.
 
 *English version below.*
 
 ## Сообщить об ошибке
 
-Откройте [issue](https://github.com/digital-bombyx/Zapret2-RustGUI/issues) и укажите:
+Откройте [issue](https://github.com/digital-bombyx/digital-bypass/issues) и укажите:
 
 - версию приложения и Windows;
 - какую сборку zapret используете: встроенную или свою папку (видно в «Настройках»);
@@ -58,9 +58,9 @@
 
 # Contributing (English)
 
-Thanks for helping Zapret2-RustGUI!
+Thanks for helping digital-bypass!
 
-- **Bugs:** open an [issue](https://github.com/digital-bombyx/Zapret2-RustGUI/issues) with:
+- **Bugs:** open an [issue](https://github.com/digital-bombyx/digital-bypass/issues) with:
   - the app and Windows versions;
   - which zapret build you use: bundled or a custom folder;
   - steps to reproduce, what you expected and what happened;

@@ -105,7 +105,7 @@
   </section>
 
   <button class="btn ghost quit" onclick={() => api.quit()}><Power size={13} /> {t("выйти из приложения", "quit the app")}</button>
-  <div class="foot faint mono">Zapret2-RustGUI · digital-bombyx</div>
+  <div class="foot faint mono">digital-bypass · digital-bombyx</div>
 </div>
 
 <style>
@@ -128,7 +128,7 @@
   .berr {
     margin-top: 8px;
     font-size: 10.5px;
-    color: #e8a594;
+    color: var(--danger-text);
     white-space: pre-wrap;
   }
   .dirrow {

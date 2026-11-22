@@ -774,6 +774,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "digital-bypass"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-single-instance",
+ "webview2-com",
+ "windows-core",
+ "windows-service",
+ "windows-sys 0.60.2",
+]
+
+[[package]]
 name = "dirs"
 version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4975,21 +4990,6 @@ dependencies = [
  "quote",
  "syn 3.0.10",
  "synstructure",
-]
-
-[[package]]
-name = "zapret2-rustgui"
-version = "0.1.1"
-dependencies = [
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-single-instance",
- "webview2-com",
- "windows-core",
- "windows-service",
- "windows-sys 0.60.2",
 ]
 
 [[package]]

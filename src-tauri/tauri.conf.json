@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Zapret2-RustGUI",
-  "version": "0.1.1",
-  "identifier": "dev.digitalbombyx.zapret2gui",
+  "productName": "digital-bypass",
+  "version": "0.1.0",
+  "identifier": "dev.digitalbombyx.digitalbypass",
   "build": {
     "beforeDevCommand": "npm run sync-zapret && npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Zapret2",
+        "title": "digital-bypass",
         "width": 500,
         "height": 790,
         "minWidth": 440,
@@ -23,7 +23,7 @@
         "theme": "Dark",
         "center": true,
         "visible": false,
-        "backgroundColor": "#171a10",
+        "backgroundColor": "#0a0c0f",
         "dragDropEnabled": false
       }
     ],
@@ -36,7 +36,7 @@
     "targets": ["nsis"],
     "publisher": "digital-bombyx",
     "category": "Utility",
-    "shortDescription": "GUI for zapret-discord-youtube",
+    "shortDescription": "Network unblocking multitool",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"],
     "resources": { "zapret/": "zapret/" }
   }

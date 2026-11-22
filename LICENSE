@@ -22,7 +22,7 @@ SOFTWARE.
 
 ---
 
-This license covers the source code of Zapret2-RustGUI only. The bundled
+This license covers the source code of digital-bypass only. The bundled
 zapret-discord-youtube build (winws2, WinDivert, Lua scripts, lists and
 strategies) is distributed under the licenses of its respective authors;
 see LICENSE.txt inside the bundled build folder.

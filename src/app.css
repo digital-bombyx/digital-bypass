@@ -6,31 +6,47 @@
 @import "@fontsource/jetbrains-mono/cyrillic-500.css";
 @import "@fontsource/jetbrains-mono/cyrillic-700.css";
 
-/* Палитра профиля digital-bombyx: оливковая ночь, крем, янтарь, шалфей. */
+/* digital-bypass: строгая графитовая тема. Один холодный акцент, статусы —
+   зелёный/красный/жёлтый. Контраст текста на фоне: text ~15:1, muted ~7:1,
+   faint ~4.5:1. Имена --amber/--sage сохранены как алиасы акцента и «успеха». */
 :root {
-  /* Значения взяты из F:\ALL_IT_PROJECTS\digital-bombyx (карточка профиля). */
-  --bg: #171a10;
-  --bg-2: #1f2317;
-  --panel: #262b1c;
-  --panel-2: #2d3322;
-  --panel-3: #363d27;
-  --border: #3f5228;
-  --border-soft: #313823;
-  --text: #f3e3c3;
-  --muted: #a99e82;
-  --faint: #6e7358;
-  --amber: #d9a25b;
-  --amber-2: #e8c9a0;
-  --amber-soft: rgba(217, 162, 91, 0.14);
-  --sage: #9db07f;
-  --sage-2: #c9e0a0;
-  --sage-soft: rgba(157, 176, 127, 0.14);
-  --olive: #6e8b3d;
-  --red: #d0705c;
-  --red-soft: rgba(208, 112, 92, 0.14);
-  --yellow: #d9c25e;
-  --radius: 12px;
-  --radius-sm: 11px;
+  --bg: #0a0c0f;
+  --bg-2: #0f1216;
+  --panel: #14181d;
+  --panel-2: #191e24;
+  --panel-3: #222830;
+  --border: #2a313a;
+  --border-soft: #1c2128;
+  --border-strong: #3a434e;
+  --text: #e3e8ee;
+  --muted: #9aa4b0;
+  --faint: #737d8a;
+  --accent: #58a6ff;
+  --accent-2: #a5cdff;
+  --accent-soft: rgba(88, 166, 255, 0.12);
+  --accent-line: rgba(88, 166, 255, 0.45);
+  --ok: #3fb978;
+  --ok-2: #8fe0b4;
+  --ok-soft: rgba(63, 185, 120, 0.12);
+  --danger: #e5534b;
+  --danger-text: #f47067;
+  --danger-soft: rgba(229, 83, 75, 0.12);
+  --danger-line: rgba(229, 83, 75, 0.45);
+  --warn: #d29922;
+  --warn-soft: rgba(210, 153, 34, 0.1);
+  /* Алиасы для компонентов, унаследованных от Zapret2-RustGUI. */
+  --amber: var(--accent);
+  --amber-2: var(--accent-2);
+  --amber-soft: var(--accent-soft);
+  --sage: var(--ok);
+  --sage-2: var(--ok-2);
+  --sage-soft: var(--ok-soft);
+  --olive: #2f7d55;
+  --red: var(--danger);
+  --red-soft: var(--danger-soft);
+  --yellow: var(--warn);
+  --radius: 6px;
+  --radius-sm: 4px;
   --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   color-scheme: dark;
@@ -53,14 +69,14 @@ body {
   background: var(--amber-soft);
 }
 
-/* Мягкий скроллбар */
+/* Скроллбар */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--panel-3);
-  border-radius: 8px;
+  border-radius: 2px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
@@ -73,19 +89,17 @@ body {
 }
 
 .card {
-  /* Плоская карточка как в профиле: ровный фон, тонкая рамка, янтарная полоса слева. */
   background: var(--bg-2);
   border: 1px solid var(--border-soft);
-  border-left: 3px solid var(--amber);
   border-radius: var(--radius);
 }
 
 .label {
   font-family: var(--mono);
   font-size: 11px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--amber);
+  color: var(--muted);
 }
 
 .btn {
@@ -95,7 +109,7 @@ body {
   gap: 6px;
   height: 32px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--panel-2);
   color: var(--text);
@@ -103,32 +117,33 @@ body {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.08s, opacity 0.15s;
+  transition: background 0.12s, border-color 0.12s, opacity 0.12s;
 }
 .btn:hover:not(:disabled) {
   background: var(--panel-3);
-  border-color: #46533a;
+  border-color: var(--border-strong);
 }
 .btn:active:not(:disabled) {
-  transform: scale(0.97);
+  background: var(--panel);
 }
 .btn:disabled {
   opacity: 0.45;
   cursor: default;
 }
 .btn.primary {
-  background: var(--amber-soft);
-  border-color: rgba(217, 162, 91, 0.45);
-  color: var(--amber-2);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #06121f;
+  font-weight: 700;
 }
 .btn.primary:hover:not(:disabled) {
-  background: rgba(217, 162, 91, 0.22);
-  border-color: rgba(217, 162, 91, 0.7);
+  background: #79b8ff;
+  border-color: #79b8ff;
 }
 .btn.danger {
-  background: var(--red-soft);
-  border-color: rgba(208, 112, 92, 0.45);
-  color: #e89a88;
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
+  color: var(--danger-text);
 }
 .btn.ghost {
   background: transparent;
@@ -151,7 +166,7 @@ body {
   gap: 5px;
   height: 22px;
   padding: 0 9px;
-  border-radius: 999px;
+  border-radius: 3px;
   border: 1px solid var(--border);
   background: var(--panel-2);
   color: var(--muted);
@@ -161,17 +176,17 @@ body {
 }
 .chip.amber {
   color: var(--amber-2);
-  border-color: rgba(217, 162, 91, 0.35);
+  border-color: var(--accent-line);
   background: var(--amber-soft);
 }
 .chip.sage {
   color: var(--sage);
-  border-color: rgba(157, 176, 127, 0.35);
+  border-color: rgba(63, 185, 120, 0.4);
   background: var(--sage-soft);
 }
 .chip.red {
-  color: #e89a88;
-  border-color: rgba(208, 112, 92, 0.35);
+  color: var(--danger-text);
+  border-color: var(--danger-line);
   background: var(--red-soft);
 }
 
@@ -199,8 +214,8 @@ body {
 }
 .input:focus,
 .textarea:focus {
-  border-color: rgba(217, 162, 91, 0.6);
-  box-shadow: 0 0 0 3px rgba(217, 162, 91, 0.12);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .muted {
@@ -211,15 +226,10 @@ body {
 }
 
 .fade-in {
-  animation: fade-in 0.18s ease-out;
+  animation: fade-in 0.12s linear;
 }
 @keyframes fade-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
   }
 }

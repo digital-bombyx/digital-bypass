@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    zapret2_rustgui_lib::run()
+    digital_bypass_lib::run()
 }

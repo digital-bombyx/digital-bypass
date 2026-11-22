@@ -314,7 +314,7 @@ fn write_payload() -> Result<PathBuf, String> {
         x ^= x << 17;
         chunk.copy_from_slice(&x.to_le_bytes()[..chunk.len()]);
     }
-    let p = std::env::temp_dir().join("zapret2gui-dpi-payload.bin");
+    let p = std::env::temp_dir().join("digital-bypass-dpi-payload.bin");
     std::fs::write(&p, buf).map_err(|e| e.to_string())?;
     Ok(p)
 }

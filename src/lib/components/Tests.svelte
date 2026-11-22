@@ -282,8 +282,8 @@
   .msg {
     padding: 10px 12px;
     font-size: 11.5px;
-    color: #e8a594;
-    border-color: rgba(208, 112, 92, 0.35);
+    color: var(--danger-text);
+    border-color: rgba(229, 83, 75, 0.35);
   }
   .best {
     display: flex;
@@ -291,7 +291,7 @@
     gap: 12px;
     padding: 12px 14px;
     color: var(--amber);
-    border-color: rgba(217, 162, 91, 0.35);
+    border-color: rgba(88, 166, 255, 0.35);
   }
   .grow {
     flex: 1;
@@ -310,10 +310,10 @@
   }
   .res {
     padding: 10px 12px;
-    border-radius: 13px;
+    border-radius: var(--radius);
   }
   .res.isbest {
-    border-color: rgba(217, 162, 91, 0.45);
+    border-color: rgba(88, 166, 255, 0.45);
   }
   .reshead {
     width: 100%;
@@ -378,7 +378,7 @@
   }
   .errtxt {
     font-size: 10.5px;
-    color: #e8a594;
+    color: var(--danger-text);
     margin-top: 6px;
     white-space: pre-wrap;
   }
@@ -417,12 +417,12 @@
     color: var(--sage);
   }
   .d.warn {
-    background: rgba(217, 194, 94, 0.12);
+    background: rgba(210, 153, 34, 0.12);
     color: var(--yellow);
   }
   .d.bad {
     background: var(--red-soft);
-    color: #e89a88;
+    color: var(--danger-text);
   }
   .png {
     width: 44px;
