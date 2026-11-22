@@ -21,6 +21,7 @@
 - **Прокси**: SOCKS5 на том же порту, раздача в локальную сеть с правилом брандмауэра и логином/паролем для устройств из сети.
 - **Сканер SNI** во вкладке «проверка»: какие имена сайтов DPI пропускает к заданному адресу, признак белых списков.
 - **Лицензия GPL-3.0** с дополнительными условиями (NOTICE): сохранение авторства и пометка изменённых версий. Zapret2-RustGUI остаётся под MIT.
+- **Прокси, способы нарезки** (по мотивам SpoofDPI): по SNI, первый байт, куски, случайная точка; TLS-записи или TCP-сегменты; disorder отдельным переключателем. Правила по доменам: «только списки» (включая списки zapret2), «не резать», «блокировать». DoH с кэшем и параллельным опросом серверов, подключение сразу к нескольким адресам сайта, режим только IPv4.
 
 ### What's new
 
@@ -37,5 +38,6 @@
 - **Proxy**: SOCKS5 on the same port, local network sharing with a firewall rule and a user/password for network devices.
 - **SNI scanner** in the Check tab: which site names DPI lets through to a given address, with a whitelist hint.
 - **GPL-3.0 license** with additional terms (NOTICE): author attribution and marking of modified versions. Zapret2-RustGUI stays under MIT.
+- **Proxy split methods** (inspired by SpoofDPI): at SNI, first byte, chunks, random point; TLS records or TCP segments; disorder as a separate switch. Per-domain rules: listed only (including the zapret2 lists), do not split, block. Cached DoH with parallel servers, racing connections to several site addresses, IPv4-only mode.
 
 [Unreleased]: https://github.com/digital-bombyx/digital-bypass/commits/main

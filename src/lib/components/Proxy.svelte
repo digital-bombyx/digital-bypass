@@ -5,10 +5,27 @@
   import { t } from "$lib/i18n.svelte";
   import Segmented from "./Segmented.svelte";
   import Switch from "./Switch.svelte";
-  import { Power, Copy, Wifi, KeyRound, ShieldAlert } from "@lucide/svelte";
+  import { Power, Copy, Wifi, KeyRound, ShieldAlert, ListFilter } from "@lucide/svelte";
 
   let st = $state<ProxyStatus | null>(null);
-  let cfg = $state<ProxyConfig>({ port: 8881, method: "disorder", doh: true, system: true, lan: false, user: "", pass: "" });
+  let cfg = $state<ProxyConfig>({
+    port: 8881,
+    split: "sni",
+    unit: "records",
+    chunk: 4,
+    disorder: true,
+    ipv6: false,
+    rules: { scope: "all", zapret_lists: true, bypass: [], skip: [], block: [] },
+    doh: true,
+    system: true,
+    lan: false,
+    user: "",
+    pass: "",
+  });
+  /** Списки правил в textarea — по домену в строке. */
+  let ruleText = $state({ bypass: "", skip: "", block: "" });
+  const toLines = (v: string[]) => v.join("\n");
+  const fromLines = (s: string) => s.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
   let lanIps = $state<string[]>([]);
   let showPass = $state(false);
   const running = $derived(!!st?.stats.running);
@@ -16,7 +33,8 @@
   async function load() {
     try {
       st = await api.proxyStatus();
-      cfg = { ...st.config };
+      cfg = { ...st.config, rules: { ...st.config.rules } };
+      ruleText = { bypass: toLines(cfg.rules.bypass), skip: toLines(cfg.rules.skip), block: toLines(cfg.rules.block) };
       lanIps = await api.lanAddresses().catch(() => []);
     } catch (e) {
       toast(String(e));
@@ -44,6 +62,22 @@
     const r = await act(() => api.proxyStop(), t("Прокси выключен", "Proxy is off"));
     if (r) st = r;
   }
+  function saveRules() {
+    change({ rules: { ...cfg.rules, bypass: fromLines(ruleText.bypass), skip: fromLines(ruleText.skip), block: fromLines(ruleText.block) } });
+  }
+  const rulesDirty = $derived(
+    ruleText.bypass !== toLines(cfg.rules.bypass) || ruleText.skip !== toLines(cfg.rules.skip) || ruleText.block !== toLines(cfg.rules.block),
+  );
+  const splitHint = $derived(
+    ({
+      sni: t("разрез внутри имени сайта", "cut inside the site name"),
+      "first-byte": t("отделить первый байт", "split off the first byte"),
+      chunk: t("куски фиксированного размера", "fixed-size chunks"),
+      random: t("одна случайная точка", "one random point"),
+      none: t("без нарезки", "no splitting"),
+    })[cfg.split],
+  );
+
   /** Настройки сохраняются сразу; работающий прокси перезапускается с новыми. */
   async function change(patch: Partial<ProxyConfig>) {
     cfg = { ...cfg, ...patch };
@@ -79,6 +113,8 @@
         <span><b>{st.stats.active}</b> {t("активных", "active")}</span>
         <span><b>{st.stats.total}</b> {t("всего", "total")}</span>
         <span><b>{st.stats.failed}</b> {t("ошибок", "failed")}</span>
+        <span title={t("с нарезкой / без / заблокировано", "split / passed / blocked")}><b>{st.stats.bypassed}</b>/<b>{st.stats.passed}</b>/<b>{st.stats.blocked}</b></span>
+        {#if cfg.doh}<span title={t("доменов в кэше DNS", "domains in the DNS cache")}>dns <b>{st.stats.dns_cached}</b></span>{/if}
         <button class="btn sm ghost addr" title={t("Скопировать адрес", "Copy address")} onclick={() => navigator.clipboard?.writeText(addr).then(() => toast(addr, "ok"))}>
           {addr} <Copy size={11} />
         </button>
@@ -98,22 +134,61 @@
   <section class="card opts">
     <div class="opt">
       <div>
-        <div class="label">{t("способ", "method")}</div>
-        <div class="hint faint mono">
-          {cfg.method === "disorder"
-            ? t("первая часть с TTL=1, поток не по порядку", "first part with TTL=1, out-of-order stream")
-            : t("части отдельными сегментами", "parts as separate segments")}
-        </div>
+        <div class="label">{t("нарезка", "split")}</div>
+        <div class="hint faint mono">{splitHint}</div>
       </div>
       <Segmented
         small
         disabled={app.busy}
-        value={cfg.method}
-        onchange={(m) => change({ method: m })}
+        value={cfg.split}
+        onchange={(m) => change({ split: m })}
         options={[
-          { value: "disorder", label: "Disorder" },
-          { value: "split", label: "Split" },
+          { value: "sni", label: "SNI" },
+          { value: "first-byte", label: t("Первый байт", "First byte") },
+          { value: "chunk", label: t("Куски", "Chunks") },
+          { value: "random", label: t("Случайно", "Random") },
+          { value: "none", label: t("Нет", "None") },
         ]} />
+    </div>
+    {#if cfg.split !== "none"}
+      <div class="opt">
+        <div>
+          <div class="label">{t("части", "parts")}</div>
+          <div class="hint faint mono">
+            {cfg.unit === "records"
+              ? t("каждая часть — отдельная TLS-запись", "each part is a separate TLS record")
+              : t("TCP-сегменты одной TLS-записи", "TCP segments of one TLS record")}
+          </div>
+        </div>
+        <div class="inline">
+          {#if cfg.split === "chunk"}
+            <input class="input chunk" type="number" min="1" max="1024" title={t("Размер куска, байт", "Chunk size, bytes")} bind:value={cfg.chunk} onchange={() => change({ chunk: Number(cfg.chunk) })} disabled={app.busy} />
+          {/if}
+          <Segmented
+            small
+            disabled={app.busy}
+            value={cfg.unit}
+            onchange={(m) => change({ unit: m })}
+            options={[
+              { value: "records", label: t("TLS-записи", "TLS records") },
+              { value: "tcp", label: t("TCP-сегменты", "TCP segments") },
+            ]} />
+        </div>
+      </div>
+      <div class="opt">
+        <div>
+          <div class="label">disorder</div>
+          <div class="hint faint mono">{t("первая часть с TTL=1 — поток приходит не по порядку", "first part with TTL=1 — out-of-order stream")}</div>
+        </div>
+        <Switch checked={cfg.disorder} disabled={app.busy} onchange={(v) => change({ disorder: v })} />
+      </div>
+    {/if}
+    <div class="opt">
+      <div>
+        <div class="label">IPv6</div>
+        <div class="hint faint mono">{t("запрашивать и использовать IPv6-адреса сайтов", "query and use IPv6 site addresses")}</div>
+      </div>
+      <Switch checked={cfg.ipv6} disabled={app.busy} onchange={(v) => change({ ipv6: v })} />
     </div>
     <div class="opt">
       <div>
@@ -135,6 +210,53 @@
         <div class="hint faint mono">{t("для ручной настройки браузера", "for manual browser setup")}</div>
       </div>
       <input class="input port" type="number" min="1024" max="65535" bind:value={cfg.port} disabled={app.busy || running} />
+    </div>
+  </section>
+
+  <section class="card block">
+    <div class="row">
+      <div>
+        <div class="label"><ListFilter size={11} /> {t("правила", "rules")}</div>
+        <div class="hint faint mono">{t("домен совпадает и со всеми поддоменами", "a domain also matches all its subdomains")}</div>
+      </div>
+      <Segmented
+        small
+        disabled={app.busy}
+        value={cfg.rules.scope}
+        onchange={(v) => change({ rules: { ...cfg.rules, scope: v } })}
+        options={[
+          { value: "all", label: t("Резать всё", "Split all") },
+          { value: "listed", label: t("Только списки", "Listed only") },
+        ]} />
+    </div>
+    <label class="check mono">
+      <input type="checkbox" checked={cfg.rules.zapret_lists} disabled={app.busy} onchange={(e) => change({ rules: { ...cfg.rules, zapret_lists: e.currentTarget.checked } })} />
+      {t("обходить и домены из списков zapret2", "also bypass domains from the zapret2 lists")}
+      {#if running && st}<span class="faint">· {st.stats.bypass_domains}</span>{/if}
+    </label>
+    <div class="rules">
+      {#if cfg.rules.scope === "listed"}
+        <label class="field">
+          <span class="k mono">{t("обходить", "bypass")}</span>
+          <textarea class="textarea" rows="4" spellcheck="false" placeholder="youtube.com" bind:value={ruleText.bypass}></textarea>
+        </label>
+      {/if}
+      <label class="field">
+        <span class="k mono">{t("не резать", "do not split")}</span>
+        <textarea class="textarea" rows="4" spellcheck="false" placeholder="sberbank.ru" bind:value={ruleText.skip}></textarea>
+      </label>
+      <label class="field">
+        <span class="k mono">{t("блокировать", "block")}</span>
+        <textarea class="textarea" rows="4" spellcheck="false" placeholder="ads.example.com" bind:value={ruleText.block}></textarea>
+      </label>
+    </div>
+    <div class="actions">
+      <span class="faint mono hint grow">
+        {cfg.rules.scope === "listed"
+          ? t("Остальные сайты идут через прокси без нарезки. Для SOCKS5 включите удалённый DNS в приложении — иначе вместо домена придёт IP.", "Other sites pass through without splitting. For SOCKS5 enable remote DNS in the app — otherwise an IP comes instead of a domain.")
+          : t("«Не резать» — для банков и сайтов, которые ломаются от нарезки.", "\"Do not split\" is for banks and sites that break with splitting.")}
+      </span>
+      <button class="btn sm" disabled={app.busy || !rulesDirty} onclick={saveRules}>{t("Сохранить", "Save")}</button>
     </div>
   </section>
 
@@ -241,6 +363,49 @@
   }
   .port {
     width: 96px;
+  }
+  .inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .chunk {
+    width: 64px;
+    height: 26px;
+  }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .check input {
+    accent-color: var(--accent);
+    margin: 0;
+  }
+  .rules {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .field .k {
+    font-size: 10.5px;
+    color: var(--faint);
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .grow {
+    flex: 1;
   }
   .label {
     display: flex;

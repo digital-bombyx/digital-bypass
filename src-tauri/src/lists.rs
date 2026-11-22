@@ -126,6 +126,15 @@ pub fn builtin_domains(dir: &Path) -> std::collections::HashSet<String> {
         .collect()
 }
 
+/// Все домены, которые zapret2 обходит по спискам: встроенные + list-general-user.
+pub fn bypass_domains(dir: &Path) -> Vec<String> {
+    let mut all = builtin_domains(dir);
+    if let Ok(t) = read(dir, "general") {
+        all.extend(domains_in(&t).filter(|d| d != "domain.example.abc"));
+    }
+    all.into_iter().collect()
+}
+
 /// Набор для интерфейса: только домены, которых ещё нет во встроенных списках.
 #[derive(Serialize)]
 pub struct PresetView {

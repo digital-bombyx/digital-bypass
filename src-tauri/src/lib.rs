@@ -129,9 +129,12 @@ impl AppState {
     }
 
     /// Запустить прокси по настройкам и, если нужно, прописать его в Windows.
-    fn proxy_start(&self, cfg: proxy::Config) -> R<()> {
+    fn proxy_start(&self, mut cfg: proxy::Config) -> R<()> {
         self.proxy_stop_inner();
-        let p = proxy::Proxy::start(cfg.clone())?;
+        cfg.normalize();
+        // Домены списков zapret2 для правила «только списки» (если папка есть).
+        let lists = if cfg.rules.zapret_lists { self.dir().map(|d| lists::bypass_domains(&d)).unwrap_or_default() } else { Vec::new() };
+        let p = proxy::Proxy::start(cfg.clone(), &lists)?;
         *self.proxy.lock().unwrap() = Some(p);
         // Раздача в LAN: правило брандмауэра (только с правами администратора).
         if cfg.lan && winapi::is_admin() {
@@ -588,6 +591,8 @@ fn proxy_set_config(app: AppHandle, state: State<AppState>, config: proxy::Confi
         return Err(tr!("порт должен быть от 1024 до 65535", "port must be 1024–65535"));
     }
     config.validate_auth()?;
+    let mut config = config;
+    config.normalize();
     if state.proxy.lock().unwrap().is_some() {
         let r = state.proxy_start(config);
         refresh_tray(&app);

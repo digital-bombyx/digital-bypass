@@ -29,8 +29,21 @@ const FIRST_DATA_TIMEOUT: Duration = Duration::from_secs(10);
 #[serde(default)]
 pub struct Config {
     pub port: u16,
-    /// split | disorder
-    pub method: String,
+    /// Из прошлых версий: `split` | `disorder`. Переводится в `disorder` (см. `normalize`).
+    #[serde(skip_serializing)]
+    pub method: Option<String>,
+    /// Где резать ClientHello: sni | first-byte | chunk | random | none.
+    pub split: String,
+    /// Чем резать: records — отдельные TLS-записи; tcp — TCP-сегменты одной записи.
+    pub unit: String,
+    /// Размер куска для `chunk`, байт.
+    pub chunk: u16,
+    /// Первая часть уходит с TTL=1 и доходит позже — поток не по порядку.
+    pub disorder: bool,
+    /// Запрашивать и использовать IPv6-адреса сайтов.
+    pub ipv6: bool,
+    /// Какие домены обрабатывать.
+    pub rules: Rules,
     /// Разрешать адреса через DoH (Cloudflare → Google), иначе системным DNS.
     pub doh: bool,
     /// Прописать прокси в настройки Windows (HKCU).
@@ -46,7 +59,142 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { port: 8881, method: "disorder".into(), doh: true, system: true, lan: false, user: String::new(), pass: String::new() }
+        Config {
+            port: 8881,
+            method: None,
+            split: "sni".into(),
+            unit: "records".into(),
+            chunk: 4,
+            disorder: true,
+            ipv6: false,
+            rules: Rules::default(),
+            doh: true,
+            system: true,
+            lan: false,
+            user: String::new(),
+            pass: String::new(),
+        }
+    }
+}
+
+/// Правила по доменам. Домен совпадает и со всеми поддоменами (`*.` можно не писать).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Rules {
+    /// all — резать всё, кроме `skip`; listed — только домены из `bypass` (и списков zapret2).
+    pub scope: String,
+    /// Добавить к `bypass` домены списков zapret2 (list-general, list-google, list-general-user).
+    pub zapret_lists: bool,
+    pub bypass: Vec<String>,
+    /// Пропускать без нарезки: банки, сайты, которые ломаются от фрагментации.
+    pub skip: Vec<String>,
+    /// Не пускать вовсе.
+    pub block: Vec<String>,
+}
+
+impl Default for Rules {
+    fn default() -> Self {
+        Rules { scope: "all".into(), zapret_lists: true, bypass: Vec::new(), skip: Vec::new(), block: Vec::new() }
+    }
+}
+
+pub const SPLITS: [&str; 5] = ["sni", "first-byte", "chunk", "random", "none"];
+
+impl Config {
+    /// Перевести настройки прошлых версий и проверить значения.
+    pub fn normalize(&mut self) {
+        match self.method.take().as_deref() {
+            Some("split") => self.disorder = false,
+            Some("disorder") => self.disorder = true,
+            _ => {}
+        }
+        if !SPLITS.contains(&self.split.as_str()) {
+            self.split = "sni".into();
+        }
+        if self.unit != "tcp" {
+            self.unit = "records".into();
+        }
+        self.chunk = self.chunk.clamp(1, 1024);
+        if self.rules.scope != "listed" {
+            self.rules.scope = "all".into();
+        }
+        for list in [&mut self.rules.bypass, &mut self.rules.skip, &mut self.rules.block] {
+            let mut v: Vec<String> = list.iter().filter_map(|d| normalize_domain(d)).collect();
+            v.dedup();
+            *list = v;
+        }
+    }
+}
+
+/// `*.Example.COM.` → `example.com`; не домен — None.
+pub fn normalize_domain(d: &str) -> Option<String> {
+    let d = d.trim().trim_start_matches("*.").trim_start_matches('.').trim_end_matches('.').to_ascii_lowercase();
+    (d.contains('.') && d.len() <= 253 && d.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.' || c == '_')).then_some(d)
+}
+
+/// Набор доменов: совпадение по имени и всем родительским доменам.
+#[derive(Debug, Default, Clone)]
+pub struct DomainSet(std::collections::HashSet<String>);
+
+impl DomainSet {
+    pub fn new<I: IntoIterator<Item = S>, S: AsRef<str>>(it: I) -> Self {
+        DomainSet(it.into_iter().filter_map(|d| normalize_domain(d.as_ref())).collect())
+    }
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn matches(&self, host: &str) -> bool {
+        if self.0.is_empty() || host.parse::<IpAddr>().is_ok() {
+            return false;
+        }
+        let host = host.trim_end_matches('.').to_ascii_lowercase();
+        let mut h = host.as_str();
+        loop {
+            if self.0.contains(h) {
+                return true;
+            }
+            match h.find('.') {
+                Some(i) => h = &h[i + 1..],
+                None => return false,
+            }
+        }
+    }
+}
+
+/// Что делать с соединением к хосту.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    Bypass,
+    Pass,
+    Block,
+}
+
+pub struct Matcher {
+    scope_listed: bool,
+    bypass: DomainSet,
+    skip: DomainSet,
+    block: DomainSet,
+}
+
+impl Matcher {
+    pub fn new(r: &Rules, extra_bypass: &[String]) -> Self {
+        Matcher {
+            scope_listed: r.scope == "listed",
+            bypass: DomainSet::new(r.bypass.iter().chain(extra_bypass.iter())),
+            skip: DomainSet::new(&r.skip),
+            block: DomainSet::new(&r.block),
+        }
+    }
+    pub fn action(&self, host: &str) -> Action {
+        if self.block.matches(host) {
+            Action::Block
+        } else if self.skip.matches(host) {
+            Action::Pass
+        } else if self.scope_listed && !self.bypass.matches(host) {
+            Action::Pass
+        } else {
+            Action::Bypass
+        }
     }
 }
 
@@ -87,21 +235,77 @@ pub fn find_sni(rec: &[u8]) -> Option<(usize, usize)> {
     None
 }
 
-/// Разрезать первую TLS-запись на несколько: до имени, середина имени, остаток.
-/// Неподходящие данные возвращаются одним куском.
-pub fn split_client_hello(data: &[u8]) -> Vec<Vec<u8>> {
+/// Внутренние точки разреза (возрастают, в пределах 1..len) для способа `split`.
+/// `sni` — смещение и длина имени в тех же координатах.
+pub fn cut_points(len: usize, sni: Option<(usize, usize)>, split: &str, chunk: usize, seed: u64) -> Vec<usize> {
+    if len < 2 {
+        return Vec::new();
+    }
+    let mut cuts: Vec<usize> = match split {
+        "sni" => match sni {
+            Some((s, n)) => vec![s, s + (n / 2).max(1)],
+            None => vec![1],
+        },
+        "first-byte" => vec![1],
+        "chunk" => {
+            // Не больше 256 кусков: иначе однобайтные куски большого ClientHello
+            // превращаются в сотни сегментов.
+            let step = chunk.max(1).max(len.div_ceil(256));
+            (1..).map(|i| i * step).take_while(|&c| c < len).collect()
+        }
+        "random" => {
+            // xorshift — для одной точки разреза случайности хватает.
+            let mut x = seed | 1;
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            vec![1 + (x as usize) % (len - 1)]
+        }
+        _ => Vec::new(),
+    };
+    cuts.retain(|&c| c > 0 && c < len);
+    cuts.sort_unstable();
+    cuts.dedup();
+    cuts
+}
+
+/// Параметры нарезки из настроек.
+#[derive(Debug, Clone)]
+pub struct SplitOpts {
+    pub split: String,
+    pub records: bool,
+    pub chunk: usize,
+    pub seed: u64,
+}
+
+impl Default for SplitOpts {
+    fn default() -> Self {
+        SplitOpts { split: "sni".into(), records: true, chunk: 4, seed: 0 }
+    }
+}
+
+/// Разрезать первый пакет туннеля. Только TLS ClientHello; остальное — одним куском.
+/// `records` — каждая часть оформляется отдельной TLS-записью; иначе режутся
+/// TCP-сегменты одной записи.
+pub fn split_with(data: &[u8], o: &SplitOpts) -> Vec<Vec<u8>> {
     let Some((sni, sni_len)) = find_sni(data) else { return vec![data.to_vec()] };
     let rec_len = u16::from_be_bytes([data[3], data[4]]) as usize;
     if 5 + rec_len > data.len() {
         return vec![data.to_vec()];
     }
+    if !o.records {
+        let cuts = cut_points(data.len(), Some((sni, sni_len)), &o.split, o.chunk, o.seed);
+        let mut b = vec![0];
+        b.extend(cuts);
+        b.push(data.len());
+        return b.windows(2).map(|w| data[w[0]..w[1]].to_vec()).collect();
+    }
     let payload = &data[5..5 + rec_len];
     let tail = &data[5 + rec_len..];
     // Точки разреза в координатах payload.
-    let a = sni - 5;
-    let b = a + (sni_len / 2).max(1);
-    let mut cuts = vec![0, a, b, payload.len()];
-    cuts.dedup();
+    let mut cuts = vec![0];
+    cuts.extend(cut_points(payload.len(), Some((sni - 5, sni_len)), &o.split, o.chunk, o.seed));
+    cuts.push(payload.len());
     let mut out: Vec<Vec<u8>> = cuts
         .windows(2)
         .filter(|w| w[1] > w[0])
@@ -119,10 +323,18 @@ pub fn split_client_hello(data: &[u8]) -> Vec<Vec<u8>> {
     out
 }
 
-fn send_parts(up: &mut TcpStream, parts: &[Vec<u8>], method: &str) -> std::io::Result<()> {
+/// Прежний способ: три TLS-записи вокруг имени сайта (для тестов).
+#[cfg(test)]
+pub fn split_client_hello(data: &[u8]) -> Vec<Vec<u8>> {
+    split_with(data, &SplitOpts::default())
+}
+
+fn send_parts(up: &mut TcpStream, parts: &[Vec<u8>], disorder: bool) -> std::io::Result<()> {
     up.set_nodelay(true)?;
+    // Паузы нужны, чтобы части не склеились в один сегмент; при сотнях кусков — короче.
+    let pause = Duration::from_micros(if parts.len() > 16 { 200 } else { 2000 });
     for (i, p) in parts.iter().enumerate() {
-        if i == 0 && method == "disorder" && parts.len() > 1 {
+        if i == 0 && disorder && parts.len() > 1 {
             // TTL работает только для IPv4-сокета; для IPv6 — обычная нарезка.
             if let Ok(ttl) = up.ttl() {
                 if up.set_ttl(1).is_ok() {
@@ -134,7 +346,9 @@ fn send_parts(up: &mut TcpStream, parts: &[Vec<u8>], method: &str) -> std::io::R
             }
         }
         up.write_all(p)?;
-        std::thread::sleep(Duration::from_millis(2));
+        if i + 1 < parts.len() {
+            std::thread::sleep(pause);
+        }
     }
     Ok(())
 }
@@ -382,6 +596,13 @@ pub struct Stats {
     pub system: bool,
     pub lan: bool,
     pub auth: bool,
+    /// Соединений с нарезкой / без неё / заблокировано правилами.
+    pub bypassed: u64,
+    pub passed: u64,
+    pub blocked: u64,
+    /// Доменов в кэше DNS и в списке обхода.
+    pub dns_cached: usize,
+    pub bypass_domains: usize,
     pub last_error: Option<String>,
 }
 
@@ -392,7 +613,11 @@ struct Shared {
     total: AtomicU64,
     failed: AtomicU64,
     last_error: Mutex<Option<String>>,
-    doh: Vec<crate::doh::DohClient>,
+    resolver: Option<crate::doh::CachedResolver>,
+    matcher: Matcher,
+    bypassed: AtomicU64,
+    passed: AtomicU64,
+    blocked: AtomicU64,
 }
 
 impl Shared {
@@ -400,34 +625,46 @@ impl Shared {
         if let Ok(ip) = host.parse::<IpAddr>() {
             return vec![SocketAddr::new(ip, port)];
         }
-        if self.cfg.doh {
-            for c in &self.doh {
-                if let Ok(ips) = c.resolve(host) {
-                    let mut v: Vec<SocketAddr> = ips.iter().filter(|i| i.is_ipv4()).map(|i| SocketAddr::new(*i, port)).collect();
-                    v.extend(ips.iter().filter(|i| i.is_ipv6()).map(|i| SocketAddr::new(*i, port)));
-                    if !v.is_empty() {
-                        return v;
-                    }
-                }
-            }
+        let ips: Vec<IpAddr> = match self.resolver.as_ref().and_then(|r| r.resolve(host)) {
+            Some(v) => v,
+            None => (host, port).to_socket_addrs().map(|i| i.map(|a| a.ip()).collect()).unwrap_or_default(),
+        };
+        // IPv4 вперёд; без IPv6 — только IPv4.
+        let mut v: Vec<SocketAddr> = ips.iter().filter(|i| i.is_ipv4()).map(|i| SocketAddr::new(*i, port)).collect();
+        if self.cfg.ipv6 || v.is_empty() {
+            v.extend(ips.iter().filter(|i| i.is_ipv6()).map(|i| SocketAddr::new(*i, port)));
         }
-        (host, port).to_socket_addrs().map(|i| i.collect()).unwrap_or_default()
+        v
+    }
+
+    fn split_opts(&self) -> SplitOpts {
+        let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(7);
+        SplitOpts { split: self.cfg.split.clone(), records: self.cfg.unit != "tcp", chunk: self.cfg.chunk as usize, seed }
+    }
+
+    fn count(&self, a: Action) {
+        match a {
+            Action::Bypass => &self.bypassed,
+            Action::Pass => &self.passed,
+            Action::Block => &self.blocked,
+        }
+        .fetch_add(1, Ordering::Relaxed);
     }
 
     fn connect(&self, host: &str, port: u16) -> std::io::Result<TcpStream> {
         let addrs = self.resolve(host, port);
-        let mut last = std::io::Error::new(std::io::ErrorKind::NotFound, format!("{host}: no address"));
-        for a in addrs.iter().take(4) {
-            match TcpStream::connect_timeout(a, CONNECT_TIMEOUT) {
-                Ok(s) => return Ok(s),
-                Err(e) => last = e,
-            }
+        if addrs.is_empty() {
+            return Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("{host}: no address")));
         }
-        Err(last)
+        connect_race(&addrs, CONNECT_TIMEOUT)
     }
 
     /// Туннель: первый пакет клиента (обычно ClientHello) режется, дальше — пересылка.
-    fn tunnel(&self, mut client: TcpStream, mut up: TcpStream, early: Vec<u8>) -> std::io::Result<()> {
+    fn tunnel(&self, mut client: TcpStream, mut up: TcpStream, early: Vec<u8>, action: Action) -> std::io::Result<()> {
+        if action == Action::Pass {
+            up.write_all(&early)?;
+            return relay(client, up);
+        }
         let mut first = early;
         if first.is_empty() {
             let mut tmp = [0u8; 16 * 1024];
@@ -437,7 +674,8 @@ impl Shared {
             }
             first.extend_from_slice(&tmp[..n]);
         }
-        send_parts(&mut up, &split_client_hello(&first), &self.cfg.method)?;
+        let parts = if self.cfg.split == "none" { vec![first] } else { split_with(&first, &self.split_opts()) };
+        send_parts(&mut up, &parts, self.cfg.disorder)?;
         relay(client, up)
     }
 
@@ -456,6 +694,13 @@ impl Shared {
         let mut b = [0u8; 1];
         if client.peek(&mut b)? == 1 && b[0] == 5 {
             let (host, port) = socks5_handshake(&mut client, creds)?;
+            let action = self.matcher.action(&host);
+            self.count(action);
+            if action == Action::Block {
+                // 0x02: соединение запрещено правилами.
+                let _ = client.write_all(&[5, 2, 0, 1, 0, 0, 0, 0, 0, 0]);
+                return Ok(());
+            }
             let up = match self.connect(&host, port) {
                 Ok(u) => u,
                 Err(e) => {
@@ -464,7 +709,7 @@ impl Shared {
                 }
             };
             client.write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0])?;
-            return self.tunnel(client, up, Vec::new());
+            return self.tunnel(client, up, Vec::new(), action);
         }
         let (head, early) = read_head(&mut client)?;
         if let Some((user, pass)) = creds {
@@ -478,6 +723,12 @@ impl Shared {
         let req = parse_request(&head).ok_or_else(|| std::io::Error::other("bad request"))?;
         match req {
             Request::Connect { host, port } => {
+                let action = self.matcher.action(&host);
+                self.count(action);
+                if action == Action::Block {
+                    let _ = client.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                    return Ok(());
+                }
                 let up = match self.connect(&host, port) {
                     Ok(u) => u,
                     Err(e) => {
@@ -486,9 +737,15 @@ impl Shared {
                     }
                 };
                 client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")?;
-                self.tunnel(client, up, early)
+                self.tunnel(client, up, early, action)
             }
             Request::Http { host, port, head } => {
+                if self.matcher.action(&host) == Action::Block {
+                    self.count(Action::Block);
+                    let _ = client.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                    return Ok(());
+                }
+                self.count(Action::Pass);
                 let mut up = self.connect(&host, port)?;
                 up.write_all(&head)?;
                 up.write_all(&early)?;
@@ -496,6 +753,30 @@ impl Shared {
             }
         }
     }
+}
+
+/// Подключиться к первому ответившему адресу: попытки стартуют с шагом 250 мс
+/// и идут параллельно. Часть адресов сайта может быть заблокирована по IP —
+/// так один «мёртвый» адрес не задерживает соединение на весь таймаут.
+pub fn connect_race(addrs: &[SocketAddr], timeout: Duration) -> std::io::Result<TcpStream> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let n = addrs.len().min(6);
+    for (i, a) in addrs.iter().take(n).enumerate() {
+        let (tx, a) = (tx.clone(), *a);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(250 * i as u64));
+            let _ = tx.send(TcpStream::connect_timeout(&a, timeout));
+        });
+    }
+    drop(tx);
+    let mut last = std::io::Error::new(std::io::ErrorKind::TimedOut, "connection timed out");
+    for r in rx {
+        match r {
+            Ok(s) => return Ok(s),
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
 }
 
 /// Двунаправленная пересылка до закрытия любой стороны.
@@ -519,39 +800,30 @@ pub struct Proxy {
 }
 
 impl Proxy {
-    pub fn start(cfg: Config) -> Result<Proxy, String> {
+    /// `extra_bypass` — домены из списков zapret2 (если включено в правилах).
+    pub fn start(mut cfg: Config, extra_bypass: &[String]) -> Result<Proxy, String> {
         cfg.validate_auth()?;
-        if cfg.method != "split" && cfg.method != "disorder" {
-            let m = &cfg.method;
-            return Err(crate::tr!("неизвестный способ: {m}", "unknown method: {m}"));
-        }
+        cfg.normalize();
         let port = cfg.port;
         let host = if cfg.lan { "0.0.0.0" } else { "127.0.0.1" };
         let listener = TcpListener::bind((host, port))
             .map_err(|e| crate::tr!("порт {port} занят: {e}", "port {port} is busy: {e}"))?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
-        let doh = if cfg.doh {
-            [
-                ("https://cloudflare-dns.com/dns-query", ["1.1.1.1", "1.0.0.1"]),
-                ("https://dns.google/dns-query", ["8.8.8.8", "8.8.4.4"]),
-            ]
-            .iter()
-            .filter_map(|(t, ips)| {
-                let boot: Vec<IpAddr> = ips.iter().filter_map(|s| s.parse().ok()).collect();
-                crate::doh::DohClient::new(t, &boot).ok()
-            })
-            .collect()
-        } else {
-            Vec::new()
-        };
+        let resolver = cfg.doh.then(|| crate::doh::CachedResolver::public(cfg.ipv6));
+        let extra: &[String] = if cfg.rules.zapret_lists { extra_bypass } else { &[] };
+        let matcher = Matcher::new(&cfg.rules, extra);
         let shared = Arc::new(Shared {
+            matcher,
+            resolver,
+            bypassed: AtomicU64::new(0),
+            passed: AtomicU64::new(0),
+            blocked: AtomicU64::new(0),
             cfg,
             stop: AtomicBool::new(false),
             active: AtomicU64::new(0),
             total: AtomicU64::new(0),
             failed: AtomicU64::new(0),
             last_error: Mutex::new(None),
-            doh,
         });
         let sh = shared.clone();
         std::thread::spawn(move || {
@@ -593,6 +865,11 @@ impl Proxy {
             system: self.shared.cfg.system,
             lan: self.shared.cfg.lan,
             auth: !self.shared.cfg.user.is_empty(),
+            bypassed: self.shared.bypassed.load(Ordering::Relaxed),
+            passed: self.shared.passed.load(Ordering::Relaxed),
+            blocked: self.shared.blocked.load(Ordering::Relaxed),
+            dns_cached: self.shared.resolver.as_ref().map(|r| r.len()).unwrap_or(0),
+            bypass_domains: self.shared.matcher.bypass.len(),
             last_error: self.shared.last_error.lock().unwrap().clone(),
         }
     }
@@ -859,6 +1136,84 @@ mod tests {
         assert_eq!(parse_socks_addr(&[9, 0]), None);
     }
 
+    /// Первый живой адрес выигрывает, даже если перед ним «мёртвый».
+    #[test]
+    fn race_picks_working_address() {
+        let ok = TcpListener::bind("127.0.0.1:0").unwrap();
+        let good = ok.local_addr().unwrap();
+        // 192.0.2.1 (TEST-NET-1) не отвечает — подключение висит до таймаута.
+        let dead: SocketAddr = "192.0.2.1:443".parse().unwrap();
+        let t0 = std::time::Instant::now();
+        let s = connect_race(&[dead, good], Duration::from_secs(5)).unwrap();
+        assert_eq!(s.peer_addr().unwrap(), good);
+        assert!(t0.elapsed() < Duration::from_secs(2));
+        let closed = { let l = TcpListener::bind("127.0.0.1:0").unwrap(); l.local_addr().unwrap() };
+        assert!(connect_race(&[closed], Duration::from_secs(2)).is_err());
+    }
+
+    #[test]
+    fn cut_points_modes() {
+        assert_eq!(cut_points(100, Some((40, 10)), "sni", 4, 0), vec![40, 45]);
+        assert_eq!(cut_points(100, None, "sni", 4, 0), vec![1]);
+        assert_eq!(cut_points(100, None, "first-byte", 4, 0), vec![1]);
+        assert_eq!(cut_points(10, None, "chunk", 4, 0), vec![4, 8]);
+        // Не больше 256 кусков даже при chunk = 1.
+        assert!(cut_points(2000, None, "chunk", 1, 0).len() < 256);
+        let r = cut_points(100, None, "random", 4, 12345);
+        assert!(r.len() == 1 && r[0] >= 1 && r[0] < 100);
+        assert!(cut_points(100, None, "none", 4, 0).is_empty());
+        assert!(cut_points(1, None, "first-byte", 4, 0).is_empty());
+    }
+
+    #[test]
+    fn split_modes_keep_data() {
+        let h = hello("www.youtube.com");
+        for split in ["sni", "first-byte", "chunk", "random"] {
+            // TCP-сегменты: склейка равна исходному.
+            let o = SplitOpts { split: split.into(), records: false, chunk: 7, seed: 99 };
+            let parts = split_with(&h, &o);
+            assert!(parts.len() > 1, "{split}");
+            assert_eq!(parts.concat(), h, "{split}");
+            // TLS-записи: склейка payload равна исходному payload.
+            let o = SplitOpts { records: true, ..o };
+            let mut payload = Vec::new();
+            for p in split_with(&h, &o) {
+                let len = u16::from_be_bytes([p[3], p[4]]) as usize;
+                assert_eq!(p.len(), 5 + len, "{split}");
+                payload.extend_from_slice(&p[5..]);
+            }
+            assert_eq!(payload, h[5..], "{split}");
+        }
+    }
+
+    #[test]
+    fn rules_and_domains() {
+        assert_eq!(normalize_domain("*.YouTube.com."), Some("youtube.com".into()));
+        assert_eq!(normalize_domain("localhost"), None);
+        let r = Rules {
+            scope: "all".into(),
+            zapret_lists: false,
+            bypass: vec![],
+            skip: vec!["sberbank.ru".into()],
+            block: vec!["ads.example.com".into()],
+        };
+        let m = Matcher::new(&r, &[]);
+        assert_eq!(m.action("www.youtube.com"), Action::Bypass);
+        assert_eq!(m.action("online.sberbank.ru"), Action::Pass);
+        assert_eq!(m.action("notsberbank.ru"), Action::Bypass);
+        assert_eq!(m.action("ads.example.com"), Action::Block);
+        assert_eq!(m.action("example.com"), Action::Bypass);
+        let listed = Matcher::new(&Rules { scope: "listed".into(), ..r.clone() }, &["googlevideo.com".to_string()]);
+        assert_eq!(listed.action("rr3---sn-abc.googlevideo.com"), Action::Bypass);
+        assert_eq!(listed.action("ya.ru"), Action::Pass);
+        assert_eq!(listed.action("1.2.3.4"), Action::Pass);
+        // Старые настройки: method → disorder.
+        let mut c: Config = serde_json::from_str(r#"{"method":"split","port":9000}"#).unwrap();
+        c.normalize();
+        assert!(!c.disorder && c.method.is_none() && c.split == "sni" && c.port == 9000);
+        assert!(!serde_json::to_string(&c).unwrap().contains("method"));
+    }
+
     #[test]
     fn basic_auth() {
         assert_eq!(b64_decode("dXNlcjpwYXNz").unwrap(), b"user:pass");
@@ -935,7 +1290,8 @@ mod tests {
         let probe = TcpListener::bind("127.0.0.1:0").unwrap();
         let pport = probe.local_addr().unwrap().port();
         drop(probe);
-        let _proxy = Proxy::start(Config { port: pport, method: "split".into(), doh: false, system: false, lan: false, user: String::new(), pass: String::new() }).unwrap();
+        let cfg = Config { port: pport, disorder: false, doh: false, system: false, ..Default::default() };
+        let _proxy = Proxy::start(cfg, &[]).unwrap();
         let mut c = TcpStream::connect(("127.0.0.1", pport)).unwrap();
         c.write_all(&[5, 1, 0]).unwrap();
         let mut r = [0u8; 2];
@@ -955,23 +1311,36 @@ mod tests {
         srv.join().unwrap();
     }
 
-    /// Сеть: curl через прокси до PROXY_URL (по умолчанию YouTube) обоими способами.
+    /// Сеть: curl через прокси до PROXY_URL (по умолчанию YouTube) всеми способами.
     /// Системный прокси не трогается.
     #[test]
     #[ignore]
     fn live_proxy() {
         let url = std::env::var("PROXY_URL").unwrap_or_else(|_| "https://www.youtube.com/".into());
-        for method in ["split", "disorder"] {
+        let mut variants = Vec::new();
+        for split in ["none", "sni", "first-byte", "chunk", "random"] {
+            for unit in ["records", "tcp"] {
+                for disorder in [false, true] {
+                    if split == "none" && (unit == "tcp" || disorder) {
+                        continue;
+                    }
+                    variants.push((split, unit, disorder));
+                }
+            }
+        }
+        for (split, unit, disorder) in variants {
+            let method = format!("{split}/{unit}{}", if disorder { "+disorder" } else { "" });
             let probe = TcpListener::bind("127.0.0.1:0").unwrap();
             let port = probe.local_addr().unwrap().port();
             drop(probe);
-            let _p = Proxy::start(Config { port, method: method.into(), doh: true, system: false, lan: false, user: String::new(), pass: String::new() }).unwrap();
+            let cfg = Config { port, split: split.into(), unit: unit.into(), chunk: 4, disorder, system: false, ..Default::default() };
+            let _p = Proxy::start(cfg, &[]).unwrap();
             let out = std::process::Command::new(crate::util::system32("curl.exe"))
                 .args(["-s", "-o", "NUL", "-w", "%{http_code} %{time_total}", "--max-time", "12"])
                 .args(["-x", &format!("http://127.0.0.1:{port}"), &url])
                 .output()
                 .unwrap();
-            println!("{method}: {} (exit {:?})", String::from_utf8_lossy(&out.stdout), out.status.code());
+            println!("{method}: {} (exit {:?}) {:?}", String::from_utf8_lossy(&out.stdout), out.status.code(), _p.stats().last_error);
         }
     }
 
@@ -1004,7 +1373,8 @@ mod tests {
         let probe = TcpListener::bind("127.0.0.1:0").unwrap();
         let pport = probe.local_addr().unwrap().port();
         drop(probe);
-        let _proxy = Proxy::start(Config { port: pport, method: "split".into(), doh: false, system: false, lan: false, user: String::new(), pass: String::new() }).unwrap();
+        let cfg = Config { port: pport, disorder: false, doh: false, system: false, ..Default::default() };
+        let _proxy = Proxy::start(cfg, &[]).unwrap();
         let mut c = TcpStream::connect(("127.0.0.1", pport)).unwrap();
         write!(c, "CONNECT 127.0.0.1:{sport} HTTP/1.1\r\n\r\n").unwrap();
         let mut resp = [0u8; 39];

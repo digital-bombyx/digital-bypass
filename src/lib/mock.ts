@@ -79,9 +79,13 @@ const dns: any = {
 
 const stub: any = { running: false, config: null, stats: null };
 const proxy: any = {
-  config: { port: 8881, method: "disorder", doh: true, system: true, lan: false, user: "", pass: "" },
+  config: {
+    port: 8881, split: "sni", unit: "records", chunk: 4, disorder: true, ipv6: false,
+    rules: { scope: "all", zapret_lists: true, bypass: [], skip: ["sberbank.ru"], block: [] },
+    doh: true, system: true, lan: false, user: "", pass: "",
+  },
   enabled: false,
-  stats: { running: false, port: 8881, active: 0, total: 0, failed: 0, system: false, lan: false, auth: false, last_error: null },
+  stats: { running: false, port: 8881, active: 0, total: 0, failed: 0, system: false, lan: false, auth: false, bypassed: 0, passed: 0, blocked: 0, dns_cached: 0, bypass_domains: 0, last_error: null },
 };
 const listPresets = [
   { id: "telegram", name: "Telegram", domains: ["telegram.org", "t.me", "telegram.me"], builtin: 0 },
@@ -187,7 +191,7 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
     case "proxy_start":
       proxy.config = args.config;
       proxy.enabled = true;
-      proxy.stats = { running: true, port: args.config.port, active: 3, total: 41, failed: 1, system: args.config.system, lan: args.config.lan, auth: !!args.config.user, last_error: null };
+      proxy.stats = { running: true, port: args.config.port, active: 3, total: 41, failed: 1, system: args.config.system, lan: args.config.lan, auth: !!args.config.user, bypassed: 30, passed: 9, blocked: 2, dns_cached: 17, bypass_domains: 1840, last_error: null };
       return structuredClone(proxy);
     case "proxy_set_config":
       proxy.config = args.config;

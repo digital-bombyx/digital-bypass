@@ -92,10 +92,12 @@ pub fn path(config_dir: &Path) -> PathBuf {
 }
 
 pub fn load(config_dir: &Path) -> Settings {
-    std::fs::read(path(config_dir))
+    let mut s: Settings = std::fs::read(path(config_dir))
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    s.proxy.normalize();
+    s
 }
 
 pub fn save(config_dir: &Path, s: &Settings) {

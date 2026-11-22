@@ -140,9 +140,15 @@ export type StubStatus = {
   stats: { queries: number; cached: number; errors: number; last_error: string | null; ipv6: boolean; addr: string; template: string } | null;
 };
 
+export type ProxyRules = { scope: "all" | "listed"; zapret_lists: boolean; bypass: string[]; skip: string[]; block: string[] };
 export type ProxyConfig = {
   port: number;
-  method: "split" | "disorder";
+  split: "sni" | "first-byte" | "chunk" | "random" | "none";
+  unit: "records" | "tcp";
+  chunk: number;
+  disorder: boolean;
+  ipv6: boolean;
+  rules: ProxyRules;
   doh: boolean;
   system: boolean;
   lan: boolean;
@@ -152,7 +158,7 @@ export type ProxyConfig = {
 export type ProxyStatus = {
   config: ProxyConfig;
   enabled: boolean;
-  stats: { running: boolean; port: number; active: number; total: number; failed: number; system: boolean; lan: boolean; auth: boolean; last_error: string | null };
+  stats: { running: boolean; port: number; active: number; total: number; failed: number; system: boolean; lan: boolean; auth: boolean; bypassed: number; passed: number; blocked: number; dns_cached: number; bypass_domains: number; last_error: string | null };
 };
 
 export type Probe = "ok" | "tcp_fail" | "tls_reset" | "tls_timeout" | "tls_cert" | "tls_error";

@@ -241,6 +241,13 @@ impl DohClient {
         unreachable!()
     }
 
+    /// Адреса одного типа и минимальный TTL.
+    pub fn query(&self, name: &str, qtype: u16) -> Result<(Vec<IpAddr>, u32), String> {
+        let q = build_query(0x4d00 + qtype, name, qtype)?;
+        let r = self.exchange(&q)?;
+        Ok(parse_answers(&r).unwrap_or_default())
+    }
+
     /// A и AAAA.
     pub fn resolve(&self, name: &str) -> Result<Vec<IpAddr>, String> {
         let mut out = Vec::new();
@@ -327,6 +334,95 @@ fn read_chunked(mut raw: Vec<u8>, r: &mut impl Read) -> std::io::Result<Vec<u8>>
         }
         out.extend_from_slice(&raw[..size]);
         raw.drain(..size + 2);
+    }
+}
+
+// ---------- кэширующий резолвер для прокси ----------
+
+/// DoH с кэшем по TTL (30 с … 10 мин). Серверы опрашиваются параллельно, их
+/// ответы объединяются: геораспределённые сайты (Facebook, Google) отдают разным
+/// серверам разные адреса, и часть из них бывает заблокирована по IP.
+/// Без IPv6 запрашивается только A — на одно обращение меньше.
+pub struct CachedResolver {
+    clients: Vec<Arc<DohClient>>,
+    ipv6: bool,
+    cache: Mutex<HashMap<String, (Vec<IpAddr>, Instant)>>,
+}
+
+impl CachedResolver {
+    /// Cloudflare, затем Google — по IP, без системного DNS.
+    pub fn public(ipv6: bool) -> Self {
+        let clients = [
+            ("https://cloudflare-dns.com/dns-query", ["1.1.1.1", "1.0.0.1"]),
+            ("https://dns.google/dns-query", ["8.8.8.8", "8.8.4.4"]),
+        ]
+        .iter()
+        .filter_map(|(t, ips)| {
+            let boot: Vec<IpAddr> = ips.iter().filter_map(|s| s.parse().ok()).collect();
+            DohClient::new(t, &boot).ok().map(Arc::new)
+        })
+        .collect();
+        CachedResolver { clients, ipv6, cache: Mutex::new(HashMap::new()) }
+    }
+
+    pub fn cached(&self, name: &str) -> Option<Vec<IpAddr>> {
+        let c = self.cache.lock().unwrap();
+        c.get(name).filter(|(_, exp)| *exp > Instant::now()).map(|(ips, _)| ips.clone())
+    }
+
+    pub fn resolve(&self, name: &str) -> Option<Vec<IpAddr>> {
+        let name = name.trim_end_matches('.').to_ascii_lowercase();
+        if let Some(ips) = self.cached(&name) {
+            return Some(ips);
+        }
+        let types: Vec<u16> = if self.ipv6 { vec![TYPE_A, TYPE_AAAA] } else { vec![TYPE_A] };
+        let (tx, rx) = std::sync::mpsc::channel();
+        for c in &self.clients {
+            let (c, tx, name, types) = (c.clone(), tx.clone(), name.clone(), types.clone());
+            std::thread::spawn(move || {
+                for qt in types {
+                    let _ = tx.send(c.query(&name, qt));
+                }
+            });
+        }
+        drop(tx);
+        let mut ips: Vec<IpAddr> = Vec::new();
+        let mut ttl = u32::MAX;
+        let deadline = Instant::now() + TIMEOUT;
+        // Ждём все ответы, но не дольше таймаута; если что-то уже есть —
+        // медленный сервер ждём не больше 300 мс.
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let wait = if ips.is_empty() { left } else { left.min(Duration::from_millis(300)) };
+            match rx.recv_timeout(wait) {
+                Ok(Ok((v, t))) => {
+                    if !v.is_empty() {
+                        ttl = ttl.min(t);
+                    }
+                    for ip in v {
+                        if !ips.contains(&ip) {
+                            ips.push(ip);
+                        }
+                    }
+                }
+                Ok(Err(_)) => {}
+                Err(_) => break,
+            }
+        }
+        if ips.is_empty() {
+            return None;
+        }
+        let ttl = if ttl == u32::MAX { 30 } else { ttl.clamp(30, 600) };
+        let mut cache = self.cache.lock().unwrap();
+        if cache.len() > 4096 {
+            cache.clear();
+        }
+        cache.insert(name, (ips.clone(), Instant::now() + Duration::from_secs(ttl as u64)));
+        Some(ips)
+    }
+
+    pub fn len(&self) -> usize {
+        self.cache.lock().unwrap().len()
     }
 }
 
@@ -597,6 +693,17 @@ mod tests {
         let ips = c.resolve("example.com").unwrap();
         println!("{ips:?}");
         assert!(!ips.is_empty());
+    }
+
+    /// Сеть: кэширующий резолвер (DOH_NAME, по умолчанию www.instagram.com).
+    #[test]
+    #[ignore]
+    fn live_cached() {
+        let n = std::env::var("DOH_NAME").unwrap_or_else(|_| "www.instagram.com".into());
+        let r = CachedResolver::public(false);
+        let c = DohClient::new("https://cloudflare-dns.com/dns-query", &["1.1.1.1".parse().unwrap()]).unwrap();
+        println!("A: {:?}", c.query(&n, TYPE_A));
+        println!("cached: {:?}", r.resolve(&n));
     }
 
     /// Сеть: резолвер на 127.0.0.1:53 отвечает по UDP и TCP. Адаптеры не трогает.
