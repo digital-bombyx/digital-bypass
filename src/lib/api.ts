@@ -203,6 +203,36 @@ export type DnsCheckReport = {
   stubs: number;
 };
 
+export type TgConfig = {
+  port: number;
+  secret: string;
+  dc_ip: string[];
+  fragment: boolean;
+  cf_proxy: boolean;
+  cf_domains: string[];
+  cf_workers: string[];
+  enabled: boolean;
+};
+export type TgStatus = {
+  config: TgConfig;
+  stats: {
+    running: boolean;
+    active: number;
+    total: number;
+    ws: number;
+    cf: number;
+    worker: number;
+    tcp: number;
+    bad: number;
+    failed: number;
+    bytes_up: number;
+    bytes_down: number;
+    last_error: string | null;
+  };
+  link: string;
+  default_cf: string[];
+};
+
 export type Probe = "ok" | "tcp_fail" | "tls_reset" | "tls_timeout" | "tls_cert" | "tls_error";
 export type Verdict = "ok" | "dns" | "dpi" | "ip" | "no_domain" | "unknown";
 export type DiagReport = {
@@ -274,6 +304,12 @@ export const api = {
   dnsCheck: (domains: string) => invoke<DnsCheckReport>("dns_check", { domains }),
   dnsCheckDefaults: () => invoke<string[]>("dns_check_defaults"),
   lanAddresses: () => invoke<string[]>("lan_addresses"),
+  tgStatus: () => invoke<TgStatus>("tg_status"),
+  tgStart: (config: TgConfig) => invoke<TgStatus>("tg_start", { config }),
+  tgStop: () => invoke<TgStatus>("tg_stop"),
+  tgSetConfig: (config: TgConfig) => invoke<TgStatus>("tg_set_config", { config }),
+  tgRegenSecret: () => invoke<TgStatus>("tg_regen_secret"),
+  tgOpenLink: () => invoke<void>("tg_open_link"),
   sniDefaults: () => invoke<{ target: string; snis: string[] }>("sni_defaults"),
   sniScan: (target: string, snis: string, timeout: number) => invoke<SniReport>("sni_scan", { target, snis, timeout }),
   listPresets: () => invoke<ListPreset[]>("list_presets"),

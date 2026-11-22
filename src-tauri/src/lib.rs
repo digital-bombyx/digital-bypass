@@ -15,6 +15,7 @@ mod runner;
 mod service;
 mod settings;
 mod sniscan;
+mod telegram;
 mod strategy;
 mod tester;
 mod util;
@@ -43,6 +44,7 @@ pub struct AppState {
     bundle_error: Mutex<Option<String>>,
     proxy: Mutex<Option<proxy::Proxy>>,
     proxy_testing: AtomicBool,
+    tg: Mutex<Option<telegram::TgProxy>>,
     proxy_test_cancel: AtomicBool,
     stub: Mutex<Option<doh::Stub>>,
 }
@@ -687,6 +689,106 @@ fn sni_scan(target: String, snis: String, timeout: u64) -> R<sniscan::Report> {
     sniscan::run(&target, &sniscan::parse_snis(&snis), timeout)
 }
 
+#[derive(Serialize)]
+struct TgStatus {
+    config: telegram::Config,
+    stats: telegram::Stats,
+    link: String,
+    default_cf: Vec<String>,
+}
+
+fn tg_status_of(state: &AppState) -> TgStatus {
+    let config = state.settings.lock().unwrap().tg.clone();
+    let stats = state.tg.lock().unwrap().as_ref().map(|p| p.stats()).unwrap_or_default();
+    let link = telegram::link("127.0.0.1", config.port, &config.secret);
+    TgStatus { config, stats, link, default_cf: telegram::default_cf_domains() }
+}
+
+fn tg_validate(c: &telegram::Config) -> R<()> {
+    if c.port < 1024 {
+        return Err(tr!("порт должен быть от 1024 до 65535", "port must be 1024–65535"));
+    }
+    telegram::parse_secret(&c.secret)?;
+    telegram::parse_dc_ip(&c.dc_ip)?;
+    Ok(())
+}
+
+impl AppState {
+    fn tg_start(&self, cfg: telegram::Config) -> R<()> {
+        tg_validate(&cfg)?;
+        self.tg.lock().unwrap().take();
+        // Дать старому слушателю отпустить порт.
+        std::thread::sleep(std::time::Duration::from_millis(120));
+        let p = telegram::TgProxy::start(&cfg)?;
+        *self.tg.lock().unwrap() = Some(p);
+        self.update(|s| {
+            s.tg = cfg;
+            s.tg.enabled = true;
+        });
+        Ok(())
+    }
+
+    fn tg_stop(&self) {
+        self.tg.lock().unwrap().take();
+        self.update(|s| s.tg.enabled = false);
+    }
+}
+
+#[tauri::command(async)]
+fn tg_status(state: State<AppState>) -> TgStatus {
+    tg_status_of(&state)
+}
+
+#[tauri::command(async)]
+fn tg_start(app: AppHandle, state: State<AppState>, config: telegram::Config) -> R<TgStatus> {
+    let r = state.tg_start(config);
+    refresh_tray(&app);
+    r?;
+    Ok(tg_status_of(&state))
+}
+
+#[tauri::command(async)]
+fn tg_stop(app: AppHandle, state: State<AppState>) -> TgStatus {
+    state.tg_stop();
+    refresh_tray(&app);
+    tg_status_of(&state)
+}
+
+/// Сохранить настройки; работающий прокси перезапустить с ними.
+#[tauri::command(async)]
+fn tg_set_config(state: State<AppState>, config: telegram::Config) -> R<TgStatus> {
+    tg_validate(&config)?;
+    if state.tg.lock().unwrap().is_some() {
+        state.tg_start(config)?;
+    } else {
+        state.update(|s| {
+            let enabled = s.tg.enabled;
+            s.tg = config;
+            s.tg.enabled = enabled;
+        });
+    }
+    Ok(tg_status_of(&state))
+}
+
+/// Новый секрет: старая ссылка в Telegram перестанет работать.
+#[tauri::command(async)]
+fn tg_regen_secret(state: State<AppState>) -> R<TgStatus> {
+    let mut cfg = state.settings.lock().unwrap().tg.clone();
+    cfg.secret = telegram::new_secret();
+    tg_set_config(state, cfg)
+}
+
+/// Открыть ссылку tg://proxy — Telegram Desktop предложит подключить прокси.
+#[tauri::command(async)]
+fn tg_open_link(state: State<AppState>) -> R<()> {
+    let link = tg_status_of(&state).link;
+    std::process::Command::new(util::system32("rundll32.exe"))
+        .args(["url.dll,FileProtocolHandler", &link])
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 /// IPv4-адреса ПК в локальной сети — их указывают на телефоне при раздаче.
 #[tauri::command(async)]
 fn lan_addresses() -> Vec<String> {
@@ -813,10 +915,12 @@ fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         None => tr!("DoH-резолвер: выключен", "DoH resolver: off"),
     };
     let stub = MenuItem::with_id(app, "stub", stub_label, false, None::<&str>)?;
+    let tg_on = state.tg.lock().unwrap().is_some();
+    let tg = CheckMenuItem::with_id(app, "tg", tr!("Telegram-прокси", "Telegram proxy"), true, tg_on, None::<&str>)?;
     let open = MenuItem::with_id(app, "open", tr!("Открыть", "Open"), true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", tr!("Выход", "Quit"), true, None::<&str>)?;
     let sep = || PredefinedMenuItem::separator(app);
-    Menu::with_items(app, &[&toggle, &sub, &sep()?, &proxy, &stub, &sep()?, &open, &quit])
+    Menu::with_items(app, &[&toggle, &sub, &sep()?, &proxy, &tg, &stub, &sep()?, &open, &quit])
 }
 
 fn refresh_tray(app: &AppHandle) {
@@ -841,6 +945,9 @@ fn refresh_tray(app: &AppHandle) {
     }
     if stub_on {
         tip.push(tr!("DoH-резолвер: включён", "DoH resolver: on"));
+    }
+    if state.tg.lock().unwrap().is_some() {
+        tip.push(tr!("Telegram-прокси: включён", "Telegram proxy: on"));
     }
     let _ = tray.set_tooltip(Some(tip.join("\n")));
     if let Ok(menu) = build_tray_menu(app) {
@@ -959,6 +1066,23 @@ fn webview_low_memory(app: &AppHandle, low: bool) {
 fn on_tray_menu(app: &AppHandle, id: &str) {
     match id {
         "open" => show_main(app),
+        "tg" => {
+            let app = app.clone();
+            std::thread::spawn(move || {
+                let st = app.state::<AppState>();
+                if st.tg.lock().unwrap().is_some() {
+                    st.tg_stop();
+                } else {
+                    let cfg = st.settings.lock().unwrap().tg.clone();
+                    if let Err(e) = st.tg_start(cfg) {
+                        let _ = app.emit("error", e);
+                        show_main(&app);
+                    }
+                }
+                let _ = app.emit("tg-changed", ());
+                refresh_tray(&app);
+            });
+        }
         "proxy" => {
             let app = app.clone();
             std::thread::spawn(move || {
@@ -1042,6 +1166,7 @@ pub fn run() {
                 last_test: Mutex::new(None),
                 proxy: Mutex::new(None),
                 proxy_testing: AtomicBool::new(false),
+                tg: Mutex::new(None),
                 proxy_test_cancel: AtomicBool::new(false),
                 stub: Mutex::new(None),
             });
@@ -1081,6 +1206,12 @@ pub fn run() {
                 if enabled {
                     if let Err(e) = st.proxy_start(cfg) {
                         let _ = app.handle().emit("error", e);
+                    }
+                }
+                let tg = st.settings.lock().unwrap().tg.clone();
+                if tg.enabled {
+                    if let Err(e) = st.tg_start(tg) {
+                        let _ = app.handle().emit("error", tr!("Telegram-прокси не запустился: {e}", "Telegram proxy failed to start: {e}"));
                     }
                 }
                 if let Some(c) = stub {
@@ -1189,6 +1320,12 @@ pub fn run() {
             dns_check,
             dns_check_defaults,
             lan_addresses,
+            tg_status,
+            tg_start,
+            tg_stop,
+            tg_set_config,
+            tg_regen_secret,
+            tg_open_link,
             sni_defaults,
             sni_scan,
             list_presets,

@@ -27,6 +27,8 @@ pub struct Settings {
     pub dns_stub: Option<crate::dns::StubConfig>,
     /// Размер и положение окна (физические пиксели) — восстанавливаются при запуске.
     pub window: Option<WindowGeom>,
+    /// Telegram-прокси (MTProto → WebSocket).
+    pub tg: crate::telegram::Config,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -66,6 +68,7 @@ impl Default for Settings {
             proxy_prev: None,
             dns_stub: None,
             window: None,
+            tg: Default::default(),
         }
     }
 }
@@ -97,6 +100,11 @@ pub fn load(config_dir: &Path) -> Settings {
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default();
     s.proxy.normalize();
+    // Секрет Telegram-прокси создаётся один раз и дальше не меняется сам.
+    if crate::telegram::parse_secret(&s.tg.secret).is_err() {
+        s.tg.secret = crate::telegram::new_secret();
+        save(config_dir, &s);
+    }
     s
 }
 

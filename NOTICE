@@ -50,6 +50,10 @@ Rust and JavaScript dependencies (Tauri, rustls, Svelte and others) are used
 under their own licenses (MIT, Apache-2.0, ISC and similar), all compatible
 with GPL-3.0.
 
+The Telegram module is a Rust port of tg-ws-proxy by Flowseal (MIT),
+https://github.com/Flowseal/tg-ws-proxy; the built-in Cloudflare Worker script
+and the default CF proxy domain list come from that project.
+
 The proxy auto mode and OOB technique are inspired by ByeDPI by hufrea (MIT),
 https://github.com/hufrea/byedpi; the code is original.
 

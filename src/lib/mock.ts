@@ -115,6 +115,22 @@ const diagSample = (domain: string) => ({
   verdict: "dpi",
 });
 
+const tg: any = {
+  config: {
+    port: 1443,
+    secret: "3f1c0a9b7e5d4c2b1a0f9e8d7c6b5a49",
+    dc_ip: ["2:149.154.167.220", "4:149.154.167.220"],
+    fragment: true,
+    cf_proxy: true,
+    cf_domains: [],
+    cf_workers: [],
+    enabled: false,
+  },
+  stats: { running: false, active: 0, total: 0, ws: 0, cf: 0, worker: 0, tcp: 0, bad: 0, failed: 0, bytes_up: 0, bytes_down: 0, last_error: null },
+  link: "tg://proxy?server=127.0.0.1&port=1443&secret=dd3f1c0a9b7e5d4c2b1a0f9e8d7c6b5a49",
+  default_cf: Array.from({ length: 20 }, (_, i) => `cf${i}.co.uk`),
+};
+
 export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
   await new Promise((r) => setTimeout(r, 120));
   switch (cmd) {
@@ -264,6 +280,23 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
           { domain: "nnmclub.to", system: ["172.67.144.20"], public: ["188.114.97.3"], trusted: ["172.67.144.20"], verdict: "differs", cert_check: "188.114.97.3: TcpFail" },
         ],
       };
+    case "tg_status":
+      return structuredClone(tg);
+    case "tg_start":
+      tg.config = { ...args.config, enabled: true };
+      tg.stats = { ...tg.stats, running: true, active: 3, total: 12, ws: 0, cf: 12, worker: 0, tcp: 0, bytes_up: 182000, bytes_down: 5400000, last_error: "DC2 kws2.web.telegram.org: connection timed out" };
+      return structuredClone(tg);
+    case "tg_stop":
+      tg.config.enabled = false;
+      tg.stats = { ...tg.stats, running: false, active: 0 };
+      return structuredClone(tg);
+    case "tg_set_config":
+      tg.config = args.config;
+      return structuredClone(tg);
+    case "tg_regen_secret":
+      return structuredClone(tg);
+    case "tg_open_link":
+      return;
     case "lan_addresses":
       return ["192.168.0.3"];
     case "sni_defaults":

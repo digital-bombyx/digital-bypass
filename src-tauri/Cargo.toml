@@ -22,6 +22,10 @@ tauri-plugin-single-instance = "2"
 # TLS для DoH и диагностики: ring вместо aws-lc (не нужен cmake/nasm), корни — из хранилища Windows.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = "0.8"
+# Telegram (MTProto obfuscated2): AES-256 (CTR поверх блочного шифра), SHA-256, случайные числа.
+aes = "0.8"
+sha2 = "0.10"
+getrandom = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8"

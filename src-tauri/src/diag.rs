@@ -139,9 +139,10 @@ pub fn probe(ip: IpAddr, host: &str) -> (Probe, Option<u64>, Option<String>) {
 /// TCP-поток, у которого первая запись (ClientHello) уходит нарезанной —
 /// как в прокси: куски по TLS-записям с disorder. Нужен, чтобы проверить
 /// сертификат сайта, имя которого режет DPI.
-struct Fragmenting {
-    inner: TcpStream,
-    first: bool,
+pub(crate) struct Fragmenting {
+    pub(crate) inner: TcpStream,
+    /// Первая запись ещё не ушла (и её надо нарезать).
+    pub(crate) first: bool,
 }
 
 impl std::io::Read for Fragmenting {

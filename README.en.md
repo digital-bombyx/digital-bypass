@@ -56,6 +56,10 @@ DPI bypass **without admin rights and without a driver** — for work PCs and wh
 - **Local network sharing**: a phone on the same Wi-Fi uses the PC as its proxy. Only local network addresses are allowed, and the firewall rule is added automatically (with admin rights). An optional user and password are asked from network devices but not from the PC itself.
 - HTTPS through the proxy only: UDP, QUIC and Discord voice still need zapret2.
 
+### Telegram
+
+A local MTProto proxy for Telegram Desktop — a port of [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) (Flowseal, MIT). Traffic goes over WebSocket to Telegram's web endpoints; if they are unreachable — through your own Cloudflare Worker or a CF proxy (domains behind Cloudflare), as a last resort — direct TCP. TLS to Telegram and Cloudflare uses a split ClientHello, as in the bypass proxy. Connecting Telegram takes one click (a `tg://proxy` link). Messages stay MTProto-encrypted.
+
 ### Check
 
 Enter a domain: the app compares the system DNS with DoH, tries TCP and TLS to each address and tells what is wrong — DNS spoofing, DPI by site name or IP blocking — and which module helps.
