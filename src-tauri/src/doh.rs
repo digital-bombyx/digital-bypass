@@ -100,17 +100,94 @@ pub fn servfail(query: &[u8]) -> Vec<u8> {
 // ---------- TLS ----------
 
 /// Общая конфигурация rustls с корнями из хранилища Windows.
+fn roots() -> Arc<rustls::RootCertStore> {
+    static ROOTS: OnceLock<Arc<rustls::RootCertStore>> = OnceLock::new();
+    ROOTS
+        .get_or_init(|| {
+            let mut roots = rustls::RootCertStore::empty();
+            for c in rustls_native_certs::load_native_certs().certs {
+                let _ = roots.add(c);
+            }
+            Arc::new(roots)
+        })
+        .clone()
+}
+
+fn provider() -> Arc<rustls::crypto::CryptoProvider> {
+    Arc::new(rustls::crypto::ring::default_provider())
+}
+
 pub fn tls_config() -> Arc<rustls::ClientConfig> {
     static CFG: OnceLock<Arc<rustls::ClientConfig>> = OnceLock::new();
     CFG.get_or_init(|| {
-        let mut roots = rustls::RootCertStore::empty();
-        for c in rustls_native_certs::load_native_certs().certs {
-            let _ = roots.add(c);
-        }
-        let cfg = rustls::ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+        let cfg = rustls::ClientConfig::builder_with_provider(provider())
             .with_safe_default_protocol_versions()
             .expect("tls versions")
-            .with_root_certificates(roots)
+            .with_root_certificates(roots())
+            .with_no_client_auth();
+        Arc::new(cfg)
+    })
+    .clone()
+}
+
+/// Проверка сертификата без сверки имени: цепочка до доверенного корня
+/// проверяется как обычно, допускается только несовпадение имени. Нужна для
+/// подмены SNI (в TLS — чужое имя, сервер отвечает своим сертификатом).
+#[derive(Debug)]
+pub struct AnyName(Arc<rustls::client::WebPkiServerVerifier>);
+
+impl rustls::client::danger::ServerCertVerifier for AnyName {
+    fn verify_server_cert(
+        &self,
+        end_entity: &rustls::pki_types::CertificateDer<'_>,
+        intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        server_name: &rustls::pki_types::ServerName<'_>,
+        ocsp: &[u8],
+        now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        use rustls::{CertificateError, Error};
+        match self.0.verify_server_cert(end_entity, intermediates, server_name, ocsp, now) {
+            Err(Error::InvalidCertificate(CertificateError::NotValidForName))
+            | Err(Error::InvalidCertificate(CertificateError::NotValidForNameContext { .. })) => {
+                Ok(rustls::client::danger::ServerCertVerified::assertion())
+            }
+            r => r,
+        }
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        self.0.verify_tls12_signature(message, cert, dss)
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        self.0.verify_tls13_signature(message, cert, dss)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        self.0.supported_verify_schemes()
+    }
+}
+
+/// TLS-конфигурация для подмены SNI (см. `AnyName`).
+pub fn tls_config_any_name() -> Arc<rustls::ClientConfig> {
+    static CFG: OnceLock<Arc<rustls::ClientConfig>> = OnceLock::new();
+    CFG.get_or_init(|| {
+        let v = rustls::client::WebPkiServerVerifier::builder_with_provider(roots(), provider()).build().expect("verifier");
+        let cfg = rustls::ClientConfig::builder_with_provider(provider())
+            .with_safe_default_protocol_versions()
+            .expect("tls versions")
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(AnyName(v)))
             .with_no_client_auth();
         Arc::new(cfg)
     })

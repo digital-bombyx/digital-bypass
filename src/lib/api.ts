@@ -211,6 +211,7 @@ export type TgConfig = {
   cf_proxy: boolean;
   cf_domains: string[];
   cf_workers: string[];
+  sni: string;
   enabled: boolean;
 };
 export type TgStatus = {
@@ -222,6 +223,7 @@ export type TgStatus = {
     ws: number;
     cf: number;
     worker: number;
+    fronted: number;
     tcp: number;
     bad: number;
     failed: number;

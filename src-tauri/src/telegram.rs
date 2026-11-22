@@ -16,6 +16,10 @@
 //! 7. Последний запасной путь — обычное TCP-подключение к DC.
 //!
 //! TLS к Telegram можно открывать с нарезкой ClientHello — как в прокси-обходчике.
+//! Подмена SNI (как в tg-ws-proxy): в ClientHello прямого маршрута уходит
+//! другое имя (например, из белого списка), заголовок Host остаётся
+//! `kws{dc}.web.telegram.org`. Сертификат проверяется по цепочке без сверки
+//! имени — сообщения всё равно защищены собственным шифрованием MTProto.
 
 use aes::cipher::{BlockEncrypt, KeyInit};
 use serde::{Deserialize, Serialize};
@@ -88,6 +92,9 @@ pub struct Config {
     pub cf_domains: Vec<String>,
     /// Свои Cloudflare Worker'ы (`имя.аккаунт.workers.dev`) — пробуются первыми.
     pub cf_workers: Vec<String>,
+    /// Подменное имя в TLS для прямого WebSocket (пусто — без подмены).
+    /// Сначала пробуется с подменой, затем с настоящим именем.
+    pub sni: String,
     /// Включать при запуске приложения.
     pub enabled: bool,
 }
@@ -102,6 +109,7 @@ impl Default for Config {
             cf_proxy: true,
             cf_domains: Vec::new(),
             cf_workers: Vec::new(),
+            sni: String::new(),
             enabled: false,
         }
     }
@@ -382,14 +390,23 @@ pub struct TlsDuplex {
 }
 
 impl TlsDuplex {
+    /// Обычное подключение (для тестов; в работе — через `connect_as`).
+    #[cfg(test)]
     pub fn connect(addr: SocketAddr, sni: &str, fragment: bool) -> std::io::Result<Self> {
+        Self::connect_as(addr, sni, None, fragment)
+    }
+
+    /// `sni_override` — подменное имя в ClientHello (сертификат тогда
+    /// проверяется по цепочке без сверки имени).
+    pub fn connect_as(addr: SocketAddr, sni: &str, sni_override: Option<&str>, fragment: bool) -> std::io::Result<Self> {
         let tcp = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)?;
         tcp.set_nodelay(true)?;
         tcp.set_read_timeout(Some(IO_TIMEOUT))?;
         tcp.set_write_timeout(Some(IO_TIMEOUT))?;
-        let name = rustls::pki_types::ServerName::try_from(sni.to_string())
+        let name = rustls::pki_types::ServerName::try_from(sni_override.unwrap_or(sni).to_string())
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string()))?;
-        let mut conn = rustls::ClientConnection::new(crate::doh::tls_config(), name).map_err(std::io::Error::other)?;
+        let config = if sni_override.is_some() { crate::doh::tls_config_any_name() } else { crate::doh::tls_config() };
+        let mut conn = rustls::ClientConnection::new(config, name).map_err(std::io::Error::other)?;
         let mut io = crate::diag::Fragmenting { inner: tcp.try_clone()?, first: fragment };
         while conn.is_handshaking() {
             conn.complete_io(&mut io)?;
@@ -518,7 +535,12 @@ pub struct Ws {
 impl Ws {
     /// WebSocket `wss://domain/path` через IP `addr` (SNI и Host — domain).
     pub fn connect(addr: SocketAddr, domain: &str, path: &str, fragment: bool) -> std::io::Result<(Ws, Vec<u8>)> {
-        let tls = TlsDuplex::connect(addr, domain, fragment)?;
+        Self::connect_as(addr, domain, None, path, fragment)
+    }
+
+    /// Как `connect`, но в TLS — подменное имя `sni`, в Host — настоящее.
+    pub fn connect_as(addr: SocketAddr, domain: &str, sni: Option<&str>, path: &str, fragment: bool) -> std::io::Result<(Ws, Vec<u8>)> {
+        let tls = TlsDuplex::connect_as(addr, domain, sni, fragment)?;
         let key = random_bytes::<16>();
         let req = format!(
             "GET {path} HTTP/1.1\r\nHost: {domain}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {}\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: binary\r\n\r\n",
@@ -574,6 +596,8 @@ pub struct Stats {
     pub ws: u64,
     pub cf: u64,
     pub worker: u64,
+    /// Из прямых WS — сколько установлено с подменой SNI.
+    pub fronted: u64,
     pub tcp: u64,
     pub bad: u64,
     pub failed: u64,
@@ -589,6 +613,8 @@ struct Shared {
     cf_domains: Vec<String>,
     cf_workers: Vec<String>,
     worker: AtomicU64,
+    sni: Option<String>,
+    fronted: AtomicU64,
     /// DC → CF-домен, который сработал в прошлый раз.
     cf_last: Mutex<std::collections::HashMap<i32, String>>,
     /// DC → до какого момента не пробовать прямой WS (он не отвечал).
@@ -627,14 +653,27 @@ impl Shared {
         let ws_ok = self.ws_down.lock().unwrap().get(&hello.dc).is_none_or(|t| *t < std::time::Instant::now());
         if let Some((_, ip)) = self.routes.iter().find(|(d, _)| *d == hello.dc).filter(|_| ws_ok) {
             let path = if hello.test { "/apiws_test" } else { "/apiws" };
+            // С подменой SNI (если задана) — первой, затем с настоящим именем.
+            let snis: Vec<Option<&str>> = match self.sni.as_deref() {
+                Some(s) => vec![Some(s), None],
+                None => vec![None],
+            };
             for domain in ws_domains(hello.dc, hello.media) {
-                match Ws::connect(SocketAddr::new(*ip, 443), &domain, path, self.fragment) {
-                    Ok((ws, early)) => {
-                        ws.send(&rinit)?;
-                        self.ws.fetch_add(1, Ordering::Relaxed);
-                        return self.bridge_ws(client, ws, early, hello.tag, clt_dec, clt_enc, tg_enc, tg_dec);
+                for sni in &snis {
+                    match Ws::connect_as(SocketAddr::new(*ip, 443), &domain, *sni, path, self.fragment) {
+                        Ok((ws, early)) => {
+                            ws.send(&rinit)?;
+                            self.ws.fetch_add(1, Ordering::Relaxed);
+                            if sni.is_some() {
+                                self.fronted.fetch_add(1, Ordering::Relaxed);
+                            }
+                            return self.bridge_ws(client, ws, early, hello.tag, clt_dec, clt_enc, tg_enc, tg_dec);
+                        }
+                        Err(e) => {
+                            let via = sni.map(|s| format!(" (SNI {s})")).unwrap_or_default();
+                            *self.last_error.lock().unwrap() = Some(format!("DC{} {domain}{via}: {e}", hello.dc));
+                        }
                     }
-                    Err(e) => *self.last_error.lock().unwrap() = Some(format!("DC{} {domain}: {e}", hello.dc)),
                 }
             }
             // Не отвечает — минуту не тратим на него время.
@@ -860,6 +899,8 @@ impl TgProxy {
             cf_domains,
             cf_workers: cfg.cf_workers.iter().filter_map(|d| crate::proxy::normalize_domain(d)).collect(),
             worker: AtomicU64::new(0),
+            sni: crate::proxy::normalize_domain(&cfg.sni),
+            fronted: AtomicU64::new(0),
             cf_last: Mutex::new(std::collections::HashMap::new()),
             ws_down: Mutex::new(std::collections::HashMap::new()),
             resolver: crate::doh::CachedResolver::public(false),
@@ -910,6 +951,7 @@ impl TgProxy {
             ws: s.ws.load(Ordering::Relaxed),
             cf: s.cf.load(Ordering::Relaxed),
             worker: s.worker.load(Ordering::Relaxed),
+            fronted: s.fronted.load(Ordering::Relaxed),
             tcp: s.tcp.load(Ordering::Relaxed),
             bad: s.bad.load(Ordering::Relaxed),
             failed: s.failed.load(Ordering::Relaxed),
@@ -1070,6 +1112,21 @@ mod tests {
         assert_eq!(decode_cf_domain("zaewayzmplad.com"), "noskomnadzor.co.uk");
         assert_eq!(decode_cf_domain("plain.org"), "plain.org");
         assert_eq!(default_cf_domains().len(), 20);
+    }
+
+    /// Сеть: проверка без сверки имени. 1.1.1.1 отдаёт сертификат
+    /// cloudflare-dns.com: с подменным SNI обычная проверка его отвергает,
+    /// а `AnyName` принимает (цепочка настоящая). Только чтение.
+    #[test]
+    #[ignore]
+    fn live_any_name() {
+        let a: SocketAddr = "1.1.1.1:443".parse().unwrap();
+        let strict = TlsDuplex::connect(a, "sprinthost.ru", false);
+        println!("strict: {:?}", strict.as_ref().err().map(|e| e.to_string()));
+        assert!(strict.is_err());
+        let lenient = TlsDuplex::connect_as(a, "cloudflare-dns.com", Some("sprinthost.ru"), false);
+        println!("any-name: {:?}", lenient.as_ref().err().map(|e| e.to_string()));
+        assert!(lenient.is_ok());
     }
 
     /// Сеть: настоящий запрос к Telegram через прокси, как от Telegram Desktop.

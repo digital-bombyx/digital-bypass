@@ -31,6 +31,7 @@
 - **Журнал соединений прокси** (включается в настройках): сайт, действие, способ, число попыток автоматического режима, время или ошибка.
 - **Проверка DNS на подмену** во вкладке «Проверка»: заглушки провайдера, перехват запросов к публичным DNS (адрес без DNS-сервера, `whoami.akamai.net`), эталон через DoT, проверка отличающихся адресов сертификатом.
 - **Telegram-прокси** (порт tg-ws-proxy от Flowseal): MTProto → WebSocket к Telegram, запасные пути через свой Cloudflare Worker, CF-прокси и TCP; нарезка ClientHello; подключение в Telegram одной кнопкой; код Worker'а в приложении; переключатель в трее.
+- **Telegram: подмена SNI** для прямого WebSocket (как в tg-ws-proxy): в TLS — другое имя, Host настоящий; сертификат проверяется по цепочке без сверки имени; при неудаче — повтор с настоящим именем.
 
 ### What's new
 
@@ -57,5 +58,6 @@
 - **Proxy connection log** (opt-in): site, action, method, auto-mode attempts, time or error.
 - **DNS tampering check** in the Check tab: ISP stubs, interception of queries to public DNS (no-DNS address, `whoami.akamai.net`), DoT reference, certificate check of differing addresses.
 - **Telegram proxy** (a port of Flowseal's tg-ws-proxy): MTProto → WebSocket to Telegram, fallbacks through your own Cloudflare Worker, a CF proxy and TCP; split ClientHello; one-click Telegram setup; Worker code built in; tray toggle.
+- **Telegram: SNI override** for the direct WebSocket (as in tg-ws-proxy): another name in TLS, the real Host; the certificate chain is verified without the name check; on failure — retry with the real name.
 
 [Unreleased]: https://github.com/digital-bombyx/digital-bypass/commits/main

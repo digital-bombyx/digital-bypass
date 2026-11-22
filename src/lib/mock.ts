@@ -124,9 +124,10 @@ const tg: any = {
     cf_proxy: true,
     cf_domains: [],
     cf_workers: [],
+    sni: "",
     enabled: false,
   },
-  stats: { running: false, active: 0, total: 0, ws: 0, cf: 0, worker: 0, tcp: 0, bad: 0, failed: 0, bytes_up: 0, bytes_down: 0, last_error: null },
+  stats: { running: false, active: 0, total: 0, ws: 0, cf: 0, worker: 0, fronted: 0, tcp: 0, bad: 0, failed: 0, bytes_up: 0, bytes_down: 0, last_error: null },
   link: "tg://proxy?server=127.0.0.1&port=1443&secret=dd3f1c0a9b7e5d4c2b1a0f9e8d7c6b5a49",
   default_cf: Array.from({ length: 20 }, (_, i) => `cf${i}.co.uk`),
 };

@@ -58,7 +58,7 @@ zapret2 (winws2 + Lua) в один клик, прокси-обходчик бе�
 
 ### Telegram
 
-Локальный MTProto-прокси для Telegram Desktop — порт [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) (Flowseal, MIT). Трафик идёт через WebSocket к веб-адресам Telegram; если они недоступны — через свой Cloudflare Worker или CF-прокси (домены за Cloudflare), в крайнем случае — напрямую по TCP. TLS к Telegram и Cloudflare открывается с нарезкой ClientHello, как в прокси-обходчике. Подключение в Telegram — одной кнопкой (ссылка `tg://proxy`). Сообщения остаются зашифрованными MTProto.
+Локальный MTProto-прокси для Telegram Desktop — порт [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) (Flowseal, MIT). Трафик идёт через WebSocket к веб-адресам Telegram; если они недоступны — через свой Cloudflare Worker или CF-прокси (домены за Cloudflare), в крайнем случае — напрямую по TCP. TLS к Telegram и Cloudflare открывается с нарезкой ClientHello, как в прокси-обходчике; для прямого маршрута можно подменить SNI (например, на имя из белого списка). Подключение в Telegram — одной кнопкой (ссылка `tg://proxy`). Сообщения остаются зашифрованными MTProto.
 
 ### Проверка
 

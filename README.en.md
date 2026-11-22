@@ -58,7 +58,7 @@ DPI bypass **without admin rights and without a driver** — for work PCs and wh
 
 ### Telegram
 
-A local MTProto proxy for Telegram Desktop — a port of [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) (Flowseal, MIT). Traffic goes over WebSocket to Telegram's web endpoints; if they are unreachable — through your own Cloudflare Worker or a CF proxy (domains behind Cloudflare), as a last resort — direct TCP. TLS to Telegram and Cloudflare uses a split ClientHello, as in the bypass proxy. Connecting Telegram takes one click (a `tg://proxy` link). Messages stay MTProto-encrypted.
+A local MTProto proxy for Telegram Desktop — a port of [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) (Flowseal, MIT). Traffic goes over WebSocket to Telegram's web endpoints; if they are unreachable — through your own Cloudflare Worker or a CF proxy (domains behind Cloudflare), as a last resort — direct TCP. TLS to Telegram and Cloudflare uses a split ClientHello, as in the bypass proxy; the direct route can override the SNI (e.g. with a whitelisted name). Connecting Telegram takes one click (a `tg://proxy` link). Messages stay MTProto-encrypted.
 
 ### Check
 

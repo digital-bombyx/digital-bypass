@@ -12,6 +12,9 @@
   let text = $state({ dc_ip: "", cf_domains: "", cf_workers: "" });
   let showSecret = $state(false);
   let showWorker = $state(false);
+  let sniText = $state("");
+  /** Имя из белых списков, которое использует tg-ws-proxy. */
+  const SNI_EXAMPLE = "sprinthost.ru";
   const running = $derived(!!st?.stats.running);
 
   const lines = (v: string[]) => v.join("\n");
@@ -22,6 +25,7 @@
       st = await api.tgStatus();
       cfg = { ...st.config };
       text = { dc_ip: lines(cfg.dc_ip), cf_domains: lines(cfg.cf_domains), cf_workers: lines(cfg.cf_workers) };
+      sniText = cfg.sni || SNI_EXAMPLE;
     } catch (e) {
       toast(String(e));
     }
@@ -90,7 +94,7 @@
           <span><b>{st.stats.active}</b> {t("активных", "active")}</span>
           <span><b>{st.stats.total}</b> {t("всего", "total")}</span>
           <span title={t("прямой WS / свой Worker / CF-прокси / TCP", "direct WS / own Worker / CF proxy / TCP")}>
-            WS <b>{st.stats.ws}</b> · Worker <b>{st.stats.worker}</b> · CF <b>{st.stats.cf}</b> · TCP <b>{st.stats.tcp}</b>
+            WS <b>{st.stats.ws}</b>{st.stats.fronted ? ` (SNI ${st.stats.fronted})` : ""} · Worker <b>{st.stats.worker}</b> · CF <b>{st.stats.cf}</b> · TCP <b>{st.stats.tcp}</b>
           </span>
           <span>↑ <b>{mb(st.stats.bytes_up)}</b> ↓ <b>{mb(st.stats.bytes_down)}</b></span>
           {#if st.stats.bad}<span class="warn">{t("неверный секрет", "wrong secret")}: <b>{st.stats.bad}</b></span>{/if}
@@ -141,6 +145,24 @@
           <div class="hint faint mono">{t("TLS к Telegram и Cloudflare — с нарезкой, как в прокси-обходчике; без неё у многих провайдеров не работает", "TLS to Telegram and Cloudflare with a split hello, as in the bypass proxy; many ISPs need it")}</div>
         </div>
         <Switch checked={cfg.fragment} disabled={app.busy} onchange={(v) => save({ fragment: v })} />
+      </div>
+      <div class="opt">
+        <div class="grow">
+          <div class="label">{t("подмена sni", "sni override")}</div>
+          <div class="hint faint mono">
+            {t(
+              "для прямого WebSocket в TLS уходит другое имя (например, из белого списка), Host остаётся настоящим; если не вышло — повтор с настоящим именем",
+              "the direct WebSocket sends another name in TLS (e.g. a whitelisted one), Host stays real; on failure — retry with the real name",
+            )}
+          </div>
+          {#if cfg.sni}
+            <div class="sni-row">
+              <input class="input mono" spellcheck="false" placeholder={SNI_EXAMPLE} bind:value={sniText} onkeydown={(e) => e.key === "Enter" && sniText.trim() && save({ sni: sniText.trim() })} disabled={app.busy} />
+              <button class="btn sm" disabled={app.busy || !sniText.trim() || sniText.trim() === cfg.sni} onclick={() => save({ sni: sniText.trim() })}>{t("Сохранить", "Save")}</button>
+            </div>
+          {/if}
+        </div>
+        <Switch checked={!!cfg.sni} disabled={app.busy} onchange={(v) => save({ sni: v ? sniText.trim() || SNI_EXAMPLE : "" })} />
       </div>
       <div class="opt">
         <div>
@@ -281,6 +303,12 @@
   }
   .opt + .opt {
     border-top: 1px solid var(--border-soft);
+  }
+  .sni-row {
+    display: grid;
+    grid-template-columns: minmax(0, 320px) auto;
+    gap: 6px;
+    margin-top: 6px;
   }
   .lists {
     display: grid;
