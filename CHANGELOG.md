@@ -28,6 +28,7 @@
 - **Свои позиции разреза** для прокси в синтаксисе ByeDPI: `смещение[:повторы:шаг][+s|e|m|n]`.
 - Текст ярче, мелкие подписи на полпикселя крупнее.
 - **DoT для локального резолвера**: DNS поверх TLS (порт 853), по умолчанию. Наш DoH работает по HTTP/1.1, и Quad9, Яндекс, AdGuard Unfiltered и Mullvad по нему не отвечали; по DoT отвечают все пресеты, кроме OpenDNS.
+- **Журнал соединений прокси** (включается в настройках): сайт, действие, способ, число попыток автоматического режима, время или ошибка.
 
 ### What's new
 
@@ -51,5 +52,6 @@
 - **Custom cut positions** for the proxy in ByeDPI syntax: `offset[:repeats:skip][+s|e|m|n]`.
 - Brighter text; small labels half a pixel larger.
 - **DoT for the local resolver**: DNS over TLS (port 853), the default. Our DoH speaks HTTP/1.1, and Quad9, Yandex, AdGuard Unfiltered and Mullvad did not answer it; over DoT every preset except OpenDNS works.
+- **Proxy connection log** (opt-in): site, action, method, auto-mode attempts, time or error.
 
 [Unreleased]: https://github.com/digital-bombyx/digital-bypass/commits/main

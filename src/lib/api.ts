@@ -154,6 +154,7 @@ export type ProxyConfig = {
   auto: boolean;
   auto_chain: ProxyVariant[];
   auto_timeout: number;
+  log: boolean;
   ipv6: boolean;
   rules: ProxyRules;
   doh: boolean;
@@ -175,6 +176,18 @@ export type ProxyVariantResult = {
   total: number;
   avg_ms: number | null;
   targets: { host: string; ok: boolean; code: number | null; ms: number | null; error: string | null }[];
+};
+
+export type ProxyLogEntry = {
+  ts: number;
+  host: string;
+  port: number;
+  action: "bypass" | "pass" | "block";
+  method: string | null;
+  tries: number;
+  ms: number | null;
+  ok: boolean;
+  error: string | null;
 };
 
 export type Probe = "ok" | "tcp_fail" | "tls_reset" | "tls_timeout" | "tls_cert" | "tls_error";
@@ -242,6 +255,8 @@ export const api = {
   proxyTest: (targets: string, timeout: number) =>
     invoke<{ results: ProxyVariantResult[]; best: ProxyVariant | null; cancelled: boolean }>("proxy_test", { targets, timeout }),
   proxyTestCancel: () => invoke<void>("proxy_test_cancel"),
+  proxyLog: () => invoke<ProxyLogEntry[]>("proxy_log"),
+  proxyLogClear: () => invoke<void>("proxy_log_clear"),
   diagRun: (domain: string) => invoke<DiagReport>("diag_run", { domain }),
   lanAddresses: () => invoke<string[]>("lan_addresses"),
   sniDefaults: () => invoke<{ target: string; snis: string[] }>("sni_defaults"),

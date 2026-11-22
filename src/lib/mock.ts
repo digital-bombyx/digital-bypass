@@ -81,7 +81,7 @@ const stub: any = { running: false, config: null, stats: null };
 const proxy: any = {
   config: {
     port: 8881, split: "sni", unit: "records", chunk: 4, positions: "", disorder: true, oob: false, ipv6: false,
-    auto: true, auto_timeout: 4,
+    auto: true, auto_timeout: 4, log: true,
     auto_chain: [
       { split: "chunk", unit: "records", disorder: true, oob: false },
       { split: "sni", unit: "records", disorder: true, oob: false },
@@ -215,6 +215,18 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
       const results = [mk("none", "records", false, 0, null), mk("sni", "records", true, 2, 1360), mk("chunk", "records", true, 4, 1566), mk("chunk", "tcp", true, 3, 1264), mk("random", "tcp", true, 1, 857), mk("sni", "tcp", false, 3, 1039, true)];
       return { results, best: results[2].variant, cancelled: false };
     }
+    case "proxy_log": {
+      const now = Date.now();
+      return [
+        { ts: now - 1000, host: "www.instagram.com", port: 443, action: "bypass", method: null, tries: 0, ms: null, ok: false, error: "connection timed out" },
+        { ts: now - 3000, host: "discord.com", port: 443, action: "bypass", method: "chunk/records+disorder", tries: 1, ms: 202, ok: true, error: null },
+        { ts: now - 5000, host: "online.sberbank.ru", port: 443, action: "pass", method: null, tries: 0, ms: 95, ok: true, error: null },
+        { ts: now - 9000, host: "www.youtube.com", port: 443, action: "bypass", method: "chunk/records+disorder", tries: 2, ms: 4660, ok: true, error: null },
+        { ts: now - 9500, host: "ads.example.com", port: 443, action: "block", method: null, tries: 0, ms: null, ok: false, error: null },
+      ];
+    }
+    case "proxy_log_clear":
+      return;
     case "proxy_test_cancel":
       return;
     case "proxy_set_config":

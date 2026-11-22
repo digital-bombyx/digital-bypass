@@ -622,6 +622,19 @@ fn proxy_test(app: AppHandle, state: State<AppState>, targets: String, timeout: 
     Ok(ProxyTestReport { results, best, cancelled: state.proxy_test_cancel.load(Ordering::SeqCst) })
 }
 
+/// Журнал соединений работающего прокси (новые первыми).
+#[tauri::command(async)]
+fn proxy_log(state: State<AppState>) -> Vec<proxy::LogEntry> {
+    state.proxy.lock().unwrap().as_ref().map(|p| p.log()).unwrap_or_default()
+}
+
+#[tauri::command(async)]
+fn proxy_log_clear(state: State<AppState>) {
+    if let Some(p) = state.proxy.lock().unwrap().as_ref() {
+        p.clear_log();
+    }
+}
+
 #[tauri::command]
 fn proxy_test_cancel(state: State<AppState>) {
     state.proxy_test_cancel.store(true, Ordering::SeqCst);
@@ -1157,6 +1170,8 @@ pub fn run() {
             proxy_set_config,
             proxy_test,
             proxy_test_cancel,
+            proxy_log,
+            proxy_log_clear,
             proxy_test_targets,
             diag_run,
             lan_addresses,

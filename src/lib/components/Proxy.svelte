@@ -6,6 +6,7 @@
   import Segmented from "./Segmented.svelte";
   import Switch from "./Switch.svelte";
   import ProxyTest from "./ProxyTest.svelte";
+  import ProxyLog from "./ProxyLog.svelte";
   import { Power, Copy, Wifi, KeyRound, ShieldAlert, ListFilter } from "@lucide/svelte";
 
   let st = $state<ProxyStatus | null>(null);
@@ -20,6 +21,7 @@
     auto: true,
     auto_chain: [],
     auto_timeout: 4,
+    log: false,
     ipv6: false,
     rules: { scope: "all", zapret_lists: true, bypass: [], skip: [], block: [] },
     doh: true,
@@ -251,6 +253,13 @@
     </div>
     <div class="opt">
       <div>
+        <div class="label">{t("журнал соединений", "connection log")}</div>
+        <div class="hint faint mono">{t("какой сайт, что сделано, каким способом и чем кончилось", "which site, what was done, which method and the outcome")}</div>
+      </div>
+      <Switch checked={cfg.log} disabled={app.busy} onchange={(v) => change({ log: v })} />
+    </div>
+    <div class="opt">
+      <div>
         <div class="label">IPv6</div>
         <div class="hint faint mono">{t("запрашивать и использовать IPv6-адреса сайтов", "query and use IPv6 site addresses")}</div>
       </div>
@@ -278,6 +287,10 @@
       <input class="input port" type="number" min="1024" max="65535" bind:value={cfg.port} disabled={app.busy || running} />
     </div>
   </section>
+
+  {#if cfg.log}
+    <ProxyLog {running} />
+  {/if}
 
   <ProxyTest
     current={{ split: cfg.split, unit: cfg.unit, disorder: cfg.disorder, oob: cfg.oob }}

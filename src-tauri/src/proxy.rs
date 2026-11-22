@@ -51,6 +51,8 @@ pub struct Config {
     pub auto_chain: Vec<Variant>,
     /// Сколько ждать первого ответа сервера, секунд.
     pub auto_timeout: u16,
+    /// Журнал соединений (последние 500) — для разбора, что и как обходится.
+    pub log: bool,
     /// Запрашивать и использовать IPv6-адреса сайтов.
     pub ipv6: bool,
     /// Какие домены обрабатывать.
@@ -82,6 +84,7 @@ impl Default for Config {
             auto: true,
             auto_chain: default_chain(),
             auto_timeout: 4,
+            log: false,
             ipv6: false,
             rules: Rules::default(),
             doh: true,
@@ -220,6 +223,56 @@ impl Default for Variant {
 impl Variant {
     pub fn new(split: &str, unit: &str, disorder: bool, oob: bool) -> Self {
         Variant { split: split.into(), unit: unit.into(), disorder, oob }
+    }
+
+    /// Короткая запись для журнала: `chunk/records+disorder+oob`.
+    pub fn short(&self) -> String {
+        if self.split == "none" {
+            return "none".into();
+        }
+        format!("{}/{}{}{}", self.split, self.unit, if self.disorder { "+disorder" } else { "" }, if self.oob { "+oob" } else { "" })
+    }
+}
+
+// ---------- журнал соединений ----------
+
+/// Запись журнала: куда шли, что сделал прокси, каким способом и чем кончилось.
+#[derive(Debug, Clone, Serialize)]
+pub struct LogEntry {
+    /// Unix-время, мс.
+    pub ts: u64,
+    pub host: String,
+    pub port: u16,
+    /// bypass | pass | block
+    pub action: &'static str,
+    /// Способ нарезки, которым соединение установилось.
+    pub method: Option<String>,
+    /// Сколько способов перепробовал автоматический режим.
+    pub tries: u8,
+    /// Время до установления соединения.
+    pub ms: Option<u64>,
+    pub ok: bool,
+    pub error: Option<String>,
+}
+
+pub const LOG_CAP: usize = 500;
+
+/// Что известно о соединении по ходу обработки.
+#[derive(Default)]
+struct Trace {
+    host: String,
+    port: u16,
+    action: Option<Action>,
+    method: Option<Variant>,
+    tries: u8,
+    logged: bool,
+}
+
+fn action_name(a: Option<Action>) -> &'static str {
+    match a {
+        Some(Action::Block) => "block",
+        Some(Action::Pass) => "pass",
+        _ => "bypass",
     }
 }
 
@@ -816,6 +869,7 @@ struct Shared {
     auto_retries: AtomicU64,
     /// Разобранные свои позиции (пусто, если не заданы).
     positions: Vec<Pos>,
+    log: Mutex<std::collections::VecDeque<LogEntry>>,
 }
 
 /// Сколько помнить способ для сайта.
@@ -870,7 +924,32 @@ impl Shared {
 
     /// Автоматический режим: попытки разными способами, пока сервер не ответит
     /// TLS-записью Handshake. Возвращает соединение и первые байты ответа.
-    fn auto_connect(&self, mut up: Option<TcpStream>, host: &str, port: u16, first: &[u8]) -> std::io::Result<(TcpStream, Vec<u8>)> {
+    /// Записать соединение в журнал (один раз на соединение).
+    fn log_entry(&self, tr: &mut Trace, t0: std::time::Instant, ok: bool, error: Option<String>) {
+        if !self.cfg.log || tr.logged || tr.host.is_empty() {
+            return;
+        }
+        tr.logged = true;
+        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+        let e = LogEntry {
+            ts,
+            host: tr.host.clone(),
+            port: tr.port,
+            action: action_name(tr.action),
+            method: tr.method.as_ref().map(|v| v.short()),
+            tries: tr.tries,
+            ms: ok.then(|| t0.elapsed().as_millis() as u64),
+            ok,
+            error,
+        };
+        let mut l = self.log.lock().unwrap();
+        if l.len() >= LOG_CAP {
+            l.pop_front();
+        }
+        l.push_back(e);
+    }
+
+    fn auto_connect(&self, mut up: Option<TcpStream>, host: &str, port: u16, first: &[u8], tr: &mut Trace) -> std::io::Result<(TcpStream, Vec<u8>)> {
         let order = attempt_order(&self.primary(), self.cached_variant(host).as_ref(), &self.cfg.auto_chain, 4);
         let wait = Duration::from_secs(self.cfg.auto_timeout as u64);
         let mut last_reply: Option<(TcpStream, Vec<u8>)> = None;
@@ -879,6 +958,8 @@ impl Shared {
             if i > 0 {
                 self.auto_retries.fetch_add(1, Ordering::Relaxed);
             }
+            tr.tries = i as u8 + 1;
+            tr.method = Some(v.clone());
             let mut s = match up.take() {
                 Some(s) => s,
                 None => match self.connect(host, port) {
@@ -931,9 +1012,11 @@ impl Shared {
     }
 
     /// Туннель: первый пакет клиента (обычно ClientHello) режется, дальше — пересылка.
-    fn tunnel(&self, mut client: TcpStream, mut up: TcpStream, early: Vec<u8>, action: Action, host: &str, port: u16) -> std::io::Result<()> {
+    #[allow(clippy::too_many_arguments)]
+    fn tunnel(&self, mut client: TcpStream, mut up: TcpStream, early: Vec<u8>, action: Action, host: &str, port: u16, tr: &mut Trace, t0: std::time::Instant) -> std::io::Result<()> {
         if action == Action::Pass {
             up.write_all(&early)?;
+            self.log_entry(tr, t0, true, None);
             return relay(client, up);
         }
         let mut first = early;
@@ -946,11 +1029,16 @@ impl Shared {
             first.extend_from_slice(&tmp[..n]);
         }
         if self.cfg.auto && find_sni(&first).is_some() {
-            let (up, reply) = self.auto_connect(Some(up), &host.to_ascii_lowercase(), port, &first)?;
+            let (up, reply) = self.auto_connect(Some(up), &host.to_ascii_lowercase(), port, &first, tr)?;
             client.write_all(&reply)?;
+            self.log_entry(tr, t0, true, None);
             return relay(client, up);
         }
-        self.send_variant(&mut up, &first, &self.primary())?;
+        let v = self.primary();
+        tr.tries = 1;
+        tr.method = Some(v.clone());
+        self.send_variant(&mut up, &first, &v)?;
+        self.log_entry(tr, t0, true, None);
         relay(client, up)
     }
 
@@ -963,7 +1051,19 @@ impl Shared {
         (!self.cfg.user.is_empty() && !local).then_some((self.cfg.user.as_str(), self.cfg.pass.as_str()))
     }
 
-    fn handle(&self, mut client: TcpStream) -> std::io::Result<()> {
+    fn handle(&self, client: TcpStream) -> std::io::Result<()> {
+        let t0 = std::time::Instant::now();
+        let mut tr = Trace::default();
+        let r = self.handle_inner(client, &mut tr, t0);
+        match &r {
+            Err(e) => self.log_entry(&mut tr, t0, false, Some(e.to_string())),
+            Ok(()) if tr.action == Some(Action::Block) => self.log_entry(&mut tr, t0, false, None),
+            Ok(()) => {}
+        }
+        r
+    }
+
+    fn handle_inner(&self, mut client: TcpStream, tr: &mut Trace, t0: std::time::Instant) -> std::io::Result<()> {
         client.set_read_timeout(Some(FIRST_DATA_TIMEOUT))?;
         let creds = self.creds_for(client.peer_addr()?.ip());
         let mut b = [0u8; 1];
@@ -971,6 +1071,7 @@ impl Shared {
             let (host, port) = socks5_handshake(&mut client, creds)?;
             let action = self.matcher.action(&host);
             self.count(action);
+            (tr.host, tr.port, tr.action) = (host.clone(), port, Some(action));
             if action == Action::Block {
                 // 0x02: соединение запрещено правилами.
                 let _ = client.write_all(&[5, 2, 0, 1, 0, 0, 0, 0, 0, 0]);
@@ -984,7 +1085,7 @@ impl Shared {
                 }
             };
             client.write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0])?;
-            return self.tunnel(client, up, Vec::new(), action, &host, port);
+            return self.tunnel(client, up, Vec::new(), action, &host, port, tr, t0);
         }
         let (head, early) = read_head(&mut client)?;
         if let Some((user, pass)) = creds {
@@ -1000,6 +1101,7 @@ impl Shared {
             Request::Connect { host, port } => {
                 let action = self.matcher.action(&host);
                 self.count(action);
+                (tr.host, tr.port, tr.action) = (host.clone(), port, Some(action));
                 if action == Action::Block {
                     let _ = client.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                     return Ok(());
@@ -1012,10 +1114,12 @@ impl Shared {
                     }
                 };
                 client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")?;
-                self.tunnel(client, up, early, action, &host, port)
+                self.tunnel(client, up, early, action, &host, port, tr, t0)
             }
             Request::Http { host, port, head } => {
+                (tr.host, tr.port, tr.action) = (host.clone(), port, Some(Action::Pass));
                 if self.matcher.action(&host) == Action::Block {
+                    tr.action = Some(Action::Block);
                     self.count(Action::Block);
                     let _ = client.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                     return Ok(());
@@ -1024,6 +1128,7 @@ impl Shared {
                 let mut up = self.connect(&host, port)?;
                 up.write_all(&head)?;
                 up.write_all(&early)?;
+                self.log_entry(tr, t0, true, None);
                 relay(client, up)
             }
         }
@@ -1107,6 +1212,7 @@ impl Proxy {
             auto_cache: Mutex::new(std::collections::HashMap::new()),
             auto_retries: AtomicU64::new(0),
             positions,
+            log: Mutex::new(std::collections::VecDeque::new()),
             cfg,
             stop: AtomicBool::new(false),
             active: AtomicU64::new(0),
@@ -1142,6 +1248,15 @@ impl Proxy {
             }
         });
         Ok(Proxy { shared })
+    }
+
+    /// Журнал, новые записи первыми.
+    pub fn log(&self) -> Vec<LogEntry> {
+        self.shared.log.lock().unwrap().iter().rev().cloned().collect()
+    }
+
+    pub fn clear_log(&self) {
+        self.shared.log.lock().unwrap().clear();
     }
 
     pub fn stats(&self) -> Stats {
@@ -1494,7 +1609,7 @@ mod tests {
         let probe = TcpListener::bind("127.0.0.1:0").unwrap();
         let pport = probe.local_addr().unwrap().port();
         drop(probe);
-        let cfg = Config { port: pport, doh: false, system: false, auto_timeout: 2, ..Default::default() };
+        let cfg = Config { port: pport, doh: false, system: false, auto_timeout: 2, log: true, ..Default::default() };
         let proxy = Proxy::start(cfg, &[]).unwrap();
         let fetch = || {
             let mut c = TcpStream::connect(("127.0.0.1", pport)).unwrap();
@@ -1516,6 +1631,14 @@ mod tests {
         fetch();
         assert_eq!(accepted.load(Ordering::SeqCst), 3, "сразу запомненный способ");
         assert_eq!(proxy.stats().auto_retries, 1);
+        // Журнал: первая запись — с двумя попытками, вторая — с одной (из памяти).
+        let log = proxy.log();
+        assert_eq!(log.len(), 2);
+        assert!(log.iter().all(|e| e.ok && e.action == "bypass" && e.host == "localhost"));
+        assert_eq!((log[1].tries, log[0].tries), (2, 1));
+        assert_eq!(log[0].method, log[1].method);
+        proxy.clear_log();
+        assert!(proxy.log().is_empty());
     }
 
     /// Первый живой адрес выигрывает, даже если перед ним «мёртвый».
@@ -1764,7 +1887,7 @@ mod tests {
         let probe = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = probe.local_addr().unwrap().port();
         drop(probe);
-        let cfg = Config { port, split: "none".into(), disorder: false, system: false, ..Default::default() };
+        let cfg = Config { port, split: "none".into(), disorder: false, system: false, log: true, ..Default::default() };
         let p = Proxy::start(cfg, &[]).unwrap();
         for round in 1..=2 {
             for host in ["www.youtube.com", "x.com", "discord.com", "www.instagram.com"] {
@@ -1778,6 +1901,9 @@ mod tests {
         }
         let s = p.stats();
         println!("auto_retries {} auto_sites {}", s.auto_retries, s.auto_sites);
+        for e in p.log() {
+            println!("LOG {:<20} {:<7} {:<30} tries {} {:?} ok {} {:?}", e.host, e.action, e.method.unwrap_or_default(), e.tries, e.ms, e.ok, e.error);
+        }
     }
 
     /// Сквозной тест на loopback: «сервер» получает три TLS-записи, склейка

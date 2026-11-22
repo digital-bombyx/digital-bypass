@@ -47,6 +47,7 @@ DPI bypass **without admin rights and without a driver** — for work PCs and wh
 
 - A local proxy splits the TLS ClientHello: at the site name, the first byte, fixed-size chunks, a random point or custom positions (ByeDPI syntax, e.g. `0+sm 1:3:5 -10`); parts go as separate TLS records or TCP segments. `disorder` sends the first part with TTL=1.
 - **Auto mode**: if a site resets or stays silent after the ClientHello, the proxy reconnects with fallback methods and remembers the one that works for that site. **OOB** adds an urgent byte after the first part that DPI sees but the server does not. Ideas from [ByeDPI](https://github.com/hufrea/byedpi).
+- **Connection log** (optional): site, action, method, attempts and outcome.
 - **Method finder**: every split variant is tried on a temporary proxy against chosen sites, the best is applied in one click — like the zapret2 strategy tests.
 - **Per-domain rules**: split everything or only listed domains (including the zapret2 lists), "do not split" for banks and fragile sites, blocking.
 - Site addresses are resolved via DoH (Cloudflare and Google in parallel, cached), so DNS spoofing does not matter. Connections race several site addresses and take the first that answers.
