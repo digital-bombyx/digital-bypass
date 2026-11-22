@@ -26,4 +26,6 @@ fn main() {
         .windows_attributes(tauri_build::WindowsAttributes::new().app_manifest(manifest));
     tauri_build::try_build(attrs).expect("tauri build failed");
     println!("cargo:rerun-if-env-changed=PROFILE");
+    // Иконка вшивается в exe здесь: при её замене скрипт должен перезапуститься.
+    println!("cargo:rerun-if-changed=icons/icon.ico");
 }
