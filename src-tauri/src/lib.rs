@@ -1,11 +1,14 @@
 mod autostart;
 mod bundled;
+mod diag;
 mod dns;
+mod doh;
 mod game_filter;
 mod hosts;
 mod i18n;
 mod ipset;
 mod lists;
+mod proxy;
 mod runner;
 mod service;
 mod settings;
@@ -35,6 +38,8 @@ pub struct AppState {
     /// Развёрнутая встроенная сборка (если она есть в установщике).
     bundled_dir: Option<PathBuf>,
     bundle_error: Mutex<Option<String>>,
+    proxy: Mutex<Option<proxy::Proxy>>,
+    stub: Mutex<Option<doh::Stub>>,
 }
 
 impl AppState {
@@ -119,6 +124,68 @@ impl AppState {
         }
         self.runner.stop();
         self.update(|s| s.last_enabled = false);
+        Ok(())
+    }
+
+    /// Запустить прокси по настройкам и, если нужно, прописать его в Windows.
+    fn proxy_start(&self, cfg: proxy::Config) -> R<()> {
+        self.proxy_stop_inner();
+        let p = proxy::Proxy::start(cfg.clone())?;
+        *self.proxy.lock().unwrap() = Some(p);
+        if cfg.system {
+            let prev = proxy::system_set(cfg.port)?;
+            self.update(|s| s.proxy_prev = Some(prev));
+        }
+        self.update(|s| {
+            s.proxy = cfg;
+            s.proxy_enabled = true;
+        });
+        Ok(())
+    }
+
+    /// Остановить прокси и вернуть системные настройки; флаг «включён» не трогает.
+    fn proxy_stop_inner(&self) {
+        self.proxy.lock().unwrap().take();
+        let (prev, port) = {
+            let s = self.settings.lock().unwrap();
+            (s.proxy_prev.clone(), s.proxy.port)
+        };
+        if let Some(prev) = prev {
+            if proxy::system_restore(&prev, port).is_ok() {
+                self.update(|s| s.proxy_prev = None);
+            }
+        }
+    }
+
+    fn stub_start(&self, cfg: &dns::StubConfig) -> R<()> {
+        let boot: Vec<std::net::IpAddr> = cfg.bootstrap.iter().filter_map(|b| b.parse().ok()).collect();
+        let client = doh::DohClient::new(&cfg.template, &boot)?;
+        let stub = doh::Stub::start(client)?;
+        // После перезапуска свободным может оказаться другой адрес — тогда адаптер
+        // указывает в пустоту; прописываем заново (нужны права администратора).
+        if stub.addr().to_string() != cfg.addr && winapi::is_admin() {
+            if let Some(a) = dns::info().adapters.into_iter().find(|a| a.guid.eq_ignore_ascii_case(&cfg.guid)) {
+                let boot: Vec<std::net::IpAddr> = cfg.bootstrap.iter().filter_map(|b| b.parse().ok()).collect();
+                let fb = cfg.fallback.as_deref().and_then(|f| f.parse().ok());
+                let mut fresh = dns::stub_point(a.index, stub.addr(), stub.ipv6(), &cfg.template, &boot, fb)?;
+                fresh.prev_v4 = cfg.prev_v4.clone();
+                fresh.prev_v6 = cfg.prev_v6.clone();
+                self.update(|s| s.dns_stub = Some(fresh));
+            }
+        }
+        *self.stub.lock().unwrap() = Some(stub);
+        Ok(())
+    }
+
+    /// Вернуть DNS адаптера и остановить резолвер.
+    fn stub_disable(&self) -> R<()> {
+        let cfg = self.settings.lock().unwrap().dns_stub.clone();
+        if let Some(cfg) = cfg {
+            dns::stub_restore(&cfg)?;
+            self.update(|s| s.dns_stub = None);
+        }
+        self.stub.lock().unwrap().take();
+        dns::flush();
         Ok(())
     }
 
@@ -425,6 +492,108 @@ fn dns_flush() -> R<()> {
     }
 }
 
+#[derive(Serialize)]
+struct StubStatus {
+    running: bool,
+    config: Option<dns::StubConfig>,
+    stats: Option<doh::StubStats>,
+}
+
+fn stub_status_of(state: &AppState) -> StubStatus {
+    let stats = state.stub.lock().unwrap().as_ref().map(|s| s.stats());
+    StubStatus { running: stats.is_some(), config: state.settings.lock().unwrap().dns_stub.clone(), stats }
+}
+
+#[tauri::command(async)]
+fn dns_stub_status(state: State<AppState>) -> StubStatus {
+    stub_status_of(&state)
+}
+
+#[tauri::command(async)]
+fn dns_stub_enable(state: State<AppState>, index: u32, template: String, bootstrap: Vec<String>, fallback: bool) -> R<StubStatus> {
+    state.require_admin()?;
+    let template = dns::validate_template(&template)?;
+    if state.settings.lock().unwrap().dns_stub.is_some() {
+        state.stub_disable()?;
+    }
+    let boot: Vec<std::net::IpAddr> = bootstrap.iter().filter_map(|b| b.trim().parse().ok()).collect();
+    // Пустой bootstrap: адрес сервера один раз узнаём системным DNS, пока он ещё не наш.
+    let client = doh::DohClient::new(&template, &boot)?;
+    let boot = client.bootstrap();
+    // Проверка до переключения адаптера: если DoH не отвечает, ничего не меняем.
+    client
+        .resolve("example.com")
+        .map_err(|e| tr!("DoH-сервер не ответил, DNS не изменён: {e}", "DoH server did not answer, DNS unchanged: {e}"))?;
+    let stub = doh::Stub::start(client)?;
+    let fb = if fallback { boot.iter().find(|i| i.is_ipv4()).copied() } else { None };
+    let cfg = dns::stub_point(index, stub.addr(), stub.ipv6(), &template, &boot, fb)?;
+    *state.stub.lock().unwrap() = Some(stub);
+    state.update(|s| s.dns_stub = Some(cfg));
+    dns::flush();
+    Ok(stub_status_of(&state))
+}
+
+#[tauri::command(async)]
+fn dns_stub_disable(state: State<AppState>) -> R<StubStatus> {
+    state.require_admin()?;
+    state.stub_disable()?;
+    Ok(stub_status_of(&state))
+}
+
+#[derive(Serialize)]
+struct ProxyStatus {
+    config: proxy::Config,
+    enabled: bool,
+    stats: proxy::Stats,
+}
+
+fn proxy_status_of(state: &AppState) -> ProxyStatus {
+    let s = state.settings.lock().unwrap().clone();
+    let stats = state.proxy.lock().unwrap().as_ref().map(|p| p.stats()).unwrap_or_default();
+    ProxyStatus { config: s.proxy, enabled: s.proxy_enabled, stats }
+}
+
+#[tauri::command(async)]
+fn proxy_status(state: State<AppState>) -> ProxyStatus {
+    proxy_status_of(&state)
+}
+
+#[tauri::command(async)]
+fn proxy_start(state: State<AppState>, config: proxy::Config) -> R<ProxyStatus> {
+    if config.port < 1024 {
+        return Err(tr!("порт должен быть от 1024 до 65535", "port must be 1024–65535"));
+    }
+    state.proxy_start(config)?;
+    Ok(proxy_status_of(&state))
+}
+
+#[tauri::command(async)]
+fn proxy_stop(state: State<AppState>) -> ProxyStatus {
+    state.proxy_stop_inner();
+    state.update(|s| s.proxy_enabled = false);
+    proxy_status_of(&state)
+}
+
+#[tauri::command(async)]
+fn diag_run(domain: String) -> R<diag::Report> {
+    diag::run(&domain)
+}
+
+#[tauri::command(async)]
+fn list_presets() -> &'static [lists::Preset] {
+    lists::PRESETS
+}
+
+#[tauri::command(async)]
+fn list_add_presets(state: State<AppState>, ids: Vec<String>) -> R<usize> {
+    state.require_idle()?;
+    let n = lists::add_presets(&state.dir()?, &ids)?;
+    if n > 0 {
+        state.restart_if_running()?;
+    }
+    Ok(n)
+}
+
 #[tauri::command(async)]
 fn set_autostart(enabled: bool) -> R<bool> {
     autostart::set(enabled)?;
@@ -643,6 +812,8 @@ pub fn run() {
                 testing: AtomicBool::new(false),
                 cancel: AtomicBool::new(false),
                 last_test: Mutex::new(None),
+                proxy: Mutex::new(None),
+                stub: Mutex::new(None),
             });
 
             let handle = app.handle().clone();
@@ -663,6 +834,31 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            // Прокси и DoH-резолвер не зависят от папки zapret.
+            {
+                let st = app.state::<AppState>();
+                let (enabled, cfg, prev, stub) = {
+                    let s = st.settings.lock().unwrap();
+                    (s.proxy_enabled, s.proxy.clone(), s.proxy_prev.clone(), s.dns_stub.clone())
+                };
+                // Прошлый запуск мог упасть с прописанным прокси — сначала вернуть как было.
+                if let Some(prev) = prev {
+                    if proxy::system_restore(&prev, cfg.port).is_ok() {
+                        st.update(|s| s.proxy_prev = None);
+                    }
+                }
+                if enabled {
+                    if let Err(e) = st.proxy_start(cfg) {
+                        let _ = app.handle().emit("error", e);
+                    }
+                }
+                if let Some(c) = stub {
+                    if let Err(e) = st.stub_start(&c) {
+                        let _ = app.handle().emit("error", tr!("DoH-резолвер не запустился: {e}", "DoH resolver failed to start: {e}"));
+                    }
+                }
+            }
 
             // Фоновые шаги при старте: восстановить ipset после прерванного теста,
             // включить обход, если он был включён при выходе.
@@ -738,6 +934,15 @@ pub fn run() {
             dns_apply,
             dns_reset,
             dns_flush,
+            dns_stub_status,
+            dns_stub_enable,
+            dns_stub_disable,
+            proxy_status,
+            proxy_start,
+            proxy_stop,
+            diag_run,
+            list_presets,
+            list_add_presets,
             set_autostart,
             set_close_to_tray,
             set_language,
@@ -759,6 +964,11 @@ pub fn run() {
                 let st = app.state::<AppState>();
                 st.cancel.store(true, Ordering::SeqCst);
                 st.runner.stop_own();
+                // Системный прокси и DNS адаптера возвращаем: без приложения они не работают.
+                st.proxy_stop_inner();
+                if st.settings.lock().unwrap().dns_stub.is_some() && winapi::is_admin() {
+                    let _ = st.stub_disable();
+                }
             }
         });
 }

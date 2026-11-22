@@ -123,6 +123,45 @@ export type DnsApplyReq = {
   doh_fallback: boolean;
 };
 
+export type StubConfig = {
+  guid: string;
+  name: string;
+  template: string;
+  bootstrap: string[];
+  fallback: string | null;
+  ipv6: boolean;
+  addr: string;
+  prev_v4: string[] | null;
+  prev_v6: string[] | null;
+};
+export type StubStatus = {
+  running: boolean;
+  config: StubConfig | null;
+  stats: { queries: number; cached: number; errors: number; last_error: string | null; ipv6: boolean; addr: string; template: string } | null;
+};
+
+export type ProxyConfig = { port: number; method: "split" | "disorder"; doh: boolean; system: boolean };
+export type ProxyStatus = {
+  config: ProxyConfig;
+  enabled: boolean;
+  stats: { running: boolean; port: number; active: number; total: number; failed: number; system: boolean; last_error: string | null };
+};
+
+export type Probe = "ok" | "tcp_fail" | "tls_reset" | "tls_timeout" | "tls_cert" | "tls_error";
+export type Verdict = "ok" | "dns" | "dpi" | "ip" | "no_domain" | "unknown";
+export type DiagReport = {
+  domain: string;
+  system: string[];
+  system_error: string | null;
+  doh: string[];
+  doh_error: string | null;
+  system_bogus: boolean;
+  checks: { ip: string; source: "system" | "doh" | "both"; result: Probe; ms: number | null; detail: string | null }[];
+  verdict: Verdict;
+};
+
+export type ListPreset = { id: string; name: string; domains: string[] };
+
 export const api = {
   overview: () => invoke<Overview>("overview"),
   status: () => invoke<Status>("status"),
@@ -152,6 +191,16 @@ export const api = {
   dnsApply: (req: DnsApplyReq) => invoke<DnsInfo>("dns_apply", { req }),
   dnsReset: (index: number, v4: boolean, v6: boolean) => invoke<DnsInfo>("dns_reset", { index, v4, v6 }),
   dnsFlush: () => invoke<void>("dns_flush"),
+  dnsStubStatus: () => invoke<StubStatus>("dns_stub_status"),
+  dnsStubEnable: (index: number, template: string, bootstrap: string[], fallback: boolean) =>
+    invoke<StubStatus>("dns_stub_enable", { index, template, bootstrap, fallback }),
+  dnsStubDisable: () => invoke<StubStatus>("dns_stub_disable"),
+  proxyStatus: () => invoke<ProxyStatus>("proxy_status"),
+  proxyStart: (config: ProxyConfig) => invoke<ProxyStatus>("proxy_start", { config }),
+  proxyStop: () => invoke<ProxyStatus>("proxy_stop"),
+  diagRun: (domain: string) => invoke<DiagReport>("diag_run", { domain }),
+  listPresets: () => invoke<ListPreset[]>("list_presets"),
+  listAddPresets: (ids: string[]) => invoke<number>("list_add_presets", { ids }),
   setAutostart: (enabled: boolean) => invoke<boolean>("set_autostart", { enabled }),
   setCloseToTray: (enabled: boolean) => invoke<void>("set_close_to_tray", { enabled }),
   setLanguage: (lang: string) => invoke<void>("set_language", { lang }),

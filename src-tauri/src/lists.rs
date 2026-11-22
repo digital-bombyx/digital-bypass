@@ -69,6 +69,87 @@ pub fn write(dir: &Path, kind: &str, content: &str) -> Result<SaveResult, String
     Ok(SaveResult { warnings })
 }
 
+/// Тематические наборы доменов для list-general-user.txt.
+/// В hostlist zapret домен покрывает и все поддомены.
+#[derive(Serialize)]
+pub struct Preset {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub domains: &'static [&'static str],
+}
+
+pub const PRESETS: &[Preset] = &[
+    Preset {
+        id: "youtube",
+        name: "YouTube",
+        domains: &["youtube.com", "youtu.be", "googlevideo.com", "ytimg.com", "ggpht.com", "youtube-nocookie.com", "youtubei.googleapis.com", "youtubekids.com"],
+    },
+    Preset {
+        id: "discord",
+        name: "Discord",
+        domains: &[
+            "discord.com", "discord.gg", "discordapp.com", "discordapp.net", "discord.media", "discordcdn.com",
+            "discord.dev", "discord.new", "discord.gift", "discordstatus.com", "dis.gd",
+        ],
+    },
+    Preset {
+        id: "telegram",
+        name: "Telegram",
+        domains: &["telegram.org", "t.me", "telegram.me", "telegram.dog", "telegra.ph", "telesco.pe", "tdesktop.com", "cdn-telegram.org"],
+    },
+    Preset {
+        id: "meta",
+        name: "Instagram / Facebook / WhatsApp",
+        domains: &[
+            "instagram.com", "cdninstagram.com", "facebook.com", "fb.com", "fbcdn.net", "facebook.net",
+            "messenger.com", "whatsapp.com", "whatsapp.net", "threads.net",
+        ],
+    },
+    Preset {
+        id: "twitter",
+        name: "X / Twitter",
+        domains: &["x.com", "twitter.com", "twimg.com", "t.co"],
+    },
+    Preset {
+        id: "roblox",
+        name: "Roblox",
+        domains: &["roblox.com", "rbxcdn.com", "rbx.com"],
+    },
+];
+
+/// Добавить наборы в list-general-user.txt без дублей. Возвращает число новых доменов.
+pub fn add_presets(dir: &Path, ids: &[String]) -> Result<usize, String> {
+    let current = read(dir, "general")?;
+    let mut existing: std::collections::HashSet<String> =
+        current.lines().map(|l| l.trim().to_lowercase()).filter(|l| !l.is_empty() && !l.starts_with('#')).collect();
+    let mut add = Vec::new();
+    for id in ids {
+        let p = PRESETS.iter().find(|p| p.id == id).ok_or_else(|| crate::tr!("неизвестный набор: {id}", "unknown set: {id}"))?;
+        let mut header = false;
+        for d in p.domains {
+            if existing.insert(d.to_string()) {
+                if !header {
+                    add.push(format!("# {}", p.name));
+                    header = true;
+                }
+                add.push(d.to_string());
+            }
+        }
+    }
+    let added = add.iter().filter(|l| !l.starts_with('#')).count();
+    if added == 0 {
+        return Ok(0);
+    }
+    // Заглушку по умолчанию убираем — теперь в списке есть настоящие домены.
+    let mut lines: Vec<String> = current.lines().map(|l| l.trim_end().to_string()).filter(|l| l.trim() != "domain.example.abc").collect();
+    while lines.last().is_some_and(|l| l.trim().is_empty()) {
+        lines.pop();
+    }
+    lines.extend(add);
+    write(dir, "general", &lines.join("\n"))?;
+    Ok(added)
+}
+
 fn is_domain(s: &str) -> bool {
     let s = s.trim_end_matches('.');
     s.contains('.')
@@ -107,5 +188,24 @@ mod tests {
         assert!(is_ip_or_cidr("2606:4700::/32"));
         assert!(!is_ip_or_cidr("1.2.3.0/33"));
         assert!(!is_ip_or_cidr("example.com"));
+    }
+
+    #[test]
+    fn presets_valid_and_merge() {
+        for p in PRESETS {
+            for d in p.domains {
+                assert!(is_domain(d), "{d}");
+            }
+        }
+        let dir = std::env::temp_dir().join(format!("digital-bypass-lists-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("lists")).unwrap();
+        ensure(&dir);
+        let n = add_presets(&dir, &["discord".into(), "twitter".into()]).unwrap();
+        assert_eq!(n, PRESETS[1].domains.len() + PRESETS[4].domains.len());
+        assert_eq!(add_presets(&dir, &["discord".into()]).unwrap(), 0);
+        let t = read(&dir, "general").unwrap();
+        assert!(t.contains("# Discord") && t.contains("x.com") && !t.contains("domain.example.abc"));
+        assert!(add_presets(&dir, &["nope".into()]).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

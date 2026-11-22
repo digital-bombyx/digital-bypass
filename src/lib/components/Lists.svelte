@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { api } from "$lib/api";
-  import { app, act } from "$lib/state.svelte";
+  import { api, type ListPreset } from "$lib/api";
+  import { app, act, toast } from "$lib/state.svelte";
+  import { onMount } from "svelte";
   import Segmented from "./Segmented.svelte";
   import { t } from "$lib/i18n.svelte";
-  import { Save, RotateCcw } from "@lucide/svelte";
+  import { Save, RotateCcw, Plus } from "@lucide/svelte";
 
   type Kind = "general" | "exclude" | "ipset-exclude";
   const info: Record<Kind, { title: string; hint: () => string }> = {
@@ -38,6 +39,26 @@
       warnings = r.warnings;
     }
   }
+  let presets = $state<ListPreset[]>([]);
+  let picked = $state<Set<string>>(new Set());
+  onMount(async () => {
+    presets = await api.listPresets().catch(() => []);
+  });
+  function togglePreset(id: string) {
+    const n = new Set(picked);
+    n.has(id) ? n.delete(id) : n.add(id);
+    picked = n;
+  }
+  async function addPresets() {
+    if (dirty && !confirm(t("Несохранённые правки списка пропадут. Продолжить?", "Unsaved list edits will be lost. Continue?"))) return;
+    const n = await act(() => api.listAddPresets([...picked]));
+    if (n === undefined) return;
+    toast(n ? `${t("Добавлено доменов", "Domains added")}: ${n}` : t("Все домены уже в списке", "All domains are already listed"), "ok");
+    picked = new Set();
+    kind = "general";
+    await load("general");
+  }
+
   const lines = $derived(text.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).length);
 </script>
 
@@ -52,6 +73,23 @@
       { value: "exclude", label: t("исключить", "exclude") },
       { value: "ipset-exclude", label: t("ip-исключения", "ip exclude") },
     ]} />
+
+  {#if kind === "general" && presets.length}
+    <section class="card sets">
+      <div class="label">{t("наборы", "sets")}</div>
+      <div class="chips">
+        {#each presets as p (p.id)}
+          <button class="set" class:on={picked.has(p.id)} title={p.domains.join(", ")} onclick={() => togglePreset(p.id)}>
+            {p.name} <span class="faint">{p.domains.length}</span>
+          </button>
+        {/each}
+      </div>
+      <div class="actions">
+        <span class="faint mono note">{t("домены добавятся в конец list-general-user.txt без дублей", "domains are appended to list-general-user.txt without duplicates")}</span>
+        <button class="btn sm" disabled={!picked.size || app.busy || app.ov?.testing} onclick={addPresets}><Plus size={12} /> {t("добавить", "add")}</button>
+      </div>
+    </section>
+  {/if}
 
   <section class="card ed">
     <div class="head">
@@ -104,7 +142,7 @@
   }
   textarea {
     flex: 1;
-    min-height: 300px;
+    min-height: 220px;
   }
   .warn {
     font-size: 10.5px;
@@ -118,5 +156,36 @@
   .note {
     flex: 1;
     font-size: 10px;
+  }
+  .sets {
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .set {
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .set:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+  }
+  .set.on {
+    color: var(--text);
+    border-color: var(--accent);
+    background: var(--accent-soft);
   }
 </style>

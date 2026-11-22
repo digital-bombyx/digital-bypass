@@ -693,12 +693,112 @@ pub fn flush() -> bool {
     crate::util::run_hidden(&crate::util::system32("ipconfig.exe"), &["/flushdns"]).is_ok_and(|o| o.status.success())
 }
 
+// ---------- локальный DoH-резолвер на адаптере ----------
+
+/// Что включено и что было до включения — хранится в настройках, пока
+/// резолвер прописан на адаптере.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct StubConfig {
+    pub guid: String,
+    pub name: String,
+    pub template: String,
+    pub bootstrap: Vec<String>,
+    /// Обычный DNS вторым адресом: если приложение закрыто, интернет не пропадёт.
+    pub fallback: Option<String>,
+    pub ipv6: bool,
+    /// Адрес петли резолвера (127.0.0.1 или запасной, если тот занят).
+    #[serde(default = "default_stub_addr")]
+    pub addr: String,
+    /// None — DNS был автоматическим (DHCP).
+    pub prev_v4: Option<Vec<String>>,
+    pub prev_v6: Option<Vec<String>>,
+}
+
+pub const STUB_V4: &str = "127.0.0.1";
+
+fn default_stub_addr() -> String {
+    STUB_V4.into()
+}
+pub const STUB_V6: &str = "::1";
+
+/// Списки адресов для адаптера (чистая функция).
+pub fn stub_servers(addr: &str, ipv6: bool, fallback: Option<&str>) -> (Vec<String>, Option<Vec<String>>) {
+    let mut v4 = vec![addr.to_string()];
+    if let Some(f) = fallback {
+        v4.push(f.to_string());
+    }
+    (v4, ipv6.then(|| vec![STUB_V6.to_string()]))
+}
+
+/// Прежние ручные адреса. Если на адаптере уже наш резолвер (остался после
+/// сбоя), прежнее состояние неизвестно — вернём DHCP.
+pub fn prev_servers(is_static: bool, list: &[String]) -> Option<Vec<String>> {
+    let ours = list.iter().any(|s| s.starts_with("127.") || s == STUB_V6);
+    (is_static && !ours && !list.is_empty()).then(|| list.to_vec())
+}
+
+fn find_guid(guid: &str) -> Result<Adapter, String> {
+    sys::adapters()
+        .into_iter()
+        .find(|a| a.guid.eq_ignore_ascii_case(guid))
+        .ok_or_else(|| crate::tr!("адаптер {guid} не найден", "adapter {guid} not found"))
+}
+
+/// Прописать резолвер на адаптер. Возвращает конфигурацию с прежними адресами.
+pub fn stub_point(index: u32, addr: std::net::Ipv4Addr, ipv6: bool, template: &str, bootstrap: &[IpAddr], fallback: Option<IpAddr>) -> Result<StubConfig, String> {
+    let a = find(index)?;
+    let cfg = StubConfig {
+        guid: a.guid.clone(),
+        name: a.name.clone(),
+        template: template.to_string(),
+        bootstrap: bootstrap.iter().map(|i| i.to_string()).collect(),
+        fallback: fallback.map(|f| f.to_string()),
+        ipv6,
+        addr: addr.to_string(),
+        prev_v4: prev_servers(a.static_v4, &a.dns_v4),
+        prev_v6: prev_servers(a.static_v6, &a.dns_v6),
+    };
+    let (v4, v6) = stub_servers(&cfg.addr, ipv6, cfg.fallback.as_deref());
+    apply(&ApplyReq { index, v4: Some(v4), v6, doh_template: None, doh_fallback: false })?;
+    Ok(cfg)
+}
+
+/// Вернуть адаптеру DNS, который был до резолвера.
+pub fn stub_restore(cfg: &StubConfig) -> Result<(), String> {
+    let a = find_guid(&cfg.guid)?;
+    match &cfg.prev_v4 {
+        Some(list) => apply(&ApplyReq { index: a.index, v4: Some(list.clone()), v6: None, doh_template: None, doh_fallback: false })?,
+        None => reset(a.index, true, false)?,
+    }
+    if cfg.ipv6 {
+        match &cfg.prev_v6 {
+            Some(list) => apply(&ApplyReq { index: a.index, v4: None, v6: Some(list.clone()), doh_template: None, doh_fallback: false })?,
+            None => reset(a.index, false, true)?,
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn stub_lists() {
+        assert_eq!(stub_servers("127.0.0.1", false, None), (s(&["127.0.0.1"]), None));
+        assert_eq!(stub_servers("127.0.0.53", true, Some("1.1.1.1")), (s(&["127.0.0.53", "1.1.1.1"]), Some(s(&["::1"]))));
+        // Списки резолвера проходят ту же проверку, что и ручные адреса.
+        assert_eq!(parse_servers(false, &stub_servers("127.0.0.1", true, Some("1.1.1.1")).0).unwrap().len(), 2);
+        assert_eq!(prev_servers(true, &s(&["127.0.0.53"])), None);
+        assert_eq!(prev_servers(false, &s(&["192.168.0.1"])), None);
+        assert_eq!(prev_servers(true, &s(&["8.8.8.8"])), Some(s(&["8.8.8.8"])));
+        // После сбоя на адаптере остался наш адрес — считаем, что было «автоматически».
+        assert_eq!(prev_servers(true, &s(&["127.0.0.1", "1.1.1.1"])), None);
+        assert_eq!(prev_servers(true, &s(&["127.0.0.1"])), None);
     }
 
     #[test]

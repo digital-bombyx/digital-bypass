@@ -17,6 +17,14 @@ pub struct Settings {
     pub hosts_custom: Vec<crate::hosts::Entry>,
     /// ru | en
     pub language: String,
+    /// Локальный прокси-обходчик.
+    pub proxy: crate::proxy::Config,
+    /// Прокси был включён при выходе — включить при старте.
+    pub proxy_enabled: bool,
+    /// Системный прокси до нашего — пока наш прописан в Windows.
+    pub proxy_prev: Option<crate::proxy::SystemProxy>,
+    /// Активный локальный DoH-резолвер (пока он прописан на адаптере).
+    pub dns_stub: Option<crate::dns::StubConfig>,
 }
 
 impl Default for Settings {
@@ -31,6 +39,10 @@ impl Default for Settings {
             test_parallel: 16,
             hosts_custom: vec![],
             language: "ru".into(),
+            proxy: Default::default(),
+            proxy_enabled: false,
+            proxy_prev: None,
+            dns_stub: None,
         }
     }
 }

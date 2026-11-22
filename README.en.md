@@ -6,7 +6,7 @@
 
 **A network unblocking multitool for Windows**
 
-One-click zapret2 (winws2 + Lua), DNS switching with DoH, hosts. One installer, no console windows.
+One-click zapret2 (winws2 + Lua), a bypass proxy without admin rights, DNS switching and DoH, a "why won't it open" check, hosts.
 
 [Русский](README.md) · **English**
 
@@ -27,6 +27,7 @@ One-click zapret2 (winws2 + Lua), DNS switching with DoH, hosts. One installer, 
 - **Strategies as-is.** Arguments are read straight from `general*.bat`.
 - **Strategy tests** modelled on `utils\test zapret.ps1`: HTTP / TLS 1.2 / TLS 1.3 + ping and the "16-20 KB" DPI test, best pick and history.
 - **Game Filter, IPSet, user lists** — the same files `service.bat` writes.
+- **Domain sets**: YouTube, Discord, Telegram, Instagram/Facebook/WhatsApp, X, Roblox are added to the list in one click.
 
 ### DNS
 
@@ -37,6 +38,20 @@ Sometimes changing DNS is enough to get around light blocking.
 - Presets: Cloudflare, Cloudflare Security, Google, Quad9, AdGuard, AdGuard Unfiltered, Yandex, Yandex Safe, OpenDNS, Mullvad, or your own addresses.
 - **DNS-over-HTTPS** (Windows 11): the template is registered with `netsh dns add encryption`, and encryption is enabled on the adapter for the chosen servers. Optional fallback to plain DNS.
 - Revert to automatic DNS (DHCP) and flush the DNS cache.
+- **Local DoH resolver** — encrypted DNS on Windows 10 too: the app answers DNS queries on `127.0.0.x:53` and forwards them over HTTPS. While it runs the ISP cannot see or spoof DNS; on exit the previous DNS is restored. An optional plain DNS fallback keeps the internet working when the app is closed.
+
+### Bypass proxy
+
+DPI bypass **without admin rights and without a driver** — for work PCs and when antivirus blocks WinDivert.
+
+- A local HTTP proxy splits the TLS ClientHello so the site name is torn between records; the `disorder` method sends the first part with TTL=1.
+- Site addresses are resolved via DoH, so DNS spoofing does not matter.
+- The proxy is set in Windows settings and removed when turned off.
+- HTTPS through the proxy only: UDP, QUIC and Discord voice still need zapret2.
+
+### Check
+
+Enter a domain: the app compares the system DNS with DoH, tries TCP and TLS to each address and tells what is wrong — DNS spoofing, DPI by site name or IP blocking — and which module helps.
 
 ### hosts
 

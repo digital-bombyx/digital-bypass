@@ -12,6 +12,10 @@
 - **Модуль DNS.** Выбор адаптера, пресеты (Cloudflare, Google, Quad9, AdGuard, Яндекс, OpenDNS, Mullvad) и свои адреса, IPv4 и IPv6, возврат к DHCP, показ текущих DNS, сброс кэша. DNS-over-HTTPS на Windows 11 через `netsh dns add encryption`.
 - **Строгая тёмная тема.** Графитовый фон, один холодный акцент, вкладки с подчёркиванием, стандартные кнопки окна.
 - Вкладки DNS и настроек работают и без папки zapret.
+- **Прокси-обходчик** без прав администратора и драйвера: нарезка TLS ClientHello (split / disorder), DoH для адресов сайтов, системный прокси Windows с откатом.
+- **Локальный DoH-резолвер**: шифрованный DNS и на Windows 10, с резервным обычным DNS и возвратом прежних настроек при выходе.
+- **Проверка домена**: системный DNS против DoH, TCP и TLS по адресам, вердикт «подмена DNS / DPI / блокировка по IP» и подсказка модуля.
+- **Наборы доменов** для списка обхода: YouTube, Discord, Telegram, Instagram/Facebook/WhatsApp, X, Roblox.
 
 ### What's new
 
@@ -19,5 +23,9 @@
 - **DNS module.** Adapter picker, presets (Cloudflare, Google, Quad9, AdGuard, Yandex, OpenDNS, Mullvad) and custom addresses, IPv4 and IPv6, revert to DHCP, current DNS view, cache flush. DNS-over-HTTPS on Windows 11 via `netsh dns add encryption`.
 - **Strict dark theme.** Graphite background, a single cool accent, underlined tabs, standard window buttons.
 - DNS and Settings tabs work without a zapret folder.
+- **Bypass proxy** without admin rights or a driver: TLS ClientHello splitting (split / disorder), DoH for site addresses, Windows system proxy with restore.
+- **Local DoH resolver**: encrypted DNS on Windows 10 too, with a plain DNS fallback and restore on exit.
+- **Domain check**: system DNS vs DoH, TCP and TLS per address, a "DNS spoofing / DPI / IP block" verdict and the module to use.
+- **Domain sets** for the bypass list: YouTube, Discord, Telegram, Instagram/Facebook/WhatsApp, X, Roblox.
 
 [Unreleased]: https://github.com/digital-bombyx/digital-bypass/commits/main

@@ -10,9 +10,11 @@
   import Hosts from "$lib/components/Hosts.svelte";
   import Settings from "$lib/components/Settings.svelte";
   import Dns from "$lib/components/Dns.svelte";
-  import { Power, FlaskConical, ListChecks, Globe, Network, Settings2, ShieldAlert } from "@lucide/svelte";
+  import Proxy from "$lib/components/Proxy.svelte";
+  import Diag from "$lib/components/Diag.svelte";
+  import { Power, FlaskConical, ListChecks, Globe, Network, Settings2, ShieldAlert, Waypoints, Stethoscope } from "@lucide/svelte";
 
-  type Tab = "home" | "tests" | "lists" | "hosts" | "dns" | "settings";
+  type Tab = "home" | "tests" | "lists" | "hosts" | "dns" | "proxy" | "diag" | "settings";
   let tab = $state<Tab>("home");
   let dirInput = $state("");
   /** Вкладки, которым нужна папка zapret; DNS и настройки работают без неё. */
@@ -24,6 +26,8 @@
     { id: "lists", label: () => t("списки", "lists"), icon: ListChecks },
     { id: "hosts", label: () => "hosts", icon: Globe },
     { id: "dns", label: () => "dns", icon: Network },
+    { id: "proxy", label: () => t("прокси", "proxy"), icon: Waypoints },
+    { id: "diag", label: () => t("проверка", "check"), icon: Stethoscope },
     { id: "settings", label: () => t("настройки", "settings"), icon: Settings2 },
   ];
   const paths: Record<Tab, string> = {
@@ -32,6 +36,8 @@
     lists: "zapret2/lists",
     hosts: "hosts",
     dns: "dns",
+    proxy: "proxy",
+    diag: "check",
     settings: "settings",
   };
 
@@ -91,6 +97,8 @@
       {:else if tab === "lists"}<Lists />
       {:else if tab === "hosts"}<Hosts />
       {:else if tab === "dns"}<Dns />
+      {:else if tab === "proxy"}<Proxy />
+      {:else if tab === "diag"}<Diag go={(id) => (tab = id as Tab)} />
       {:else}<Settings />{/if}
     </main>
   {/if}
@@ -140,7 +148,8 @@
     transition: color 0.12s, border-color 0.12s;
   }
   .tabs button span {
-    font-size: 10px;
+    font-size: 9.5px;
+    white-space: nowrap;
   }
   .tabs button:hover {
     color: var(--muted);

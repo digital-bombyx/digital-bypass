@@ -77,6 +77,34 @@ const dns: any = {
   ],
 };
 
+const stub: any = { running: false, config: null, stats: null };
+const proxy: any = {
+  config: { port: 8881, method: "disorder", doh: true, system: true },
+  enabled: false,
+  stats: { running: false, port: 8881, active: 0, total: 0, failed: 0, system: false, last_error: null },
+};
+const listPresets = [
+  { id: "youtube", name: "YouTube", domains: ["youtube.com", "youtu.be", "googlevideo.com", "ytimg.com"] },
+  { id: "discord", name: "Discord", domains: ["discord.com", "discord.gg", "discordapp.com", "discordapp.net", "discord.media"] },
+  { id: "telegram", name: "Telegram", domains: ["telegram.org", "t.me", "telegram.me"] },
+  { id: "meta", name: "Instagram / Facebook / WhatsApp", domains: ["instagram.com", "facebook.com", "whatsapp.com"] },
+  { id: "twitter", name: "X / Twitter", domains: ["x.com", "twitter.com", "twimg.com", "t.co"] },
+  { id: "roblox", name: "Roblox", domains: ["roblox.com", "rbxcdn.com", "rbx.com"] },
+];
+const diagSample = (domain: string) => ({
+  domain,
+  system: ["127.0.0.1"],
+  system_error: null,
+  doh: ["157.240.205.174", "2a03:2880:f15c:83:face:b00c:0:3603"],
+  doh_error: null,
+  system_bogus: true,
+  checks: [
+    { ip: "127.0.0.1", source: "system", result: "tcp_fail", ms: null, detail: "bogus" },
+    { ip: "157.240.205.174", source: "doh", result: "tls_timeout", ms: null, detail: "os error 10060" },
+  ],
+  verdict: "dpi",
+});
+
 export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
   await new Promise((r) => setTimeout(r, 120));
   switch (cmd) {
@@ -143,6 +171,36 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
     }
     case "dns_flush":
       return;
+    case "dns_stub_status":
+      return structuredClone(stub);
+    case "dns_stub_enable":
+      Object.assign(stub, {
+        running: true,
+        config: { guid: "{A1}", name: "Ethernet", template: args.template, bootstrap: args.bootstrap, fallback: args.fallback ? args.bootstrap[0] : null, ipv6: true, addr: "127.0.0.53", prev_v4: null, prev_v6: null },
+        stats: { queries: 0, cached: 0, errors: 0, last_error: null, ipv6: true, addr: "127.0.0.53", template: args.template },
+      });
+      return structuredClone(stub);
+    case "dns_stub_disable":
+      Object.assign(stub, { running: false, config: null, stats: null });
+      return structuredClone(stub);
+    case "proxy_status":
+      return structuredClone(proxy);
+    case "proxy_start":
+      proxy.config = args.config;
+      proxy.enabled = true;
+      proxy.stats = { running: true, port: args.config.port, active: 3, total: 41, failed: 1, system: args.config.system, last_error: null };
+      return structuredClone(proxy);
+    case "proxy_stop":
+      proxy.enabled = false;
+      proxy.stats = { ...proxy.stats, running: false, active: 0 };
+      return structuredClone(proxy);
+    case "diag_run":
+      await new Promise((r) => setTimeout(r, 700));
+      return diagSample(args.domain);
+    case "list_presets":
+      return listPresets;
+    case "list_add_presets":
+      return 7;
     case "set_autostart":
       state.autostart = args.enabled;
       return args.enabled;

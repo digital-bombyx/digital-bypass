@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, type DnsInfo, type DnsPreset, type DnsAdapter } from "$lib/api";
+  import { api, type DnsInfo, type DnsPreset, type DnsAdapter, type StubStatus } from "$lib/api";
   import { app, act, toast } from "$lib/state.svelte";
   import { t, i18n } from "$lib/i18n.svelte";
   import Switch from "./Switch.svelte";
-  import { RefreshCw, Eraser, Undo2, Check, Lock, Cable, Wifi, Network } from "@lucide/svelte";
+  import { RefreshCw, Eraser, Undo2, Check, Lock, Cable, Wifi, Network, ShieldCheck } from "@lucide/svelte";
 
   let info = $state<DnsInfo | null>(null);
   let presets = $state<DnsPreset[]>([]);
@@ -17,6 +17,8 @@
   let doh = $state(false);
   let template = $state("");
   let fallback = $state(false);
+  let stub = $state<StubStatus | null>(null);
+  let stubFallback = $state(true);
 
   const adapter = $derived(info?.adapters.find((a) => a.index === index) ?? null);
   const current = $derived(
@@ -41,8 +43,9 @@
 
   async function load() {
     try {
-      const [i, p] = await Promise.all([api.dnsInfo(), presets.length ? Promise.resolve(presets) : api.dnsPresets()]);
+      const [i, p, sb] = await Promise.all([api.dnsInfo(), presets.length ? Promise.resolve(presets) : api.dnsPresets(), api.dnsStubStatus()]);
       info = i;
+      stub = sb;
       presets = p;
       if (index === null || !i.adapters.some((a) => a.index === index)) {
         index = (i.adapters.find((a) => a.internet) ?? i.adapters.find((a) => a.up && a.gateway) ?? i.adapters.find((a) => a.up) ?? i.adapters[0])?.index ?? null;
@@ -80,6 +83,25 @@
   }
   async function flush() {
     await act(() => api.dnsFlush(), t("Кэш DNS сброшен", "DNS cache flushed"));
+  }
+
+  /** Резолвер берёт шаблон и адреса выбранного сервера; адреса — bootstrap (без системного DNS). */
+  const stubTemplate = $derived(template.trim() || presets.find((x) => x.id === preset)?.doh || "");
+  async function stubEnable() {
+    if (index === null) return;
+    const boot = [...v4, ...v6].map((x) => x.trim()).filter(Boolean);
+    const r = await act(() => api.dnsStubEnable(index!, stubTemplate, boot, stubFallback), t("Резолвер включён", "Resolver enabled"));
+    if (r) {
+      stub = r;
+      info = await api.dnsInfo();
+    }
+  }
+  async function stubDisable() {
+    const r = await act(() => api.dnsStubDisable(), t("DNS адаптера возвращён", "Adapter DNS restored"));
+    if (r) {
+      stub = r;
+      info = await api.dnsInfo();
+    }
   }
 
   const kindIcon = (a: DnsAdapter) => (a.kind === "wifi" ? Wifi : a.kind === "ethernet" ? Cable : Network);
@@ -199,6 +221,56 @@
     {#if !admin}
       <div class="faint mono small">{t("Смена DNS требует прав администратора.", "Changing DNS requires administrator rights.")}</div>
     {/if}
+
+    <!-- Локальный DoH-резолвер -->
+    <section class="card block">
+      <div class="row">
+        <div>
+          <div class="label">{t("локальный DoH-резолвер", "local DoH resolver")}</div>
+          <div class="hint faint mono">{t("шифрованный DNS на Windows 10 и 11, слушает 127.0.0.x:53", "encrypted DNS on Windows 10 and 11, listens on 127.0.0.x:53")}</div>
+        </div>
+        {#if stub?.running}<span class="chip sage"><ShieldCheck size={11} /> {stub.stats?.addr}</span>{/if}
+      </div>
+      {#if stub?.config}
+        <div class="kv2 mono">
+          <span class="k">{t("адаптер", "adapter")}</span><span>{stub.config.name}</span>
+          <span class="k">{t("сервер", "server")}</span><span class="wrap">{stub.config.template}</span>
+          {#if stub.stats}
+            <span class="k">{t("запросы", "queries")}</span>
+            <span>{stub.stats.queries} · {t("кэш", "cache")} {stub.stats.cached} · {t("ошибки", "errors")} {stub.stats.errors}</span>
+          {/if}
+          {#if stub.config.fallback}<span class="k">{t("резерв", "fallback")}</span><span>{stub.config.fallback}</span>{/if}
+        </div>
+        {#if stub.stats?.last_error}<div class="err mono">{stub.stats.last_error}</div>{/if}
+        {#if !stub.running}
+          <div class="err mono">{t("Резолвер не запущен, хотя прописан на адаптере — выключите и включите снова.", "The resolver is not running but is set on the adapter — turn it off and on again.")}</div>
+        {/if}
+        <div class="actions">
+          <span class="grow"></span>
+          <button class="btn danger" disabled={app.busy || !admin} onclick={stubDisable}><Undo2 size={13} /> {t("выключить и вернуть DNS", "turn off and restore DNS")}</button>
+        </div>
+      {:else}
+        <p class="muted text">
+          {t(
+            "Приложение само отвечает на DNS-запросы и пересылает их выбранному серверу по HTTPS. Пока оно запущено (и в трее), провайдер не видит и не подменяет DNS. При выходе прежний DNS адаптера возвращается.",
+            "The app answers DNS queries itself and forwards them to the chosen server over HTTPS. While it runs (also in the tray), the ISP cannot see or spoof DNS. On exit the adapter's previous DNS is restored.",
+          )}
+        </p>
+        <div class="kv2 mono">
+          <span class="k">{t("сервер", "server")}</span><span class="wrap">{stubTemplate || t("выберите сервер с DoH", "pick a server with DoH")}</span>
+        </div>
+        <label class="check mono">
+          <input type="checkbox" bind:checked={stubFallback} />
+          {t("резервный обычный DNS: если приложение закрыто, интернет не пропадёт", "plain DNS fallback: internet keeps working if the app is closed")}
+        </label>
+        <div class="actions">
+          <span class="grow"></span>
+          <button class="btn primary" disabled={app.busy || !admin || !adapter || !stubTemplate.startsWith("https://")} onclick={stubEnable}>
+            <ShieldCheck size={13} /> {t("включить на адаптере", "enable on adapter")}
+          </button>
+        </div>
+      {/if}
+    </section>
   {/if}
 </div>
 
@@ -364,5 +436,25 @@
   }
   .small {
     font-size: 10.5px;
+  }
+  .text {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .kv2 {
+    display: grid;
+    grid-template-columns: 74px 1fr;
+    gap: 4px 8px;
+    font-size: 11.5px;
+  }
+  .wrap {
+    word-break: break-all;
+    user-select: text;
+  }
+  .err {
+    font-size: 10.5px;
+    color: var(--danger-text);
+    word-break: break-all;
   }
 </style>
