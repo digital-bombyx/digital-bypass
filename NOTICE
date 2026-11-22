@@ -1,0 +1,58 @@
+digital-bypass
+Copyright (C) 2026 digital-bombyx
+https://github.com/digital-bombyx/digital-bypass
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License version 3 as published by the Free
+Software Foundation (see LICENSE), together with the additional terms below.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+------------------------------------------------------------------------------
+ADDITIONAL TERMS (GNU GPL version 3, section 7)
+------------------------------------------------------------------------------
+
+Under section 7(b) and 7(c) of the GNU General Public License version 3, the
+following additional terms apply to this program and to any work based on it:
+
+1. Author attribution (7b). Every copy and every modified version, in source
+   or object form, must preserve this NOTICE file and the copyright notices in
+   it. A work that displays Appropriate Legal Notices in its user interface
+   (for example an "About" or settings screen) must show there, in a
+   reasonably visible way, the attribution:
+
+       Based on digital-bypass by digital-bombyx
+       https://github.com/digital-bombyx/digital-bypass
+
+   An unmodified copy may show "digital-bypass by digital-bombyx" instead.
+
+2. Marking of modified versions (7c). A modified version must be marked in
+   reasonable ways as different from the original, for example by a different
+   product name or a version suffix, and must not be presented as the original
+   digital-bypass.
+
+These terms are "further restrictions" only to the extent permitted by
+section 7; they do not restrict any other right granted by the license.
+
+------------------------------------------------------------------------------
+THIRD-PARTY COMPONENTS
+------------------------------------------------------------------------------
+
+The license above covers the source code of digital-bypass only.
+
+The bundled zapret-discord-youtube build (winws2, WinDivert, Lua scripts,
+lists and strategies) is distributed under the licenses of its respective
+authors; see LICENSE.txt inside the bundled build folder.
+
+Rust and JavaScript dependencies (Tauri, rustls, Svelte and others) are used
+under their own licenses (MIT, Apache-2.0, ISC and similar), all compatible
+with GPL-3.0.
+
+The SNI scanner idea comes from sni-spoofing-rust by therealaleph (MIT),
+https://github.com/therealaleph/sni-spoofing-rust; the code is original.
+
+digital-bypass is based on Zapret2-RustGUI by the same author
+(https://github.com/digital-bombyx/Zapret2-RustGUI). Earlier releases of
+Zapret2-RustGUI remain available under the MIT License.

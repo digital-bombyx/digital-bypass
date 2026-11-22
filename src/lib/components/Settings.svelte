@@ -105,7 +105,11 @@
   </section>
 
   <button class="btn ghost quit" onclick={() => api.quit()}><Power size={13} /> {t("выйти из приложения", "quit the app")}</button>
-  <div class="foot faint mono">digital-bypass · digital-bombyx</div>
+  <!-- Сведения об авторстве (GPL-3.0, NOTICE: дополнительное условие 7b). Не удалять в форках. -->
+  <div class="foot faint mono">
+    digital-bypass by digital-bombyx · GPL-3.0<br />
+    <span class="url">github.com/digital-bombyx/digital-bypass</span>
+  </div>
 </div>
 
 <style>
@@ -170,7 +174,11 @@
   .quit {
     align-self: center;
   }
+  .foot .url {
+    user-select: text;
+  }
   .foot {
+    line-height: 1.6;
     text-align: center;
     font-size: 10px;
   }

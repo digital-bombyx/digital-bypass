@@ -52,7 +52,7 @@
 
 ## Лицензия
 
-Отправляя вклад, вы соглашаетесь, что он распространяется под [лицензией MIT](LICENSE) проекта.
+Отправляя вклад, вы соглашаетесь, что он распространяется под [лицензией GPL-3.0](LICENSE) проекта с дополнительными условиями из [NOTICE](NOTICE).
 
 ---
 
@@ -81,4 +81,4 @@ Thanks for helping digital-bypass!
   - write every UI string in both languages: `t("ru", "en")` / `tr!(…)`;
   - use the palette tokens from `src/app.css`.
 - **Conduct:** be kind and respectful.
-- **License:** contributions are released under the project's [MIT License](LICENSE).
+- **License:** contributions are released under the project's [GPL-3.0 license](LICENSE) with the additional terms in [NOTICE](NOTICE).

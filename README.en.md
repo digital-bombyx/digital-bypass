@@ -13,6 +13,7 @@ One-click zapret2 (winws2 + Lua), a bypass proxy without admin rights, DNS switc
 ![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-58a6ff?style=flat-square&labelColor=0f1216)
 ![Rust](https://img.shields.io/badge/Rust-Tauri%202-58a6ff?style=flat-square&labelColor=0f1216)
 ![Svelte](https://img.shields.io/badge/Svelte-5-58a6ff?style=flat-square&labelColor=0f1216)
+![License](https://img.shields.io/badge/license-GPL--3.0-58a6ff?style=flat-square&labelColor=0f1216)
 
 </div>
 
@@ -89,3 +90,13 @@ npm run tauri build
 - **[Flowseal](https://github.com/Flowseal)** and the [zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube) contributors.
 - Authors of [PR #18202](https://github.com/Flowseal/zapret-discord-youtube/pull/18202) — the zapret2 port.
 - **[basil00/WinDivert](https://github.com/basil00/WinDivert)**, **[hyperion-cs/dpi-checkers](https://github.com/hyperion-cs/dpi-checkers)**.
+
+## License
+
+[GPL-3.0](LICENSE) with additional terms under section 7 ([NOTICE](NOTICE)):
+
+- every copy and derivative keeps the NOTICE file and the copyright;
+- if the program shows author information in its UI (an About or settings screen), it must include "Based on digital-bypass by digital-bombyx" with a link to the repository;
+- modified versions must be marked as different from the original (another name or a version suffix).
+
+Forks and derivative works stay open under GPL-3.0.

@@ -38,6 +38,7 @@
     "category": "Utility",
     "shortDescription": "Network unblocking multitool",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"],
-    "resources": { "zapret/": "zapret/" }
+    "resources": { "zapret/": "zapret/", "../LICENSE": "LICENSE", "../NOTICE": "NOTICE" },
+    "licenseFile": "../LICENSE"
   }
 }

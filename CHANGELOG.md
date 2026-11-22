@@ -20,6 +20,7 @@
 - **Трей**: переключатель прокси-обходчика, состояние DoH-резолвера, в подсказке — все включённые модули.
 - **Прокси**: SOCKS5 на том же порту, раздача в локальную сеть с правилом брандмауэра и логином/паролем для устройств из сети.
 - **Сканер SNI** во вкладке «проверка»: какие имена сайтов DPI пропускает к заданному адресу, признак белых списков.
+- **Лицензия GPL-3.0** с дополнительными условиями (NOTICE): сохранение авторства и пометка изменённых версий. Zapret2-RustGUI остаётся под MIT.
 
 ### What's new
 
@@ -35,5 +36,6 @@
 - **Tray**: bypass proxy toggle, DoH resolver state, all active modules in the tooltip.
 - **Proxy**: SOCKS5 on the same port, local network sharing with a firewall rule and a user/password for network devices.
 - **SNI scanner** in the Check tab: which site names DPI lets through to a given address, with a whitelist hint.
+- **GPL-3.0 license** with additional terms (NOTICE): author attribution and marking of modified versions. Zapret2-RustGUI stays under MIT.
 
 [Unreleased]: https://github.com/digital-bombyx/digital-bypass/commits/main

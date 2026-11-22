@@ -13,6 +13,7 @@ zapret2 (winws2 + Lua) в один клик, прокси-обходчик бе�
 ![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-58a6ff?style=flat-square&labelColor=0f1216)
 ![Rust](https://img.shields.io/badge/Rust-Tauri%202-58a6ff?style=flat-square&labelColor=0f1216)
 ![Svelte](https://img.shields.io/badge/Svelte-5-58a6ff?style=flat-square&labelColor=0f1216)
+![License](https://img.shields.io/badge/license-GPL--3.0-58a6ff?style=flat-square&labelColor=0f1216)
 
 </div>
 
@@ -96,5 +97,15 @@ npm run tauri build
 - **[hyperion-cs/dpi-checkers](https://github.com/hyperion-cs/dpi-checkers)** — цели для DPI-теста «16-20 КБ».
 
 Бинарники и Lua-скрипты встроенной сборки распространяются под лицензиями их авторов (см. `LICENSE.txt` в папке сборки).
+
+## Лицензия
+
+[GPL-3.0](LICENSE) с дополнительными условиями по пункту 7 ([NOTICE](NOTICE)):
+
+- в любой копии и производной версии сохраняются файл NOTICE и копирайт;
+- если программа показывает сведения об авторах в интерфейсе («О программе», настройки), там должна быть строка «Based on digital-bypass by digital-bombyx» со ссылкой на репозиторий;
+- изменённые версии помечаются как отличные от оригинала (другое название или суффикс версии).
+
+Форки и производные работы остаются открытыми под GPL-3.0.
 
 <div align="center"><sub><a href="https://github.com/digital-bombyx">digital-bombyx</a></sub></div>

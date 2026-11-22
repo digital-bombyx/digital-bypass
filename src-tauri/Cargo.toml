@@ -3,7 +3,7 @@ name = "digital-bypass"
 version = "0.1.0"
 description = "Multitool for bypassing network blocks: zapret2 (winws2), DNS and more"
 authors = ["digital-bombyx"]
-license = "MIT"
+license = "GPL-3.0-only"
 repository = "https://github.com/digital-bombyx/digital-bypass"
 edition = "2021"
 
