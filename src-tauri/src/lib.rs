@@ -691,8 +691,57 @@ fn refresh_tray(app: &AppHandle) {
 /// Показать окно. Если оно было закрыто в трей (уничтожено вместе с WebView2),
 /// создать заново из конфигурации. Создание — в отдельном потоке: на Windows
 /// построение окна из обработчика событий главного потока может зависнуть.
+/// Вернуть окну сохранённые размер и положение (если монитор на месте).
+fn restore_geometry(app: &AppHandle, w: &tauri::WebviewWindow) {
+    let Some(g) = app.state::<AppState>().settings.lock().unwrap().window else { return };
+    let monitors: Vec<(i32, i32, u32, u32)> = w
+        .available_monitors()
+        .unwrap_or_default()
+        .iter()
+        .map(|m| (m.position().x, m.position().y, m.size().width, m.size().height))
+        .collect();
+    if !g.visible_on(&monitors) {
+        let _ = w.set_size(tauri::PhysicalSize::new(g.width.max(460), g.height.max(520)));
+        let _ = w.center();
+    } else {
+        let _ = w.set_size(tauri::PhysicalSize::new(g.width, g.height));
+        let _ = w.set_position(tauri::PhysicalPosition::new(g.x, g.y));
+    }
+    if g.maximized {
+        let _ = w.maximize();
+    }
+}
+
+/// Запомнить размер и положение (в памяти; на диск — при закрытии окна и выходе).
+fn remember_geometry(window: &tauri::Window) {
+    if window.is_minimized().unwrap_or(true) || !window.is_visible().unwrap_or(false) {
+        return;
+    }
+    let st = window.app_handle().state::<AppState>();
+    let mut s = st.settings.lock().unwrap();
+    if window.is_maximized().unwrap_or(false) {
+        // Размер «до разворачивания» оставляем прежним.
+        if let Some(g) = s.window.as_mut() {
+            g.maximized = true;
+        }
+        return;
+    }
+    let (Ok(pos), Ok(size)) = (window.outer_position(), window.inner_size()) else { return };
+    s.window = Some(settings::WindowGeom { x: pos.x, y: pos.y, width: size.width, height: size.height, maximized: false });
+}
+
+fn save_settings(app: &AppHandle) {
+    let st = app.state::<AppState>();
+    let s = st.settings.lock().unwrap().clone();
+    settings::save(&st.config_dir, &s);
+}
+
 fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
+        // Первый показ окна, созданного из конфигурации при старте.
+        if !w.is_visible().unwrap_or(true) {
+            restore_geometry(app, &w);
+        }
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
@@ -702,6 +751,7 @@ fn show_main(app: &AppHandle) {
     std::thread::spawn(move || {
         let Some(cfg) = app.config().app.windows.iter().find(|w| w.label == "main").cloned() else { return };
         if let Ok(w) = tauri::WebviewWindowBuilder::from_config(&app, &cfg).and_then(|b| b.build()) {
+            restore_geometry(&app, &w);
             let _ = w.show();
             let _ = w.set_focus();
         }
@@ -891,6 +941,15 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            match event {
+                WindowEvent::Resized(_) | WindowEvent::Moved(_) => remember_geometry(window),
+                // Закрытие в трей уничтожает окно — сохраняем, пока оно ещё есть.
+                WindowEvent::CloseRequested { .. } => {
+                    remember_geometry(window);
+                    save_settings(window.app_handle());
+                }
+                _ => {}
+            }
             // Закрытие в трей = окно уничтожается вместе с WebView2 (основная часть RAM);
             // само приложение остаётся жить — см. ExitRequested ниже.
             #[cfg(windows)]
@@ -961,6 +1020,7 @@ pub fn run() {
             }
             // Процесс winws2, запущенный нами, при выходе гасим; служба продолжает работать.
             if let tauri::RunEvent::Exit = event {
+                save_settings(app);
                 let st = app.state::<AppState>();
                 st.cancel.store(true, Ordering::SeqCst);
                 st.runner.stop_own();

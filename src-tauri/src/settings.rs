@@ -25,6 +25,28 @@ pub struct Settings {
     pub proxy_prev: Option<crate::proxy::SystemProxy>,
     /// Активный локальный DoH-резолвер (пока он прописан на адаптере).
     pub dns_stub: Option<crate::dns::StubConfig>,
+    /// Размер и положение окна (физические пиксели) — восстанавливаются при запуске.
+    pub window: Option<WindowGeom>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct WindowGeom {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub maximized: bool,
+}
+
+impl WindowGeom {
+    /// Окно видно хотя бы на одном мониторе (заголовок в пределах экрана).
+    /// Мониторы — (x, y, ширина, высота) в физических пикселях.
+    pub fn visible_on(&self, monitors: &[(i32, i32, u32, u32)]) -> bool {
+        let (px, py) = (self.x + 60, self.y + 12);
+        self.width >= 200
+            && self.height >= 150
+            && monitors.iter().any(|&(mx, my, mw, mh)| px >= mx && py >= my && px < mx + mw as i32 && py < my + mh as i32)
+    }
 }
 
 impl Default for Settings {
@@ -43,7 +65,25 @@ impl Default for Settings {
             proxy_enabled: false,
             proxy_prev: None,
             dns_stub: None,
+            window: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn window_on_screen() {
+        let mons = [(0, 0, 1920, 1080), (1920, 0, 2560, 1440)];
+        let g = |x, y| WindowGeom { x, y, width: 1040, height: 680, maximized: false };
+        assert!(g(100, 100).visible_on(&mons));
+        assert!(g(3000, 200).visible_on(&mons));
+        // Монитор отключили — окно осталось за пределами.
+        assert!(!g(5000, 100).visible_on(&mons));
+        assert!(!g(-1500, 100).visible_on(&mons));
+        assert!(!WindowGeom { width: 10, ..g(100, 100) }.visible_on(&mons));
     }
 }
 

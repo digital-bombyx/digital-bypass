@@ -20,15 +20,15 @@
   /** Вкладки, которым нужна папка zapret; DNS и настройки работают без неё. */
   const needsZapret: Tab[] = ["home", "tests", "lists", "hosts"];
 
-  const tabs: { id: Tab; label: () => string; icon: typeof Power }[] = [
-    { id: "home", label: () => "zapret2", icon: Power },
+  const tabs: { id: Tab; label: () => string; icon: typeof Power; group?: () => string }[] = [
+    { id: "home", label: () => "zapret2", icon: Power, group: () => "zapret2" },
     { id: "tests", label: () => t("тесты", "tests"), icon: FlaskConical },
     { id: "lists", label: () => t("списки", "lists"), icon: ListChecks },
+    { id: "dns", label: () => "dns", icon: Network, group: () => t("сеть", "network") },
     { id: "hosts", label: () => "hosts", icon: Globe },
-    { id: "dns", label: () => "dns", icon: Network },
     { id: "proxy", label: () => t("прокси", "proxy"), icon: Waypoints },
-    { id: "diag", label: () => t("проверка", "check"), icon: Stethoscope },
-    { id: "settings", label: () => t("настройки", "settings"), icon: Settings2 },
+    { id: "diag", label: () => t("проверка", "check"), icon: Stethoscope, group: () => t("инструменты", "tools") },
+    { id: "settings", label: () => t("настройки", "settings"), icon: Settings2, group: () => "" },
   ];
   const paths: Record<Tab, string> = {
     home: "zapret2",
@@ -75,15 +75,19 @@
       <div class="banner mono"><ShieldAlert size={14} /> {t("нет прав администратора — только просмотр", "no administrator rights — view only")}</div>
     {/if}
 
+    <div class="body">
     <nav class="tabs">
       {#each tabs as tb (tb.id)}
+        {#if tb.group}
+          <div class="group mono" class:spacer={!tb.group()}>{tb.group()}</div>
+        {/if}
         <button class:active={tab === tb.id} onclick={() => (tab = tb.id)} title={tb.label()}>
           <tb.icon size={14} />
           <span class="mono">{tb.label()}</span>
         </button>
       {/each}
     </nav>
-    <main class="content">
+    <main class="content"><div class="page">
       {#if !app.ov.dir && needsZapret.includes(tab)}
         <section class="card setup fade-in">
           <div class="label">zapret2</div>
@@ -100,7 +104,8 @@
       {:else if tab === "proxy"}<Proxy />
       {:else if tab === "diag"}<Diag go={(id) => (tab = id as Tab)} />
       {:else}<Settings />{/if}
-    </main>
+    </div></main>
+    </div>
   {/if}
 
   {#if app.toast}
@@ -125,44 +130,123 @@
     background: rgba(210, 153, 34, 0.08);
     border-bottom: 1px solid rgba(210, 153, 34, 0.18);
   }
-  .tabs {
-    display: flex;
-    gap: 0;
-    padding: 0 8px;
-    border-bottom: 1px solid var(--border-soft);
-    background: var(--bg);
-  }
-  .tabs button {
+  /* Широкое окно: навигация слева, сгруппированная по модулям. */
+  .body {
     flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+  .tabs {
+    width: 184px;
+    flex: none;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    padding: 8px 0 7px;
-    border: 0;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
-    background: transparent;
+    gap: 1px;
+    padding: 10px 8px;
+    border-right: 1px solid var(--border-soft);
+    background: var(--bg);
+    overflow-y: auto;
+  }
+  .group {
+    padding: 12px 10px 4px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
     color: var(--faint);
+  }
+  .group:first-child {
+    padding-top: 2px;
+  }
+  .group.spacer {
+    flex: 1;
+    padding: 0;
+  }
+  .tabs button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 32px;
+    padding: 0 10px;
+    border: 0;
+    border-left: 2px solid transparent;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    background: transparent;
+    color: var(--muted);
     cursor: pointer;
-    transition: color 0.12s, border-color 0.12s;
+    text-align: left;
+    transition: color 0.12s, background 0.12s, border-color 0.12s;
   }
   .tabs button span {
-    font-size: 9.5px;
+    font-size: 12px;
     white-space: nowrap;
   }
   .tabs button:hover {
-    color: var(--muted);
+    color: var(--text);
+    background: var(--panel);
   }
   .tabs button.active {
-    border-bottom-color: var(--accent);
+    border-left-color: var(--accent);
+    background: var(--panel-2);
     color: var(--text);
   }
   .content {
     flex: 1;
     overflow-y: auto;
-    padding: 12px 14px 16px;
     min-height: 0;
+    min-width: 0;
+  }
+  .page {
+    max-width: 880px;
+    padding: 16px 20px 20px;
+    min-height: calc(100% - 36px);
+    display: flex;
+    flex-direction: column;
+  }
+  .page > :global(*) {
+    flex: 1 0 auto;
+  }
+  /* Узкое окно: навигация сверху, как раньше. */
+  @media (max-width: 720px) {
+    .body {
+      flex-direction: column;
+    }
+    .tabs {
+      width: auto;
+      flex-direction: row;
+      gap: 0;
+      padding: 0 8px;
+      border-right: 0;
+      border-bottom: 1px solid var(--border-soft);
+      overflow: visible;
+    }
+    .group {
+      display: none;
+    }
+    .tabs button {
+      flex: 1;
+      flex-direction: column;
+      gap: 3px;
+      height: auto;
+      padding: 8px 0 7px;
+      border-left: 0;
+      border-bottom: 2px solid transparent;
+      border-radius: 0;
+      margin-bottom: -1px;
+      align-items: center;
+    }
+    .tabs button span {
+      font-size: 9.5px;
+    }
+    .tabs button:hover {
+      background: transparent;
+    }
+    .tabs button.active {
+      background: transparent;
+      border-bottom-color: var(--accent);
+    }
+    .page {
+      padding: 12px 14px 16px;
+    }
   }
   .setup {
     padding: 16px;
