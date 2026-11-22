@@ -5,10 +5,11 @@
   import { Search, Loader } from "@lucide/svelte";
   import Segmented from "./Segmented.svelte";
   import SniScan from "./SniScan.svelte";
+  import DnsCheck from "./DnsCheck.svelte";
 
   let { go }: { go: (tab: string) => void } = $props();
 
-  let mode = $state<"site" | "sni">("site");
+  let mode = $state<"site" | "dns" | "sni">("site");
   let domain = $state("");
   let busy = $state(false);
   let report = $state<DiagReport | null>(null);
@@ -84,10 +85,13 @@
     onchange={(m) => (mode = m)}
     options={[
       { value: "site", label: t("Почему не открывается", "Why it does not open") },
+      { value: "dns", label: t("Подмена DNS", "DNS tampering") },
       { value: "sni", label: t("Сканер SNI", "SNI scanner") },
     ]} />
   {#if mode === "sni"}
     <SniScan />
+  {:else if mode === "dns"}
+    <DnsCheck {go} />
   {:else}
   <section class="card block">
     <div class="label">{t("почему не открывается сайт", "why a site does not open")}</div>

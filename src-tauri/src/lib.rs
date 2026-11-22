@@ -2,6 +2,7 @@ mod autostart;
 mod bundled;
 mod diag;
 mod dns;
+mod dnscheck;
 mod doh;
 mod game_filter;
 mod hosts;
@@ -698,6 +699,17 @@ fn lan_addresses() -> Vec<String> {
         .collect()
 }
 
+/// Проверка DNS на подмену провайдером (заглушки и перехват). Только запросы.
+#[tauri::command(async)]
+fn dns_check(domains: String) -> dnscheck::Report {
+    dnscheck::run(&dnscheck::parse_domains(&domains))
+}
+
+#[tauri::command(async)]
+fn dns_check_defaults() -> &'static [&'static str] {
+    dnscheck::DEFAULT_DOMAINS
+}
+
 #[tauri::command(async)]
 fn diag_run(domain: String) -> R<diag::Report> {
     diag::run(&domain)
@@ -1174,6 +1186,8 @@ pub fn run() {
             proxy_log_clear,
             proxy_test_targets,
             diag_run,
+            dns_check,
+            dns_check_defaults,
             lan_addresses,
             sni_defaults,
             sni_scan,

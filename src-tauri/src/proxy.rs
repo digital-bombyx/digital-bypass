@@ -563,7 +563,7 @@ fn send_oob(up: &TcpStream, part: &[u8]) -> std::io::Result<()> {
     Ok(())
 }
 
-fn send_parts(up: &mut TcpStream, parts: &[Vec<u8>], disorder: bool, oob: bool) -> std::io::Result<()> {
+pub(crate) fn send_parts(up: &mut TcpStream, parts: &[Vec<u8>], disorder: bool, oob: bool) -> std::io::Result<()> {
     up.set_nodelay(true)?;
     // Паузы нужны, чтобы части не склеились в один сегмент; при сотнях кусков — короче.
     let pause = Duration::from_micros(if parts.len() > 16 { 200 } else { 2000 });

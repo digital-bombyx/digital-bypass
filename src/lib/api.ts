@@ -190,6 +190,19 @@ export type ProxyLogEntry = {
   error: string | null;
 };
 
+export type DnsDomainVerdict = "ok" | "cdn" | "stub_system" | "stub_intercepted" | "spoofed" | "differs" | "no_answer";
+export type DnsCheckReport = {
+  nowhere_answered: boolean;
+  resolvers: { name: string; server: string; answered: boolean; egress: string | null; ms: number | null }[];
+  system_egress: string | null;
+  trusted_ok: boolean;
+  trusted_error: string | null;
+  intercepted: boolean;
+  intercept_reasons: string[];
+  domains: { domain: string; system: string[]; public: string[]; trusted: string[]; verdict: DnsDomainVerdict; cert_check: string | null }[];
+  stubs: number;
+};
+
 export type Probe = "ok" | "tcp_fail" | "tls_reset" | "tls_timeout" | "tls_cert" | "tls_error";
 export type Verdict = "ok" | "dns" | "dpi" | "ip" | "no_domain" | "unknown";
 export type DiagReport = {
@@ -258,6 +271,8 @@ export const api = {
   proxyLog: () => invoke<ProxyLogEntry[]>("proxy_log"),
   proxyLogClear: () => invoke<void>("proxy_log_clear"),
   diagRun: (domain: string) => invoke<DiagReport>("diag_run", { domain }),
+  dnsCheck: (domains: string) => invoke<DnsCheckReport>("dns_check", { domains }),
+  dnsCheckDefaults: () => invoke<string[]>("dns_check_defaults"),
   lanAddresses: () => invoke<string[]>("lan_addresses"),
   sniDefaults: () => invoke<{ target: string; snis: string[] }>("sni_defaults"),
   sniScan: (target: string, snis: string, timeout: number) => invoke<SniReport>("sni_scan", { target, snis, timeout }),

@@ -239,6 +239,31 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
     case "diag_run":
       await new Promise((r) => setTimeout(r, 700));
       return diagSample(args.domain);
+    case "dns_check_defaults":
+      return ["rutracker.org", "www.linkedin.com", "www.instagram.com", "www.facebook.com", "x.com", "discord.com"];
+    case "dns_check":
+      await new Promise((r) => setTimeout(r, 800));
+      return {
+        nowhere_answered: false,
+        resolvers: [
+          { name: "Google", server: "8.8.8.8", answered: true, egress: "172.217.33.215", ms: 82 },
+          { name: "Cloudflare", server: "1.1.1.1", answered: true, egress: "172.69.50.56", ms: 69 },
+          { name: "Quad9", server: "9.9.9.9", answered: true, egress: "103.194.167.233", ms: 120 },
+        ],
+        system_egress: "178.185.173.115",
+        trusted_ok: true,
+        trusted_error: null,
+        intercepted: false,
+        intercept_reasons: [],
+        stubs: 2,
+        domains: [
+          { domain: "rutracker.org", system: ["172.67.182.196", "104.21.32.39"], public: ["172.67.182.196", "104.21.32.39"], trusted: ["104.21.32.39", "172.67.182.196"], verdict: "ok", cert_check: null },
+          { domain: "www.linkedin.com", system: ["130.211.32.14"], public: ["104.18.41.41"], trusted: ["104.18.41.41"], verdict: "cdn", cert_check: "130.211.32.14: ok" },
+          { domain: "www.instagram.com", system: ["127.0.0.1"], public: ["31.13.72.174"], trusted: ["31.13.72.174"], verdict: "stub_system", cert_check: null },
+          { domain: "www.facebook.com", system: ["127.0.0.1"], public: ["57.144.248.1"], trusted: ["31.13.72.36"], verdict: "stub_system", cert_check: null },
+          { domain: "nnmclub.to", system: ["172.67.144.20"], public: ["188.114.97.3"], trusted: ["172.67.144.20"], verdict: "differs", cert_check: "188.114.97.3: TcpFail" },
+        ],
+      };
     case "lan_addresses":
       return ["192.168.0.3"];
     case "sni_defaults":

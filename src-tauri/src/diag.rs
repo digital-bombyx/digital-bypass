@@ -136,6 +136,62 @@ pub fn probe(ip: IpAddr, host: &str) -> (Probe, Option<u64>, Option<String>) {
     }
 }
 
+/// TCP-поток, у которого первая запись (ClientHello) уходит нарезанной —
+/// как в прокси: куски по TLS-записям с disorder. Нужен, чтобы проверить
+/// сертификат сайта, имя которого режет DPI.
+struct Fragmenting {
+    inner: TcpStream,
+    first: bool,
+}
+
+impl std::io::Read for Fragmenting {
+    fn read(&mut self, b: &mut [u8]) -> std::io::Result<usize> {
+        self.inner.read(b)
+    }
+}
+
+impl std::io::Write for Fragmenting {
+    fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+        if self.first {
+            self.first = false;
+            let o = crate::proxy::SplitOpts { split: "chunk".into(), records: true, chunk: 4, ..Default::default() };
+            crate::proxy::send_parts(&mut self.inner, &crate::proxy::split_with(b, &o), true, false)?;
+            return Ok(b.len());
+        }
+        self.inner.write(b)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+/// Как `probe`, но ClientHello нарезается — для сайтов, которые режет DPI.
+pub fn probe_fragmented(ip: IpAddr, host: &str) -> (Probe, Option<u64>, Option<String>) {
+    let t0 = Instant::now();
+    let tcp = match TcpStream::connect_timeout(&SocketAddr::new(ip, 443), TIMEOUT) {
+        Ok(s) => s,
+        Err(e) => return (Probe::TcpFail, None, Some(e.to_string())),
+    };
+    let _ = tcp.set_read_timeout(Some(TIMEOUT));
+    let _ = tcp.set_write_timeout(Some(TIMEOUT));
+    let name = match rustls::pki_types::ServerName::try_from(host.to_string()) {
+        Ok(n) => n,
+        Err(e) => return (Probe::TlsError, None, Some(e.to_string())),
+    };
+    let conn = match rustls::ClientConnection::new(crate::doh::tls_config(), name) {
+        Ok(c) => c,
+        Err(e) => return (Probe::TlsError, None, Some(e.to_string())),
+    };
+    let mut tls = rustls::StreamOwned::new(conn, Fragmenting { inner: tcp, first: true });
+    while tls.conn.is_handshaking() {
+        if let Err(e) = tls.conn.complete_io(&mut tls.sock) {
+            let (p, d) = classify(&e);
+            return (p, None, Some(d));
+        }
+    }
+    (Probe::Ok, Some(t0.elapsed().as_millis() as u64), None)
+}
+
 /// Вердикт по результатам (чистая функция — покрыта тестами).
 pub fn verdict(system: &[IpAddr], doh: &[IpAddr], bogus: bool, checks: &[Check]) -> Verdict {
     if system.is_empty() && doh.is_empty() {

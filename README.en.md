@@ -60,6 +60,8 @@ DPI bypass **without admin rights and without a driver** — for work PCs and wh
 
 Enter a domain: the app compares the system DNS with DoH, tries TCP and TLS to each address and tells what is wrong — DNS spoofing, DPI by site name or IP blocking — and which module helps.
 
+**DNS tampering**: finds ISP stubs (127.0.0.1 and foreign addresses for blocked domains) and interception of queries to 8.8.8.8, 1.1.1.1, 9.9.9.9 — then changing DNS does not help and encrypted DNS is needed. The reference is DoT; differing addresses are verified by the site's certificate (with a split ClientHello so DPI does not interfere).
+
 The **SNI scanner** sends a TLS hello with different site names to one address and shows which names DPI lets through. It helps to tell whether whitelists are on and to pick a name for VLESS Reality or a fake SNI for strategies. The idea comes from [sni-spoofing-rust](https://github.com/therealaleph/sni-spoofing-rust).
 
 ### hosts
