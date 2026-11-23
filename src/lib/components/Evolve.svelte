@@ -3,7 +3,8 @@
   import { api, on, strategyName, type EvolveRun, type TestRun } from "$lib/api";
   import { app, act, toast, refresh } from "$lib/state.svelte";
   import { t } from "$lib/i18n.svelte";
-  import { Dna, Play, Square, Save } from "@lucide/svelte";
+  import { Dna, Play, Square, Save, X } from "@lucide/svelte";
+  import Segmented from "./Segmented.svelte";
 
   let { kind, picked, last, busy }: { kind: "standard" | "dpi"; picked: Set<string>; last: TestRun | null; busy: boolean } = $props();
 
@@ -12,15 +13,56 @@
   let rounds = $state(3);
   const live = $derived(!!ev && !ev.finished);
 
-  // Засев: 4 лучших из последнего теста того же вида, иначе первые 4 выбранных.
-  const seeds = $derived.by(() => {
+  /** Сколько стратегий в засеве. */
+  const MAX_SEEDS = 4;
+  // Засев вручную — для экспериментов; выбор помнится в этом браузере.
+  const KEY = "evolve.seeds";
+  const load = (): { mode: "auto" | "manual"; files: string[] } => {
+    try {
+      const v = JSON.parse(localStorage.getItem(KEY) ?? "null");
+      if (v && (v.mode === "auto" || v.mode === "manual") && Array.isArray(v.files)) return v;
+    } catch {}
+    return { mode: "auto", files: [] };
+  };
+  const saved0 = load();
+  let mode = $state<"auto" | "manual">(saved0.mode);
+  let manual = $state<string[]>(saved0.files);
+  let filter = $state("");
+  $effect(() => {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ mode, files: manual }));
+    } catch {}
+  });
+  // Удалённые стратегии из ручного выбора убираем.
+  const manualValid = $derived(manual.filter((f) => ov.strategies.some((s) => s.file === f)));
+  /** ok из последнего теста того же вида — подсказка при ручном выборе. */
+  const okOf = $derived.by(() => {
+    const m = new Map<string, number>();
+    if (last?.finished && last.kind === kind) for (const r of last.results) if (!r.error) m.set(r.file, r.ok);
+    return m;
+  });
+  const shown = $derived(
+    ov.strategies
+      .map((s) => s.file)
+      .filter((f) => !filter.trim() || strategyName(f).toLowerCase().includes(filter.trim().toLowerCase()))
+      .sort((a, b) => (okOf.get(b) ?? -1) - (okOf.get(a) ?? -1)),
+  );
+  function togglePick(f: string) {
+    if (manual.includes(f)) manual = manual.filter((x) => x !== f);
+    else if (manualValid.length < MAX_SEEDS) manual = [...manualValid, f];
+  }
+
+  // Засев: вручную — как выбрано; иначе 4 лучших из последнего теста того же вида,
+  // а без теста — первые 4 выбранных.
+  const autoSeeds = $derived.by(() => {
     const pickedList = ov.strategies.map((s) => s.file).filter((f) => picked.has(f));
     if (last?.finished && last.kind === kind && last.results.length) {
       const top = [...last.results].filter((r) => picked.has(r.file) && !r.error).sort((a, b) => b.ok - a.ok).map((r) => r.file);
-      if (top.length) return top.slice(0, 4);
+      if (top.length) return top.slice(0, MAX_SEEDS);
     }
-    return pickedList.slice(0, 4);
+    return pickedList.slice(0, MAX_SEEDS);
   });
+  const seeds = $derived(mode === "manual" ? manualValid : autoSeeds);
   // Оценка числа кандидатов: засев + раунды × зал славы (4) × 3 мутанта.
   const planned = $derived(seeds.length + rounds * 4 * 3);
 
@@ -57,7 +99,43 @@
       "mutates the TCP part of the best strategies (technique, pos, seqovl, repeats, fooling, fake) and checks with the tester; each candidate twice, the worst counts; on a tie the simpler wins",
     )}
   </div>
-  {#if !(last?.finished && last.kind === kind)}
+  <Segmented
+    small
+    options={[
+      { value: "auto", label: t("Засев: лучшие из теста", "Seeds: best from the test") },
+      { value: "manual", label: t("Засев: выбрать вручную", "Seeds: pick by hand") },
+    ]}
+    value={mode}
+    disabled={busy || live}
+    onchange={(v) => (mode = v as "auto" | "manual")}
+  />
+  {#if mode === "manual"}
+    <div class="pick">
+      <div class="pickhead mono">
+        <span>{t(`выбрано ${manualValid.length} из ${MAX_SEEDS}`, `${manualValid.length} of ${MAX_SEEDS} picked`)}</span>
+        {#each manualValid as f (f)}
+          <button class="chip sel" disabled={busy || live} onclick={() => togglePick(f)} title={t("Убрать", "Remove")}>{strategyName(f)} <X size={10} /></button>
+        {/each}
+        <span class="grow"></span>
+        <input class="input flt" spellcheck="false" placeholder={t("поиск", "search")} bind:value={filter} />
+      </div>
+      <div class="list mono">
+        {#each shown as f (f)}
+          {@const on = manualValid.includes(f)}
+          <button class="item" class:on disabled={busy || live || (!on && manualValid.length >= MAX_SEEDS)} onclick={() => togglePick(f)}>
+            <span class="nm">{strategyName(f)}</span>
+            {#if okOf.has(f)}<span class="ok">ok {okOf.get(f)}</span>{/if}
+          </button>
+        {/each}
+      </div>
+      <div class="hint faint mono">
+        {t(
+          "любые стратегии, в том числе не из теста; рядом — результат последнего теста этого вида. Планка для сохранения — лучший результат засева в тесте (если он там был).",
+          "any strategies, including ones outside the test; next to them — the last test result of this kind. The bar for saving is the seeds' best result in the test (if they were in it).",
+        )}
+      </div>
+    </div>
+  {:else if !(last?.finished && last.kind === kind)}
     <div class="first mono">
       {t(
         "Сначала прогоните обычный тест стратегий выше (тот же вид — стандартный или DPI): автоподбор возьмёт для засева 4 лучшие из него. Без теста засев — первые выбранные стратегии наугад.",
@@ -171,6 +249,75 @@
   }
   .seeds {
     font-size: 11.5px;
+  }
+  .pick {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .pickhead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .chip.sel {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    color: var(--text);
+    border-color: var(--accent);
+  }
+  .flt {
+    width: 160px;
+    height: 26px;
+  }
+  .list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 4px;
+    max-height: 190px;
+    overflow: auto;
+    padding: 2px;
+  }
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    font-size: 11.5px;
+    text-align: left;
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .item:hover:not(:disabled) {
+    border-color: var(--border);
+    color: var(--text);
+  }
+  .item.on {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+  .item:disabled:not(.on) {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .nm {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ok {
+    color: var(--sage);
+    font-size: 11px;
   }
   .progline {
     display: flex;

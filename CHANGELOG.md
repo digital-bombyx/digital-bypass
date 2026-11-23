@@ -8,6 +8,8 @@
 
 ### Что нового
 
+- **Автоподбор: засев вручную** — можно выбрать до 4 любых стратегий вместо лучших из теста; рядом показан их результат в последнем тесте, выбор запоминается.
+
 - **Вкладка Tor** — обход того, что не берут zapret и нарезка: блокировок по IP, геоограничений, адресов .onion. Внутри — `tor.exe` и `lyrebird` из официального Tor Expert Bundle 16.0.1 (SHA-256 сверяется при сборке, сверить самому — [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt)).
   - Транспорты obfs4, webtunnel, snowflake, meek, свои мосты или напрямую; «Авто» перебирает их по очереди, если подключение стоит 90 с.
   - **Поиск мостов** (из [TorBridgeMaster](https://github.com/digital-bombyx/TorBridgeMaster), переписан на Rust): свежие списки [scriptzteam/Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2) → проверка адресов → рукопожатие через lyrebird до ответа реле Tor. Десяток рабочих мостов — меньше чем за минуту, без полного запуска tor на каждый.
