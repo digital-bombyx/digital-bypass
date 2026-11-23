@@ -35,6 +35,8 @@ pub struct Settings {
     pub mcp: crate::mcp::Settings,
     /// Дополнения к стратегиям zapret2.
     pub addons: crate::addons::Addons,
+    /// Tor (мосты, транспорт).
+    pub tor: crate::tor::Config,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -79,6 +81,7 @@ impl Default for Settings {
             net: Default::default(),
             mcp: Default::default(),
             addons: Default::default(),
+            tor: Default::default(),
         }
     }
 }
@@ -110,6 +113,7 @@ pub fn load(config_dir: &Path) -> Settings {
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default();
     s.proxy.normalize();
+    s.tor.normalize();
     if s.mcp.token.is_empty() {
         s.mcp.token = crate::mcp::new_token();
         save(config_dir, &s);

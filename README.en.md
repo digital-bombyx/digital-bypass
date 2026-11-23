@@ -64,6 +64,18 @@ DPI bypass **without admin rights and without a driver** — for work PCs and wh
 
 A local MTProto proxy for Telegram Desktop — a port of [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) (Flowseal, MIT). Traffic goes over WebSocket to Telegram's web endpoints; if they are unreachable — through your own Cloudflare Worker or a CF proxy (domains behind Cloudflare), as a last resort — direct TCP. TLS to Telegram and Cloudflare uses a split ClientHello, as in the bypass proxy; the direct route can override the SNI (e.g. with a whitelisted name). Connecting Telegram takes one click (a `tg://proxy` link). Messages stay MTProto-encrypted.
 
+### Tor
+
+For what zapret and splitting cannot fix: IP-blocked sites, geo-restrictions, .onion addresses. Ships `tor.exe` and `lyrebird` from the official [Tor Expert Bundle](https://www.torproject.org/download/tor/) (16.0.1, SHA-256 checked at build time; check it yourself against [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt)).
+
+- **Transports**: obfs4, webtunnel, snowflake, meek, your own bridges or direct. "Auto" goes in turn: own and found bridges → built-in obfs4 → snowflake → meek.
+- **Bridge search** (from [TorBridgeMaster](https://github.com/digital-bombyx/TorBridgeMaster)): fresh obfs4 and webtunnel bridges from [Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2), verified through lyrebird up to the Tor relay's reply — under a minute.
+- **Sites through Tor**: the bypass proxy sends listed domains and every `.onion` to Tor, everything else as usual. Any program can use SOCKS5 `127.0.0.1:9055`.
+- **Bridges through the bypass proxy**: if your ISP chokes webtunnel's TLS, tor reaches bridges through our proxy with a split ClientHello.
+- New identity, a log, a directory cache (connects in seconds from the second start).
+
+This bypasses blocks; it is not anonymity: a browser behind the proxy is identifiable by its fingerprint and cookies. For anonymity use Tor Browser.
+
 ### Check
 
 Enter a domain: the app compares the system DNS with DoH, tries TCP and TLS to each address and tells what is wrong — DNS spoofing, DPI by site name or IP blocking — and which module helps.
@@ -104,8 +116,8 @@ What to expect, based on public reports of how each country filters traffic (not
 | Country | Main techniques | What helps | What does not |
 |---|---|---|---|
 | 🇹🇷 Turkey | ISP DNS spoofing, DPI on the site name (SNI) for some sites | DNS module or DoH resolver, the bypass proxy — usually enough | bandwidth throttling during events, IP blocks |
-| 🇮🇷 Iran | DPI on SNI, DNS spoofing, wide IP blocking, throttling of foreign TLS, whitelists and shutdowns during unrest | the proxy and DoH for sites filtered by name; the SNI scanner to see what passes; the Telegram module if Cloudflare is reachable | anything blocked by IP, whitelist mode, shutdowns |
-| 🇨🇳 China | the Great Firewall: IP blocking of major services, DNS injection, TCP reassembly, blocking of DoH/DoT | little: the check will show what is going on | Google, YouTube, X and similar are blocked by IP — you need a VPN with your own server (for example VLESS + Reality) |
+| 🇮🇷 Iran | DPI on SNI, DNS spoofing, wide IP blocking, throttling of foreign TLS, whitelists and shutdowns during unrest | the proxy and DoH for sites filtered by name; the SNI scanner to see what passes; the Telegram module if Cloudflare is reachable; Tor with snowflake, webtunnel or found bridges for IP blocks | whitelist mode, shutdowns |
+| 🇨🇳 China | the Great Firewall: IP blocking of major services, DNS injection, TCP reassembly, blocking of DoH/DoT | the Tor tab with snowflake or meek may work, slowly; the check shows what is going on | most bridges are found and blocked quickly — a VPN with your own server (for example VLESS + Reality) is more reliable |
 
 If something works or fails for you in another country, an issue with the **Check** result is welcome.
 
@@ -129,6 +141,8 @@ $env:ZAPRET_SRC = "D:\zapret-discord-youtube"   # this is the default
 npm run tauri build
 ```
 
+`scripts/sync-tor.mjs` downloads the Tor Expert Bundle from dist.torproject.org and checks its SHA-256 (offline: `$env:TOR_TARBALL = "path\to\archive.tar.gz"`).
+
 ## Credits
 
 - **[bol-van](https://github.com/bol-van)** — [zapret](https://github.com/bol-van/zapret) and [zapret2](https://github.com/bol-van/zapret2).
@@ -137,6 +151,8 @@ npm run tauri build
 - Authors of [PR #18202](https://github.com/Flowseal/zapret-discord-youtube/pull/18202) — the zapret2 port.
 - **[basil00/WinDivert](https://github.com/basil00/WinDivert)**, **[hyperion-cs/dpi-checkers](https://github.com/hyperion-cs/dpi-checkers)**.
 - **[Flowseal/tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy)** (MIT) — the Telegram module is a port of it; the Worker script and the CF domain list come from it.
+- **[The Tor Project](https://www.torproject.org/)** — tor and lyrebird (Tor Expert Bundle, BSD-3-Clause and others; license texts in `tor\docs`).
+- **[scriptzteam/Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2)** — bridge lists for the search.
 
 ### Ideas
 

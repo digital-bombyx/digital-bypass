@@ -121,11 +121,14 @@ pub struct Rules {
     /// Через свой Cloudflare Worker (сайты, заблокированные по IP или с геоограничениями).
     #[serde(default)]
     pub worker: Vec<String>,
+    /// Через Tor (когда он подключён). Адреса .onion идут в Tor всегда.
+    #[serde(default)]
+    pub tor: Vec<String>,
 }
 
 impl Default for Rules {
     fn default() -> Self {
-        Rules { scope: "all".into(), zapret_lists: true, bypass: Vec::new(), skip: Vec::new(), block: Vec::new(), worker: Vec::new() }
+        Rules { scope: "all".into(), zapret_lists: true, bypass: Vec::new(), skip: Vec::new(), block: Vec::new(), worker: Vec::new(), tor: Vec::new() }
     }
 }
 
@@ -326,6 +329,7 @@ fn action_name(a: Option<Action>) -> &'static str {
         Some(Action::Block) => "block",
         Some(Action::Pass) => "pass",
         Some(Action::Worker) => "worker",
+        Some(Action::Tor) => "tor",
         _ => "bypass",
     }
 }
@@ -428,6 +432,13 @@ pub enum Action {
     Block,
     /// Через свой Worker.
     Worker,
+    /// Через Tor.
+    Tor,
+}
+
+/// Адрес скрытого сервиса Tor.
+pub fn is_onion(host: &str) -> bool {
+    host.trim_end_matches('.').to_ascii_lowercase().ends_with(".onion")
 }
 
 pub struct Matcher {
@@ -436,6 +447,7 @@ pub struct Matcher {
     skip: DomainSet,
     block: DomainSet,
     worker: DomainSet,
+    tor: DomainSet,
 }
 
 impl Matcher {
@@ -448,6 +460,7 @@ impl Matcher {
     pub fn with_worker(r: &Rules, extra_bypass: &[String], worker_on: bool) -> Self {
         Matcher {
             worker: DomainSet::new(if worker_on { &r.worker[..] } else { &[] }),
+            tor: DomainSet::new(&r.tor),
             scope_listed: r.scope == "listed",
             bypass: DomainSet::new(r.bypass.iter().chain(extra_bypass.iter())),
             skip: DomainSet::new(&r.skip),
@@ -457,6 +470,9 @@ impl Matcher {
     pub fn action(&self, host: &str) -> Action {
         if self.block.matches(host) {
             Action::Block
+        } else if is_onion(host) || (self.tor.matches(host) && crate::tor::ready_port().is_some()) {
+            // Список «через Tor» действует, только пока Tor подключён; иначе — обычные правила.
+            Action::Tor
         } else if self.worker.matches(host) {
             Action::Worker
         } else if self.skip.matches(host) {
@@ -922,6 +938,8 @@ pub struct Stats {
     pub blocked: u64,
     /// Через свой Worker.
     pub via_worker: u64,
+    /// Через Tor.
+    pub via_tor: u64,
     /// Доменов в кэше DNS и в списке обхода.
     pub dns_cached: usize,
     pub bypass_domains: usize,
@@ -944,6 +962,7 @@ struct Shared {
     passed: AtomicU64,
     blocked: AtomicU64,
     via_worker: AtomicU64,
+    via_tor: AtomicU64,
     /// Сайт → способ, который сработал (если не основной), с отметкой времени.
     auto_cache: Mutex<std::collections::HashMap<String, (Variant, std::time::Instant)>>,
     auto_retries: AtomicU64,
@@ -969,6 +988,12 @@ impl Shared {
             }
         }
         Err(last)
+    }
+
+    /// Соединение через SOCKS tor (имя разрешает сам tor).
+    fn tor_up(&self, host: &str, port: u16) -> std::io::Result<TcpStream> {
+        let p = crate::tor::ready_port().ok_or_else(|| std::io::Error::other(crate::tr!("Tor не подключён", "Tor is not connected")))?;
+        crate::tor::socks_connect(p, host, port, Duration::from_secs(60))
     }
 
     fn resolve(&self, host: &str, port: u16) -> Vec<SocketAddr> {
@@ -1095,6 +1120,7 @@ impl Shared {
             Action::Pass => &self.passed,
             Action::Block => &self.blocked,
             Action::Worker => &self.via_worker,
+            Action::Tor => &self.via_tor,
         }
         .fetch_add(1, Ordering::Relaxed);
     }
@@ -1185,6 +1211,18 @@ impl Shared {
                 self.log_entry(tr, t0, true, None);
                 return crate::telegram::ws_pipe(client, ws, early, Vec::new());
             }
+            if action == Action::Tor {
+                let up = match self.tor_up(&host, port) {
+                    Ok(u) => u,
+                    Err(e) => {
+                        let _ = client.write_all(&[5, 4, 0, 1, 0, 0, 0, 0, 0, 0]);
+                        return Err(e);
+                    }
+                };
+                client.write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0])?;
+                self.log_entry(tr, t0, true, None);
+                return relay(client, up);
+            }
             let up = match self.connect(&host, port) {
                 Ok(u) => u,
                 Err(e) => {
@@ -1226,6 +1264,19 @@ impl Shared {
                     self.log_entry(tr, t0, true, None);
                     return crate::telegram::ws_pipe(client, ws, wearly, early);
                 }
+                if action == Action::Tor {
+                    let mut up = match self.tor_up(&host, port) {
+                        Ok(u) => u,
+                        Err(e) => {
+                            let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
+                            return Err(e);
+                        }
+                    };
+                    client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")?;
+                    up.write_all(&early)?;
+                    self.log_entry(tr, t0, true, None);
+                    return relay(client, up);
+                }
                 let up = match self.connect(&host, port) {
                     Ok(u) => u,
                     Err(e) => {
@@ -1252,6 +1303,15 @@ impl Shared {
                     first.extend_from_slice(&early);
                     self.log_entry(tr, t0, true, None);
                     return crate::telegram::ws_pipe(client, ws, wearly, first);
+                }
+                if self.matcher.action(&host) == Action::Tor {
+                    tr.action = Some(Action::Tor);
+                    self.count(Action::Tor);
+                    let mut up = self.tor_up(&host, port)?;
+                    up.write_all(&head)?;
+                    up.write_all(&early)?;
+                    self.log_entry(tr, t0, true, None);
+                    return relay(client, up);
                 }
                 self.count(Action::Pass);
                 let mut up = self.connect(&host, port)?;
@@ -1395,6 +1455,7 @@ impl Proxy {
             passed: AtomicU64::new(0),
             blocked: AtomicU64::new(0),
             via_worker: AtomicU64::new(0),
+            via_tor: AtomicU64::new(0),
             auto_cache: Mutex::new(std::collections::HashMap::new()),
             auto_retries: AtomicU64::new(0),
             positions,
@@ -1459,6 +1520,7 @@ impl Proxy {
             passed: self.shared.passed.load(Ordering::Relaxed),
             blocked: self.shared.blocked.load(Ordering::Relaxed),
             via_worker: self.shared.via_worker.load(Ordering::Relaxed),
+            via_tor: self.shared.via_tor.load(Ordering::Relaxed),
             dns_cached: self.shared.resolver.as_ref().map(|r| r.len()).unwrap_or(0),
             bypass_domains: self.shared.matcher.bypass.len(),
             auto_retries: self.shared.auto_retries.load(Ordering::Relaxed),
@@ -1923,6 +1985,7 @@ mod tests {
             skip: vec!["sberbank.ru".into()],
             block: vec!["ads.example.com".into()],
             worker: vec![],
+            tor: vec![],
         };
         let m = Matcher::new(&r, &[]);
         assert_eq!(m.action("www.youtube.com"), Action::Bypass);
@@ -2125,6 +2188,11 @@ mod tests {
         let blocked = Rules { worker: vec!["a.com".into()], block: vec!["a.com".into()], ..Default::default() };
         assert_eq!(Matcher::with_worker(&blocked, &[], true).action("a.com"), Action::Block);
         assert!(!WorkerCfg::default().ready());
+        // Tor не подключён: список «через Tor» не действует, .onion — всегда в Tor.
+        let tor = Rules { tor: vec!["rutracker.org".into()], ..Default::default() };
+        assert_eq!(Matcher::new(&tor, &[]).action("rutracker.org"), Action::Bypass);
+        assert_eq!(Matcher::new(&tor, &[]).action("duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion"), Action::Tor);
+        assert!(is_onion("x.ONION.") && !is_onion("onion.com"));
         // Старый конфиг без новых полей читается.
         let c: Config = serde_json::from_str(r#"{"rules":{"scope":"all","zapret_lists":true,"bypass":[],"skip":[],"block":[]}}"#).unwrap();
         assert!(c.rules.worker.is_empty() && c.worker.fragment);

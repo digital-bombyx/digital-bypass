@@ -147,7 +147,7 @@ export type StubStatus = {
   stats: { queries: number; cached: number; ech_stripped?: number; errors: number; last_error: string | null; ipv6: boolean; addr: string; template: string } | null;
 };
 
-export type ProxyRules = { scope: "all" | "listed"; zapret_lists: boolean; bypass: string[]; skip: string[]; block: string[]; worker: string[] };
+export type ProxyRules = { scope: "all" | "listed"; zapret_lists: boolean; bypass: string[]; skip: string[]; block: string[]; worker: string[]; tor?: string[] };
 export type ProxyWorker = { host: string; key: string; fragment: boolean };
 export type ProxyConfig = {
   port: number;
@@ -174,7 +174,7 @@ export type ProxyConfig = {
 export type ProxyStatus = {
   config: ProxyConfig;
   enabled: boolean;
-  stats: { running: boolean; port: number; active: number; total: number; failed: number; system: boolean; lan: boolean; auth: boolean; bypassed: number; passed: number; blocked: number; via_worker?: number; dns_cached: number; bypass_domains: number; auto_retries: number; auto_sites: number; last_error: string | null };
+  stats: { running: boolean; port: number; active: number; total: number; failed: number; system: boolean; lan: boolean; auth: boolean; bypassed: number; passed: number; blocked: number; via_worker?: number; via_tor?: number; dns_cached: number; bypass_domains: number; auto_retries: number; auto_sites: number; last_error: string | null };
 };
 
 export type ProxyVariant = { split: ProxyConfig["split"]; unit: ProxyConfig["unit"]; disorder: boolean; oob: boolean };
@@ -190,7 +190,7 @@ export type ProxyLogEntry = {
   ts: number;
   host: string;
   port: number;
-  action: "bypass" | "pass" | "block";
+  action: "bypass" | "pass" | "block" | "worker" | "tor";
   method: string | null;
   tries: number;
   ms: number | null;
@@ -210,6 +210,23 @@ export type DnsCheckReport = {
   domains: { domain: string; system: string[]; public: string[]; trusted: string[]; verdict: DnsDomainVerdict; cert_check: string | null }[];
   stubs: number;
 };
+
+export type TorTransport = "auto" | "obfs4" | "webtunnel" | "snowflake" | "meek" | "custom" | "direct";
+export type TorConfig = { socks_port: number; transport: TorTransport; bridges: string[]; found: string[]; via_proxy: boolean; enabled: boolean };
+export type TorRun = { running: boolean; ready: boolean; percent: number; phase: string; tier: string; tiers: string[]; socks_port: number; error: string | null; elapsed: number };
+export type TorStatus = {
+  config: TorConfig;
+  status: TorRun;
+  available: boolean;
+  version: string | null;
+  domains: string[];
+  proxy_running: boolean;
+  proxy_port: number;
+  finding: boolean;
+};
+export type BridgeFound = { line: string; transport: string; ms: number };
+export type BridgeReport = { found: BridgeFound[]; checked: number; candidates: number; downloaded: [string, number][]; errors: string[]; cancelled: boolean; secs: number };
+export type BridgeProgress = { stage: "download" | "tcp" | "check"; done: number; total: number; found: number };
 
 export type TgConfig = {
   port: number;
@@ -389,6 +406,15 @@ export const api = {
   tgSetConfig: (config: TgConfig) => invoke<TgStatus>("tg_set_config", { config }),
   tgRegenSecret: () => invoke<TgStatus>("tg_regen_secret"),
   tgOpenLink: () => invoke<void>("tg_open_link"),
+  torStatus: () => invoke<TorStatus>("tor_status"),
+  torStart: (config: TorConfig) => invoke<TorStatus>("tor_start", { config }),
+  torStop: () => invoke<TorStatus>("tor_stop"),
+  torSetConfig: (config: TorConfig) => invoke<TorStatus>("tor_set_config", { config }),
+  torNewIdentity: () => invoke<void>("tor_new_identity"),
+  torLog: () => invoke<string[]>("tor_log"),
+  torSetDomains: (domains: string[]) => invoke<TorStatus>("tor_set_domains", { domains }),
+  torFindBridges: (kinds: string[], want: number) => invoke<BridgeReport>("tor_find_bridges", { kinds, want }),
+  torFindCancel: () => invoke<void>("tor_find_cancel"),
   sniDefaults: () => invoke<{ target: string; snis: string[] }>("sni_defaults"),
   sniScan: (target: string, snis: string, timeout: number) => invoke<SniReport>("sni_scan", { target, snis, timeout }),
   listPresets: () => invoke<ListPreset[]>("list_presets"),

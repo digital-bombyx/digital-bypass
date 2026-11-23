@@ -1,6 +1,7 @@
 mod addons;
 mod addons_strats;
 mod autostart;
+mod bridges;
 mod bundled;
 mod diag;
 mod dns;
@@ -23,6 +24,7 @@ mod sniscan;
 mod telegram;
 mod strategy;
 mod tester;
+mod tor;
 mod util;
 mod winapi;
 mod zapret_dir;
@@ -60,6 +62,13 @@ pub struct AppState {
     last_evolve: Mutex<Option<evolve::EvolveRun>>,
     mcp: Mutex<Option<mcp::Server>>,
     mcp_error: Mutex<Option<String>>,
+    /// Папка с tor.exe и lyrebird (ресурсы установщика).
+    tor_dir: Option<PathBuf>,
+    /// Где tor хранит torrc и кэш (локальные данные приложения).
+    tor_work: PathBuf,
+    tor: Mutex<Option<tor::Tor>>,
+    tor_finding: AtomicBool,
+    tor_find_cancel: AtomicBool,
 }
 
 impl AppState {
@@ -904,6 +913,160 @@ impl AppState {
 }
 
 #[derive(Serialize)]
+struct TorStatus {
+    config: tor::Config,
+    status: tor::Status,
+    /// tor.exe есть в установке.
+    available: bool,
+    version: Option<String>,
+    /// Домены прокси-обходчика «через Tor».
+    domains: Vec<String>,
+    proxy_running: bool,
+    proxy_port: u16,
+    finding: bool,
+}
+
+fn tor_status_of(state: &AppState) -> TorStatus {
+    let (config, domains, proxy_port) = {
+        let s = state.settings.lock().unwrap();
+        (s.tor.clone(), s.proxy.rules.tor.clone(), s.proxy.port)
+    };
+    let status = state.tor.lock().unwrap().as_ref().map(|t| t.status()).unwrap_or_else(|| tor::Status { socks_port: config.socks_port, ..Default::default() });
+    TorStatus {
+        available: state.tor_dir.is_some(),
+        version: state.tor_dir.as_deref().and_then(tor::version),
+        proxy_running: state.proxy.lock().unwrap().is_some(),
+        finding: state.tor_finding.load(Ordering::SeqCst),
+        config,
+        status,
+        domains,
+        proxy_port,
+    }
+}
+
+impl AppState {
+    fn tor_start(&self, mut cfg: tor::Config) -> R<()> {
+        cfg.normalize();
+        let dir = self.tor_dir.clone().ok_or_else(|| tr!("В этой сборке нет Tor (npm run sync-tor)", "This build has no Tor (npm run sync-tor)"))?;
+        let old = self.tor.lock().unwrap().take();
+        drop(old);
+        let t = tor::Tor::start(&cfg, &dir, &self.tor_work, proxy_port_if_running(self))?;
+        *self.tor.lock().unwrap() = Some(t);
+        self.update(|s| {
+            s.tor = cfg;
+            s.tor.enabled = true;
+        });
+        Ok(())
+    }
+
+    fn tor_stop(&self) {
+        let old = self.tor.lock().unwrap().take();
+        drop(old);
+        self.update(|s| s.tor.enabled = false);
+    }
+}
+
+#[tauri::command(async)]
+fn tor_status(state: State<AppState>) -> TorStatus {
+    tor_status_of(&state)
+}
+
+#[tauri::command(async)]
+fn tor_start(app: AppHandle, state: State<AppState>, config: tor::Config) -> R<TorStatus> {
+    let r = state.tor_start(config);
+    refresh_tray(&app);
+    r?;
+    Ok(tor_status_of(&state))
+}
+
+#[tauri::command(async)]
+fn tor_stop(app: AppHandle, state: State<AppState>) -> TorStatus {
+    state.tor_stop();
+    refresh_tray(&app);
+    tor_status_of(&state)
+}
+
+/// Сохранить настройки Tor; работающий перезапустить с ними.
+#[tauri::command(async)]
+fn tor_set_config(state: State<AppState>, mut config: tor::Config) -> R<TorStatus> {
+    config.normalize();
+    if state.tor.lock().unwrap().is_some() {
+        state.tor_start(config)?;
+    } else {
+        state.update(|s| {
+            let enabled = s.tor.enabled;
+            s.tor = config;
+            s.tor.enabled = enabled;
+        });
+    }
+    Ok(tor_status_of(&state))
+}
+
+#[tauri::command(async)]
+fn tor_new_identity(state: State<AppState>) -> R<()> {
+    state.tor.lock().unwrap().as_ref().ok_or_else(|| tr!("Tor не запущен", "Tor is not running"))?.new_identity()
+}
+
+#[tauri::command(async)]
+fn tor_log(state: State<AppState>) -> Vec<String> {
+    state.tor.lock().unwrap().as_ref().map(|t| t.log()).unwrap_or_default()
+}
+
+/// Домены прокси-обходчика, которые идут через Tor; работающий прокси перезапускается.
+#[tauri::command(async)]
+fn tor_set_domains(app: AppHandle, state: State<AppState>, domains: Vec<String>) -> R<TorStatus> {
+    let mut d: Vec<String> = domains
+        .iter()
+        .map(|x| x.trim().trim_start_matches("*.").trim_start_matches("https://").trim_start_matches("http://").split('/').next().unwrap_or("").to_ascii_lowercase())
+        .filter(|x| !x.is_empty())
+        .collect();
+    d.dedup();
+    let mut cfg = state.settings.lock().unwrap().proxy.clone();
+    cfg.rules.tor = d;
+    if state.proxy.lock().unwrap().is_some() {
+        let r = state.proxy_start(cfg);
+        refresh_tray(&app);
+        r?;
+    } else {
+        state.update(|s| s.proxy = cfg);
+    }
+    let _ = app.emit("proxy-changed", ());
+    Ok(tor_status_of(&state))
+}
+
+/// Поиск рабочих мостов; прогресс — событием `tor-bridges-progress`.
+/// Найденные сохраняются в настройках и идут первыми при подключении.
+#[tauri::command(async)]
+fn tor_find_bridges(app: AppHandle, state: State<AppState>, kinds: Vec<String>, want: usize) -> R<bridges::Report> {
+    let dir = state.tor_dir.clone().ok_or_else(|| tr!("В этой сборке нет Tor", "This build has no Tor"))?;
+    let kinds: Vec<&str> = kinds.iter().map(String::as_str).filter(|k| matches!(*k, "obfs4" | "webtunnel")).collect();
+    if kinds.is_empty() {
+        return Err(tr!("выберите obfs4 и/или webtunnel", "choose obfs4 and/or webtunnel"));
+    }
+    if state.tor_finding.swap(true, Ordering::SeqCst) {
+        return Err(tr!("поиск уже идёт", "a search is already running"));
+    }
+    state.tor_find_cancel.store(false, Ordering::SeqCst);
+    let proxy = proxy_port_if_running(&state);
+    let via = state.settings.lock().unwrap().tor.via_proxy;
+    let emit = app.clone();
+    let r = bridges::find(&dir, &kinds, want.clamp(1, 30), proxy, via && proxy.is_some(), &state.tor_find_cancel, move |p| {
+        let _ = emit.emit("tor-bridges-progress", p);
+    });
+    state.tor_finding.store(false, Ordering::SeqCst);
+    let r = r?;
+    if !r.found.is_empty() {
+        state.update(|s| s.tor.found = r.found.iter().map(|f| f.line.clone()).collect());
+    }
+    Ok(r)
+}
+
+#[tauri::command]
+fn tor_find_cancel(state: State<AppState>) {
+    state.tor_find_cancel.store(true, Ordering::SeqCst);
+}
+
+#[derive(Serialize)]
 struct NetStatus {
     rules: netrules::NetRules,
     current: Vec<String>,
@@ -1193,10 +1356,12 @@ fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let stub = MenuItem::with_id(app, "stub", stub_label, false, None::<&str>)?;
     let tg_on = state.tg.lock().unwrap().is_some();
     let tg = CheckMenuItem::with_id(app, "tg", tr!("Telegram-прокси", "Telegram proxy"), true, tg_on, None::<&str>)?;
+    let tor_on = state.tor.lock().unwrap().is_some();
+    let torm = CheckMenuItem::with_id(app, "tor", "Tor", state.tor_dir.is_some(), tor_on, None::<&str>)?;
     let open = MenuItem::with_id(app, "open", tr!("Открыть", "Open"), true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", tr!("Выход", "Quit"), true, None::<&str>)?;
     let sep = || PredefinedMenuItem::separator(app);
-    Menu::with_items(app, &[&toggle, &sub, &sep()?, &proxy, &tg, &stub, &sep()?, &open, &quit])
+    Menu::with_items(app, &[&toggle, &sub, &sep()?, &proxy, &tg, &torm, &stub, &sep()?, &open, &quit])
 }
 
 fn refresh_tray(app: &AppHandle) {
@@ -1363,6 +1528,23 @@ fn on_tray_menu(app: &AppHandle, id: &str) {
                 refresh_tray(&app);
             });
         }
+        "tor" => {
+            let app = app.clone();
+            std::thread::spawn(move || {
+                let st = app.state::<AppState>();
+                if st.tor.lock().unwrap().is_some() {
+                    st.tor_stop();
+                } else {
+                    let cfg = st.settings.lock().unwrap().tor.clone();
+                    if let Err(e) = st.tor_start(cfg) {
+                        let _ = app.emit("error", e);
+                        show_main(&app);
+                    }
+                }
+                let _ = app.emit("tor-changed", ());
+                refresh_tray(&app);
+            });
+        }
         "proxy" => {
             let app = app.clone();
             std::thread::spawn(move || {
@@ -1440,6 +1622,7 @@ pub fn run() {
                 .ok()
                 .and_then(|b| serde_json::from_slice::<Vec<tester::TestRun>>(&b).ok())
                 .and_then(|h| h.into_iter().next());
+            let config_dir_tor = config_dir.clone();
             app.manage(AppState {
                 bundled_dir,
                 bundle_error: Mutex::new(bundle_error),
@@ -1460,6 +1643,11 @@ pub fn run() {
                 last_evolve: Mutex::new(None),
                 mcp: Mutex::new(None),
                 mcp_error: Mutex::new(None),
+                tor_dir: tor::find_dir(app.path().resource_dir().ok().as_deref()),
+                tor_work: app.path().app_local_data_dir().unwrap_or_else(|_| config_dir_tor.clone()),
+                tor: Mutex::new(None),
+                tor_finding: AtomicBool::new(false),
+                tor_find_cancel: AtomicBool::new(false),
             });
 
             let handle = app.handle().clone();
@@ -1503,6 +1691,12 @@ pub fn run() {
                 if tg.enabled {
                     if let Err(e) = st.tg_start(tg) {
                         let _ = app.handle().emit("error", tr!("Telegram-прокси не запустился: {e}", "Telegram proxy failed to start: {e}"));
+                    }
+                }
+                let torc = st.settings.lock().unwrap().tor.clone();
+                if torc.enabled {
+                    if let Err(e) = st.tor_start(torc) {
+                        let _ = app.handle().emit("error", tr!("Tor не запустился: {e}", "Tor failed to start: {e}"));
                     }
                 }
                 if let Some(c) = stub {
@@ -1659,6 +1853,15 @@ pub fn run() {
             tg_set_config,
             tg_regen_secret,
             tg_open_link,
+            tor_status,
+            tor_start,
+            tor_stop,
+            tor_set_config,
+            tor_new_identity,
+            tor_log,
+            tor_set_domains,
+            tor_find_bridges,
+            tor_find_cancel,
             sni_defaults,
             sni_scan,
             list_presets,
@@ -1685,6 +1888,8 @@ pub fn run() {
                 let st = app.state::<AppState>();
                 st.cancel.store(true, Ordering::SeqCst);
                 st.runner.stop_own();
+                let t = st.tor.lock().unwrap().take();
+                drop(t);
                 // Системный прокси и DNS адаптера возвращаем: без приложения они не работают.
                 st.proxy_stop_inner();
                 if st.settings.lock().unwrap().dns_stub.is_some() && winapi::is_admin() {

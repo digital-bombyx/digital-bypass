@@ -8,6 +8,7 @@ vite.config.js.timestamp-*
 src-tauri/target/
 src-tauri/gen/schemas
 src-tauri/zapret/
+src-tauri/tor/
 
 # Локальные файлы разработки
 .claude/

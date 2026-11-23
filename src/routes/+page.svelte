@@ -13,9 +13,10 @@
   import Proxy from "$lib/components/Proxy.svelte";
   import Diag from "$lib/components/Diag.svelte";
   import Telegram from "$lib/components/Telegram.svelte";
-  import { Power, ListChecks, Globe, Network, Settings2, ShieldAlert, Waypoints, Stethoscope, Send } from "@lucide/svelte";
+  import Tor from "$lib/components/Tor.svelte";
+  import { Power, ListChecks, Globe, Network, Settings2, ShieldAlert, Waypoints, Stethoscope, Send, Layers } from "@lucide/svelte";
 
-  type Tab = "home" | "lists" | "hosts" | "dns" | "proxy" | "telegram" | "diag" | "settings";
+  type Tab = "home" | "lists" | "hosts" | "dns" | "proxy" | "telegram" | "tor" | "diag" | "settings";
   let tab = $state<Tab>("home");
   let dirInput = $state("");
   /** Вкладки, которым нужна папка zapret; DNS и настройки работают без неё. */
@@ -28,6 +29,7 @@
     { id: "hosts", label: () => "Hosts", icon: Globe },
     { id: "proxy", label: () => t("Прокси", "Proxy"), icon: Waypoints },
     { id: "telegram", label: () => "Telegram", icon: Send },
+    { id: "tor", label: () => "Tor", icon: Layers },
     { id: "diag", label: () => t("Проверка", "Check"), icon: Stethoscope, group: () => t("инструменты", "tools") },
     { id: "settings", label: () => t("Настройки", "Settings"), icon: Settings2, group: () => "" },
   ];
@@ -38,6 +40,7 @@
     dns: "dns",
     proxy: "proxy",
     telegram: "telegram",
+    tor: "tor",
     diag: "check",
     settings: "settings",
   };
@@ -103,6 +106,7 @@
       {:else if tab === "dns"}<Dns />
       {:else if tab === "proxy"}<Proxy />
       {:else if tab === "telegram"}<Telegram />
+      {:else if tab === "tor"}<Tor />
       {:else if tab === "diag"}<Diag go={(id) => (tab = id as Tab)} />
       {:else}<Settings />{/if}
     </div></main>

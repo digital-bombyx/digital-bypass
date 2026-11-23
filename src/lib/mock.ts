@@ -28,6 +28,16 @@ const state: any = {
   bundle_error: null,
   language: "ru",
 };
+const tor: any = {
+  config: { socks_port: 9055, transport: "auto", bridges: [], found: [], via_proxy: false, enabled: false },
+  status: { running: false, ready: false, percent: 0, phase: "", tier: "", tiers: ["bridges", "obfs4", "snowflake", "meek"], socks_port: 9055, error: null, elapsed: 0 },
+  available: true,
+  version: "16.0.1",
+  domains: ["rutracker.org"],
+  proxy_running: true,
+  proxy_port: 8881,
+  finding: false,
+};
 const targets = ["DiscordMain", "DiscordGateway", "YouTubeWeb", "GoogleMain", "CloudflareWeb"];
 const mkRes = (file: string, ok: number) => ({
   file,
@@ -341,6 +351,33 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
       net.rules = JSON.parse(JSON.stringify(args.rules));
       net.allowed = !args.rules.enabled || !args.rules.networks.length || (args.rules.mode === "only") === args.rules.networks.includes("HomeWiFi");
       return structuredClone(net);
+    case "tor_status":
+      return structuredClone(tor);
+    case "tor_start":
+      tor.config = { ...args.config, enabled: true };
+      tor.status = { ...tor.status, running: true, ready: false, percent: 45, phase: "Asking for relay descriptors", tier: "bridges", error: null, elapsed: 7 };
+      setTimeout(() => (tor.status = { ...tor.status, ready: true, percent: 100, phase: "Done" }), 2500);
+      return structuredClone(tor);
+    case "tor_stop":
+      tor.config.enabled = false;
+      tor.status = { ...tor.status, running: false, ready: false, percent: 0, phase: "" };
+      return structuredClone(tor);
+    case "tor_set_config":
+      tor.config = args.config;
+      return structuredClone(tor);
+    case "tor_new_identity":
+      return;
+    case "tor_log":
+      return ["--- bridges (6 bridges) ---", "Nov 24 02:28:35.000 [notice] Bootstrapped 30% (loading_status): Loading networkstatus consensus", "Nov 24 02:28:46.000 [notice] Bootstrapped 100% (done): Done"];
+    case "tor_set_domains":
+      tor.domains = args.domains;
+      return structuredClone(tor);
+    case "tor_find_bridges":
+      await new Promise((r) => setTimeout(r, 1500));
+      tor.config.found = ["obfs4 78.109.16.83:9938 1EFFC759915A61151D835A26C0BB2E60F5E666CB cert=AbCd iat-mode=0", "obfs4 103.17.153.50:443 E1FE1E1EBF704DB6D9F450895E449D86255DD8DE cert=EfGh iat-mode=0"];
+      return { found: tor.config.found.map((line: string, i: number) => ({ line, transport: "obfs4", ms: 242 + i * 3 })), checked: 30, candidates: 305, downloaded: [["obfs4", 223], ["webtunnel", 94]], errors: [], cancelled: false, secs: 41 };
+    case "tor_find_cancel":
+      return;
     case "tg_status":
       return structuredClone(tg);
     case "tg_start":

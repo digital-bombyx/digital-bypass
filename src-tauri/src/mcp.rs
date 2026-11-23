@@ -195,7 +195,7 @@ pub fn handle(app: &AppHandle, req: &Value) -> Option<Value> {
 
 const INSTRUCTIONS: &str = "digital-bypass is a Windows censorship-circumvention tool (zapret2/winws2 DPI bypass, a local bypass proxy, DNS/DoH, Telegram proxy). \
 Typical flow for 'site X does not open': call diagnose_site(X) first; it tells whether the block is DNS spoofing, DPI on the site name (and at which stage), or an IP block. \
-For DPI blocks call find_zapret_strategy(X) (it needs admin rights and takes up to a few minutes) or suggest the proxy. IP blocks cannot be fixed by zapret or the proxy — say so and suggest a VPN. \
+For DPI blocks call find_zapret_strategy(X) (it needs admin rights and takes up to a few minutes) or suggest the proxy. IP blocks cannot be fixed by zapret or the proxy splitting: suggest Tor (tor_control start, then add_domains_to_list list=proxy_tor; if Tor cannot connect, find_tor_bridges first), the user's Cloudflare Worker route, or a VPN. \
 Tools that change settings fail unless the user enabled 'allow changes' in the app's MCP settings; then explain how to enable it instead of retrying.";
 
 fn tool(name: &str, desc: &str, props: Value, required: &[&str]) -> Value {
@@ -222,15 +222,23 @@ fn tools() -> Vec<Value> {
         }), &["action"]),
         tool("proxy_control", "Start or stop the bypass proxy (no admin rights needed). Needs 'allow changes'.", json!({"action":{"type":"string","enum":["start","stop"]}}), &["action"]),
         tool("proxy_set_options", "Change bypass proxy settings (restarts it if running). Keys: split (sni|first-byte|chunk|random|custom|none), unit (records|tcp|mixed), disorder, oob, auto, doh, system, ipv6, log, rcvbuf (bytes, 0 = off), port. Needs 'allow changes'.", json!({"options":{"type":"object"}}), &["options"]),
-        tool("add_domains_to_list", "Add domains to a list: zapret (zapret2 hostlist), zapret_exclude (never touch), proxy_bypass (proxy splits only these when scope=listed), proxy_skip (proxy passes as is), proxy_block, proxy_worker (through the user's Cloudflare Worker — for IP-blocked or geo-restricted sites; works only if the Worker is set up in the proxy tab). Needs 'allow changes'.", json!({
+        tool("add_domains_to_list", "Add domains to a list: zapret (zapret2 hostlist), zapret_exclude (never touch), proxy_bypass (proxy splits only these when scope=listed), proxy_skip (proxy passes as is), proxy_block, proxy_tor (through Tor while it is connected; .onion always goes there), proxy_worker (through the user's Cloudflare Worker — for IP-blocked or geo-restricted sites; works only if the Worker is set up in the proxy tab). Needs 'allow changes'.", json!({
             "domains": {"type":"array","items":{"type":"string"}},
-            "list": {"type":"string","enum":["zapret","zapret_exclude","proxy_bypass","proxy_skip","proxy_block","proxy_worker"]}
+            "list": {"type":"string","enum":["zapret","zapret_exclude","proxy_bypass","proxy_skip","proxy_block","proxy_worker","proxy_tor"]}
         }), &["domains","list"]),
         tool("get_proxy_log", "Recent bypass proxy connections: host, what was done, method, attempts, result. The connection log must be enabled in proxy settings.", json!({
             "limit": {"type":"integer","description":"Default 50"},
             "only_failed": {"type":"boolean"}
         }), &[]),
         tool("get_zapret_log", "Last lines of winws2 output (errors, startup problems).", json!({"lines": {"type":"integer","description":"Default 80"}}), &[]),
+        tool("tor_control", "Tor: start, stop, status (bootstrap %, current transport tier, last error, recent log) or new_identity (fresh circuits). Starting uses the saved transport (auto tries found/own bridges, then built-in obfs4, snowflake, meek); bootstrap takes 10 s to a few minutes. Tor gives a SOCKS5 proxy and serves the bypass proxy's 'through Tor' domains. It bypasses blocks, it is not anonymity for the browser. start/stop/new_identity need 'allow changes'.", json!({
+            "action": {"type":"string","enum":["start","stop","status","new_identity"]},
+            "transport": {"type":"string","enum":["auto","obfs4","webtunnel","snowflake","meek","custom","direct"],"description":"Optional for start: save and use this transport"}
+        }), &["action"]),
+        tool("find_tor_bridges", "Find working Tor bridges: downloads fresh obfs4/webtunnel lists, TCP-checks them and verifies each through lyrebird up to the Tor relay's TLS reply. Found bridges are saved and used first. ~30-90 s. Needs 'allow changes'.", json!({
+            "want": {"type":"integer","description":"How many bridges to find (default 8)"},
+            "kinds": {"type":"array","items":{"type":"string","enum":["obfs4","webtunnel"]},"description":"Default both"}
+        }), &[]),
         tool("dns_check", "Does the ISP tamper with DNS: interception of queries to public resolvers and spoofed answers for given domains (compared with DoT).", json!({"domains":{"type":"array","items":{"type":"string"}}}), &[]),
     ]
 }
@@ -320,7 +328,9 @@ pub fn call(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
             let net = crate::net_status_of(&st);
             let stub = crate::stub_status_of(&st);
             let mcp = st.settings.lock().unwrap().mcp.clone();
+            let tor = crate::tor_status_of(&st);
             Ok(json!({
+                "tor": {"running": tor.status.running, "connected": tor.status.ready, "bootstrap_percent": tor.status.percent, "socks": format!("127.0.0.1:{}", tor.config.socks_port), "transport": tor.config.transport, "domains_through_tor": tor.domains},
                 "admin": ov.admin,
                 "zapret2": {"status": to_value(&ov.status), "selected_strategy": ov.selected, "mode": ov.mode, "build_found": ov.dir.is_some(), "testing": ov.testing},
                 "proxy": {"running": px.stats.running, "address": format!("127.0.0.1:{}", px.config.port), "config": to_value(&px.config), "stats": to_value(&px.stats)},
@@ -434,6 +444,40 @@ pub fn call(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
             let d = if d.is_empty() { crate::dnscheck::DEFAULT_DOMAINS.iter().map(|s| s.to_string()).collect() } else { d };
             Ok(to_value(crate::dnscheck::run(&d)))
         }
+        "tor_control" => {
+            let action = arg_str(a, "action").unwrap_or("");
+            if action != "status" {
+                need_changes(&st)?;
+            }
+            match action {
+                "start" => {
+                    let mut cfg = st.settings.lock().unwrap().tor.clone();
+                    if let Some(t) = arg_str(a, "transport") {
+                        cfg.transport = t.into();
+                    }
+                    crate::tor_start(app.clone(), app.state(), cfg)?;
+                }
+                "stop" => {
+                    crate::tor_stop(app.clone(), app.state());
+                }
+                "new_identity" => crate::tor_new_identity(app.state())?,
+                "status" => {}
+                _ => return Err("action must be start, stop, status or new_identity".into()),
+            }
+            let _ = app.emit("tor-changed", ());
+            let t = crate::tor_status_of(&st);
+            let log: Vec<String> = crate::tor_log(app.state()).into_iter().rev().take(25).collect();
+            Ok(json!({"status": to_value(&t.status), "transport": t.config.transport, "found_bridges": t.config.found.len(), "own_bridges": t.config.bridges.len(), "domains_through_tor": t.domains, "log_tail": log}))
+        }
+        "find_tor_bridges" => {
+            need_changes(&st)?;
+            let want = a.get("want").and_then(|v| v.as_u64()).unwrap_or(8) as usize;
+            let kinds: Vec<String> = a.get("kinds").and_then(|d| d.as_array()).map(|v| v.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+            let kinds = if kinds.is_empty() { vec!["obfs4".into(), "webtunnel".into()] } else { kinds };
+            let r = crate::tor_find_bridges(app.clone(), app.state(), kinds, want)?;
+            let _ = app.emit("tor-changed", ());
+            Ok(json!({"found": r.found.iter().map(|f| json!({"transport": f.transport, "ms": f.ms})).collect::<Vec<_>>(), "checked": r.checked, "candidates": r.candidates, "seconds": r.secs, "errors": r.errors, "note": "Saved; Tor uses them first (restart Tor to apply if it is running)."}))
+        }
         _ => Err(format!("unknown tool {name}")),
     }
 }
@@ -460,6 +504,13 @@ fn add_to(app: &AppHandle, list: &str, domains: &[String]) -> R<Vec<String>> {
             }
             Ok(added)
         }
+        "proxy_tor" => {
+            let mut have = st.settings.lock().unwrap().proxy.rules.tor.clone();
+            let added: Vec<String> = domains.iter().filter(|d| !have.contains(d)).cloned().collect();
+            have.extend(added.iter().cloned());
+            crate::tor_set_domains(app.clone(), app.state(), have)?;
+            Ok(added)
+        }
         "proxy_bypass" | "proxy_skip" | "proxy_block" | "proxy_worker" => {
             let mut cfg = st.settings.lock().unwrap().proxy.clone();
             let v = match list {
@@ -473,7 +524,7 @@ fn add_to(app: &AppHandle, list: &str, domains: &[String]) -> R<Vec<String>> {
             crate::proxy_set_config(app.clone(), app.state(), cfg)?;
             Ok(added)
         }
-        _ => Err("list must be zapret, zapret_exclude, proxy_bypass, proxy_skip, proxy_block or proxy_worker".into()),
+        _ => Err("list must be zapret, zapret_exclude, proxy_bypass, proxy_skip, proxy_block, proxy_worker or proxy_tor".into()),
     }
 }
 

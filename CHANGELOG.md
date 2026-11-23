@@ -8,6 +8,13 @@
 
 ### Что нового
 
+- **Вкладка Tor** — обход того, что не берут zapret и нарезка: блокировок по IP, геоограничений, адресов .onion. Внутри — `tor.exe` и `lyrebird` из официального Tor Expert Bundle 16.0.1 (SHA-256 сверяется при сборке, сверить самому — [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt)).
+  - Транспорты obfs4, webtunnel, snowflake, meek, свои мосты или напрямую; «Авто» перебирает их по очереди, если подключение стоит 90 с.
+  - **Поиск мостов** (из [TorBridgeMaster](https://github.com/digital-bombyx/TorBridgeMaster), переписан на Rust): свежие списки [scriptzteam/Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2) → проверка адресов → рукопожатие через lyrebird до ответа реле Tor. Десяток рабочих мостов — меньше чем за минуту, без полного запуска tor на каждый.
+  - Прокси-обходчик отправляет через Tor домены из списка и все `.onion`; остальное идёт как обычно. Для других программ — SOCKS5 `127.0.0.1:9055`.
+  - «Мосты через прокси-обходчик»: tor идёт к мостам через наш прокси, а тот режет ClientHello — для webtunnel, если провайдер глушит его TLS.
+  - «Новая личность», журнал tor, кэш в папке данных: со второго запуска подключение за секунды. MCP: `tor_control`, `find_tor_bridges`, список `proxy_tor`.
+
 - **Прокси: маршрут через свой Cloudflare Worker** — домены из списка (сайты, заблокированные по IP или с геоограничениями: Instagram, Facebook, Spotify, ИИ-сервисы) идут через ваш Worker по WebSocket, а он открывает TCP к сайту. TLS браузера с сайтом сквозной. Нарезка ClientHello к Cloudflare — как в Telegram-модуле. Код Worker с ключом и инструкция — в приложении. Идея — ws-proxy из [kinlay0/zapret2-discord-youtube-strats](https://github.com/kinlay0/zapret2-discord-youtube-strats).
 
 - **Ещё 38 стратегий zapret2** из коллекции [kinlay0/zapret2-discord-youtube-strats](https://github.com/kinlay0/zapret2-discord-youtube-strats): ALT14–16, CIRCULAR, DOUBLE/SINGLE FAKE, EXP1–10, HOSTFAKESPLIT TS, LEGACY, SYNDATA и др. В списке — с префиксом «K-», имена фейков приведены к сборке Flowseal, два новых фейка добавлены. Обновление коллекции — `scripts/import-kinlay-strats.py`.

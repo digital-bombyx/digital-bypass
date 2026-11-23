@@ -67,6 +67,18 @@ zapret2 (winws2 + Lua) в один клик, прокси-обходчик бе�
 
 Локальный MTProto-прокси для Telegram Desktop — порт [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) (Flowseal, MIT). Трафик идёт через WebSocket к веб-адресам Telegram; если они недоступны — через свой Cloudflare Worker или CF-прокси (домены за Cloudflare), в крайнем случае — напрямую по TCP. TLS к Telegram и Cloudflare открывается с нарезкой ClientHello, как в прокси-обходчике; для прямого маршрута можно подменить SNI (например, на имя из белого списка). Подключение в Telegram — одной кнопкой (ссылка `tg://proxy`). Сообщения остаются зашифрованными MTProto.
 
+### Tor
+
+Для того, что не берут zapret и нарезка: сайты, заблокированные по IP, геоограничения, адреса .onion. Внутри — `tor.exe` и `lyrebird` из официального [Tor Expert Bundle](https://www.torproject.org/download/tor/) (16.0.1, SHA-256 сверяется при сборке; сверить самому — [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt)).
+
+- **Способы подключения**: obfs4, webtunnel, snowflake, meek, свои мосты или напрямую. «Авто» идёт по очереди: свои и найденные мосты → встроенные obfs4 → snowflake → meek.
+- **Поиск мостов** (из [TorBridgeMaster](https://github.com/digital-bombyx/TorBridgeMaster)): свежие obfs4 и webtunnel из [Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2), проверка до ответа реле Tor через lyrebird — меньше минуты. Встроенные мосты Tor Browser в России почти все заблокированы, найденные работают.
+- **Сайты через Tor**: прокси-обходчик отправляет в Tor домены из списка и все `.onion`, остальное — как обычно. Любая программа может подключиться к SOCKS5 `127.0.0.1:9055`.
+- **Мосты через прокси-обходчик**: если провайдер глушит TLS webtunnel, tor идёт к мостам через наш прокси с нарезкой ClientHello.
+- «Новая личность», журнал, кэш каталога (со второго запуска — подключение за секунды).
+
+Это обход блокировок, а не анонимность: браузер через прокси узнаваем по отпечатку и кукам. Для анонимности — Tor Browser.
+
 ### Проверка
 
 Введите домен — приложение сравнит системный DNS с DoH, попробует TCP и TLS к каждому адресу и скажет, в чём дело: подмена DNS, DPI по имени сайта или блокировка по IP. И подскажет, какой модуль поможет.
@@ -109,7 +121,7 @@ $env:ZAPRET_SRC = "D:\zapret-discord-youtube"   # по умолчанию име
 npm run tauri build
 ```
 
-Перед сборкой `scripts/sync-zapret.mjs` берёт чистую копию сборки из git и кладёт её в ресурсы установщика. Установщик появится в `src-tauri\target\release\bundle\nsis\`.
+Перед сборкой `scripts/sync-zapret.mjs` берёт чистую копию сборки из git и кладёт её в ресурсы установщика, а `scripts/sync-tor.mjs` скачивает Tor Expert Bundle с dist.torproject.org и сверяет его SHA-256 (без сети: `$env:TOR_TARBALL = "путь\к\архиву.tar.gz"`). Установщик появится в `src-tauri\target\release\bundle\nsis\`.
 
 Релизы собирает GitHub Actions ([`release.yml`](.github/workflows/release.yml)) при пуше тега `vX.Y.Z`, описание берётся из [CHANGELOG.md](CHANGELOG.md).
 
@@ -122,6 +134,8 @@ npm run tauri build
 - **[basil00/WinDivert](https://github.com/basil00/WinDivert)** — драйвер перехвата пакетов.
 - **[hyperion-cs/dpi-checkers](https://github.com/hyperion-cs/dpi-checkers)** — цели для DPI-теста «16-20 КБ».
 - **[Flowseal/tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy)** (MIT) — модуль Telegram портирован с него, скрипт Worker и список CF-доменов взяты оттуда.
+- **[The Tor Project](https://www.torproject.org/)** — tor и lyrebird (Tor Expert Bundle, BSD-3-Clause и др., тексты лицензий — в папке `tor\docs`).
+- **[scriptzteam/Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2)** — списки мостов для поиска.
 
 ### Идеи
 
@@ -134,6 +148,7 @@ npm run tauri build
 - **[sni-spoofing-rust](https://github.com/therealaleph/sni-spoofing-rust)** (therealaleph) — сканер SNI, раздача в локальную сеть.
 - **[Geneva](https://geneva.cs.umd.edu/)** (Bock et al., ACM CCS 2019) — подход автоподбора: засев известными стратегиями, оценка с повторами, штраф за сложность, зал славы.
 - **[B4](https://github.com/DanielLavrushin/b4)** и **[tspu-docs](https://github.com/DanielLavrushin/tspu-docs)** (DanielLavrushin) — удаление ключей ECH из DNS, проверка «напрямую и через обход», поиск SNI для хостингов, подтверждение победителя; сведения о том, как ТСПУ ограничивает хостинги.
+- **[Tallow](https://github.com/basil00/Tallow)** (basil00) — Tor для приложений, которые его не умеют (у нас — через прокси-обходчик, а не перехват всего трафика).
 - **[zapret](https://github.com/bol-van/zapret)** (bol-van) — методика blockcheck для определения типа блокировки, маленький буфер приёма (аналог `--wssize`), включение по сети (`--ssid-filter`).
 
 Бинарники и Lua-скрипты встроенной сборки распространяются под лицензиями их авторов (см. `LICENSE.txt` в папке сборки).

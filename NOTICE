@@ -84,6 +84,21 @@ https://github.com/kinlay0/zapret2-discord-youtube-strats; fake names were
 mapped to the Flowseal build, tls_clienthello_firpo_ru.bin and
 tls_clienthello_retext_ai.bin with blobs-extra.lua come from the same project.
 
+Tor (tor.exe) and lyrebird (obfs4, webtunnel, snowflake and meek transports)
+are unmodified binaries from the Tor Expert Bundle by The Tor Project,
+https://www.torproject.org/, downloaded from dist.torproject.org with a pinned
+SHA-256 (scripts/sync-tor.mjs). Tor is distributed under the 3-clause BSD
+license; lyrebird and its dependencies under BSD-style and other licenses.
+The full license texts ship with the installer in the tor\docs folder.
+
+Bridge lists for the bridge search are downloaded at run time from
+Tor-Bridges-Collector-v2 by scriptzteam,
+https://github.com/scriptzteam/Tor-Bridges-Collector-v2. The bridge search is
+a Rust rewrite of TorBridgeMaster by the same author as digital-bypass,
+https://github.com/digital-bombyx/TorBridgeMaster. The idea of giving Tor to
+programs that do not support it comes from Tallow by basil00 (GPL-3.0),
+https://github.com/basil00/Tallow; no code was copied.
+
 ------------------------------------------------------------------------------
 THIRD-PARTY LICENSE TEXTS
 ------------------------------------------------------------------------------
