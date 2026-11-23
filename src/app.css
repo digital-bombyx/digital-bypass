@@ -18,6 +18,8 @@
   --border: #232831;
   --border-soft: #161a20;
   --border-strong: #343b46;
+  /* Обводка карточек — заметно ярче фона, чтобы блоки читались на чёрном. */
+  --card-border: #323a46;
   --text: #eef2f6;
   --muted: #b2bbc6;
   --faint: #8c96a3;
@@ -90,7 +92,7 @@ body {
 
 .card {
   background: var(--bg-2);
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--card-border);
   border-radius: var(--radius);
 }
 

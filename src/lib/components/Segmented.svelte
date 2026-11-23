@@ -25,7 +25,7 @@
     padding: 3px;
     border-radius: var(--radius-sm);
     background: var(--bg);
-    border: 1px solid var(--border-soft);
+    border: 1px solid var(--border);
   }
   .seg button {
     flex: 1;
