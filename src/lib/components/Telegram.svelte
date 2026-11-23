@@ -1,11 +1,12 @@
 <script lang="ts">
+  import PowerButton from "./PowerButton.svelte";
   import { onMount } from "svelte";
   import { api, on, type TgConfig, type TgStatus } from "$lib/api";
   import { app, act, toast } from "$lib/state.svelte";
   import { t } from "$lib/i18n.svelte";
   import { TG_WORKER_CODE } from "$lib/tgWorker";
   import Switch from "./Switch.svelte";
-  import { Power, Copy, Send, RefreshCw, Cloud, Eye, EyeOff } from "@lucide/svelte";
+  import { Copy, Send, RefreshCw, Cloud, Eye, EyeOff } from "@lucide/svelte";
 
   let st = $state<TgStatus | null>(null);
   let cfg = $state<TgConfig | null>(null);
@@ -78,16 +79,11 @@
 
 <div class="tg fade-in">
   {#if st && cfg}
-    <section class="card block">
-      <div class="row">
-        <div>
-          <div class="label">{t("telegram-прокси", "telegram proxy")}</div>
-          <div class="hint faint mono">{t("MTProto → WebSocket к Telegram; для Telegram Desktop", "MTProto → WebSocket to Telegram; for Telegram Desktop")}</div>
-        </div>
-        <button class="btn" class:primary={!running} class:danger={running} disabled={app.busy} onclick={toggle}>
-          <Power size={13} />
-          {running ? t("Выключить", "Turn off") : t("Включить", "Turn on")}
-        </button>
+    <section class="card block hero">
+      <div class="prompt mono">{t("telegram-прокси · MTProto → WebSocket, для Telegram Desktop", "telegram proxy · MTProto → WebSocket, for Telegram Desktop")}</div>
+      <PowerButton on={running} disabled={app.busy} onclick={toggle} />
+      <div class="state-line mono">
+        {#if app.busy}<span class="muted">…</span>{:else if running}<span class="on">● 127.0.0.1:{st.config.port}</span>{:else}<span class="faint">○ {t("выключен", "off")}</span>{/if}
       </div>
       {#if running}
         <div class="stats mono">
@@ -215,6 +211,25 @@
 </div>
 
 <style>
+  .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 18px 18px;
+  }
+  .prompt {
+    align-self: flex-start;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .state-line {
+    font-size: 12px;
+    height: 16px;
+    margin-bottom: 6px;
+  }
+  .state-line .on {
+    color: var(--sage);
+  }
   .tg {
     display: flex;
     flex-direction: column;
@@ -226,7 +241,6 @@
     flex-direction: column;
     gap: 10px;
   }
-  .row,
   .opt {
     display: flex;
     align-items: center;

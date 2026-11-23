@@ -143,6 +143,8 @@ const net: any = {
 
 export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
   await new Promise((r) => setTimeout(r, 120));
+  // Как настоящий invoke: аргументы сериализуются (реактивные прокси Svelte не клонируются).
+  args = JSON.parse(JSON.stringify(args ?? {}));
   switch (cmd) {
     case "overview":
       return structuredClone(state);

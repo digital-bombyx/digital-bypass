@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PowerButton from "./PowerButton.svelte";
   import { onMount } from "svelte";
   import { api, on, type ProxyConfig, type ProxyStatus } from "$lib/api";
   import { app, act, toast } from "$lib/state.svelte";
@@ -7,7 +8,7 @@
   import Switch from "./Switch.svelte";
   import ProxyTest from "./ProxyTest.svelte";
   import ProxyLog from "./ProxyLog.svelte";
-  import { Power, Copy, Wifi, KeyRound, ShieldAlert, ListFilter } from "@lucide/svelte";
+  import { Copy, Wifi, KeyRound, ShieldAlert, ListFilter } from "@lucide/svelte";
 
   let st = $state<ProxyStatus | null>(null);
   let cfg = $state<ProxyConfig>({
@@ -114,16 +115,11 @@
 </script>
 
 <div class="proxy fade-in">
-  <section class="card block">
-    <div class="row">
-      <div>
-        <div class="label">{t("прокси-обходчик", "bypass proxy")}</div>
-        <div class="hint faint mono">{t("без прав администратора и без драйвера", "no admin rights, no driver")}</div>
-      </div>
-      <button class="btn" class:primary={!running} class:danger={running} disabled={app.busy} onclick={running ? stop : start}>
-        <Power size={13} />
-        {running ? t("Выключить", "Turn off") : t("Включить", "Turn on")}
-      </button>
+  <section class="card block hero">
+    <div class="prompt mono">{t("прокси-обходчик · без прав администратора и драйвера", "bypass proxy · no admin rights, no driver")}</div>
+    <PowerButton on={running} disabled={app.busy} onclick={running ? stop : start} />
+    <div class="state-line mono">
+      {#if app.busy}<span class="muted">…</span>{:else if running}<span class="on">● {addr}</span>{:else}<span class="faint">○ {t("выключен", "off")}</span>{/if}
     </div>
     {#if st && running}
       <div class="stats mono">
@@ -405,6 +401,25 @@
 </div>
 
 <style>
+  .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 18px 18px;
+  }
+  .prompt {
+    align-self: flex-start;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .state-line {
+    font-size: 12px;
+    height: 16px;
+    margin-bottom: 6px;
+  }
+  .state-line .on {
+    color: var(--sage);
+  }
   .proxy {
     display: flex;
     flex-direction: column;

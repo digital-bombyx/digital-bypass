@@ -57,6 +57,14 @@
       "mutates the TCP part of the best strategies (technique, pos, seqovl, repeats, fooling, fake) and checks with the tester; each candidate twice, the worst counts; on a tie the simpler wins",
     )}
   </div>
+  {#if !(last?.finished && last.kind === kind)}
+    <div class="first mono">
+      {t(
+        "Сначала прогоните обычный тест стратегий выше (тот же вид — стандартный или DPI): автоподбор возьмёт для засева 4 лучшие из него. Без теста засев — первые выбранные стратегии наугад.",
+        "Run the regular strategy test above first (same kind — standard or DPI): auto-tune seeds from its 4 best. Without it the seeds are just the first selected strategies.",
+      )}
+    </div>
+  {/if}
   <div class="row">
     <label class="mono rl">{t("раундов", "rounds")}
       <input class="input" type="number" min="1" max="5" bind:value={rounds} disabled={busy || live} />
@@ -131,6 +139,12 @@
   }
   .hint {
     font-size: 11px;
+  }
+  .first {
+    font-size: 11.5px;
+    color: var(--yellow);
+    border-left: 2px solid var(--yellow);
+    padding: 2px 0 2px 8px;
   }
   .row {
     display: flex;
