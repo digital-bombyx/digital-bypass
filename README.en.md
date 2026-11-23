@@ -126,11 +126,18 @@ If something works or fails for you in another country, an issue with the **Chec
 
 ## Install
 
-1. Download `digital-bypass_x.y.z_x64-setup.exe` from [Releases](https://github.com/digital-bombyx/digital-bypass/releases/latest). A `.sha256` file is attached.
-2. Run it. The app asks for administrator rights: WinDivert, services, hosts and DNS changes need them.
+1. Download `digital-bypass_x.y.z_x64-setup.exe` from [Releases](https://github.com/digital-bombyx/digital-bypass/releases/latest).
+2. Verify the checksum: the SHA-256 is in the release description and in the `.sha256` file next to the installer. GitHub Actions builds the installer from the public source and computes the sum there.
+
+   ```powershell
+   (Get-FileHash .\digital-bypass_x.y.z_x64-setup.exe -Algorithm SHA256).Hash
+   ```
+
+   It must match the sum from the release (case does not matter). If it does not, do not run the file.
+3. Run it. The app asks for administrator rights: WinDivert, services, hosts and DNS changes need them.
 
 > [!NOTE]
-> The app ships `winws2.exe` and the WinDivert driver. Some antivirus products flag files like these. You can verify them against the checksums of the [zapret2 release](https://github.com/bol-van/zapret2/releases).
+> The app ships `winws2.exe`, the WinDivert driver and `tor.exe`. Some antivirus products flag files like these. You can check them against their origins: `winws2` and WinDivert against the [zapret2 release](https://github.com/bol-van/zapret2/releases) checksums, tor and lyrebird against [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt) (the Tor Expert Bundle archive sum is checked at build time).
 
 ## Build from source
 

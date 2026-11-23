@@ -111,12 +111,9 @@ fn standard_targets(dir: &Path) -> Vec<Target> {
 }
 
 fn dpi_targets(timeout: u32) -> Result<Vec<Target>, String> {
-    let out = crate::util::hidden(crate::util::system32("curl.exe"))
-        .args(["-s", "-L", "-m", &timeout.max(5).to_string(), DPI_SUITE_URL])
-        .output()
-        .map_err(|e| format!("curl: {e}"))?;
-    let v: serde_json::Value =
-        serde_json::from_slice(&out.stdout).map_err(|_| crate::tr!("не удалось получить набор DPI-проверок", "failed to fetch the DPI check suite"))?;
+    let text = crate::util::fetch(&crate::tr!("набор DPI-проверок", "DPI check suite"), DPI_SUITE_URL, timeout.max(10), None)?;
+    let v: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|_| crate::tr!("набор DPI-проверок: неожиданный ответ (не JSON) — источник изменился", "DPI check suite: unexpected answer (not JSON) — the source changed"))?;
     let arr = v.as_array().ok_or_else(|| crate::tr!("неожиданный формат набора DPI-проверок", "unexpected DPI suite format"))?;
     let s = |e: &serde_json::Value, k: &str| e.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
     let list: Vec<Target> = arr

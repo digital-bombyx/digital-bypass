@@ -655,7 +655,7 @@ fn hosts_remove(state: State<AppState>) -> R<()> {
 
 #[tauri::command(async)]
 fn hosts_update(state: State<AppState>) -> R<usize> {
-    hosts::update_upstream(&state.hosts_cache())
+    hosts::update_upstream(&state.hosts_cache(), proxy_port_if_running(&state))
 }
 
 #[tauri::command(async)]

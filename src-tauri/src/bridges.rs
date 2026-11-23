@@ -59,25 +59,9 @@ pub struct Progress {
     pub found: usize,
 }
 
-/// Скачать список (curl.exe; при неудаче — через прокси-обходчик, если он запущен).
-fn download(url: &str, proxy: Option<u16>) -> Result<String, String> {
-    let curl = crate::util::system32("curl.exe");
-    let mut tries: Vec<Vec<String>> = vec![vec![]];
-    if let Some(p) = proxy {
-        tries.push(vec!["-x".into(), format!("http://127.0.0.1:{p}")]);
-    }
-    let mut last = String::new();
-    for extra in tries {
-        let mut args: Vec<String> = vec!["-sSfL".into(), "-m".into(), "25".into()];
-        args.extend(extra);
-        args.push(url.into());
-        match crate::util::hidden(&curl).args(&args).output() {
-            Ok(o) if o.status.success() => return Ok(String::from_utf8_lossy(&o.stdout).into_owned()),
-            Ok(o) => last = String::from_utf8_lossy(&o.stderr).trim().to_string(),
-            Err(e) => last = e.to_string(),
-        }
-    }
-    Err(last)
+/// Скачать список (при неудаче — через прокси-обходчик, если он запущен).
+fn download(kind: &str, url: &str, proxy: Option<u16>) -> Result<String, String> {
+    crate::util::fetch(&crate::tr!("список мостов {kind}", "{kind} bridge list"), url, 25, proxy)
 }
 
 /// Разобрать список: только нужные транспорты, без повторов по отпечатку.
@@ -304,13 +288,19 @@ pub fn find(tor_dir: &Path, kinds: &[&str], want: usize, proxy: Option<u16>, via
     let mut lists: Vec<Vec<String>> = Vec::new();
     for (kind, url) in SOURCES.iter().filter(|(k, _)| kinds.contains(k)) {
         progress(Progress { stage: "download", done: 0, total: 0, found: 0 });
-        match download(url, proxy) {
+        match download(kind, url, proxy) {
             Ok(t) => {
                 let v = parse_list(&t, &[kind]);
+                if v.is_empty() {
+                    rep.errors.push(crate::tr!(
+                        "список мостов {kind} скачан, но в нём нет мостов — формат источника изменился",
+                        "the {kind} bridge list downloaded but has no bridges — the source format changed"
+                    ));
+                }
                 rep.downloaded.push((kind.to_string(), v.len()));
                 lists.push(v);
             }
-            Err(e) => rep.errors.push(format!("{kind}: {e}")),
+            Err(e) => rep.errors.push(e),
         }
     }
     // Чередуем транспорты, чтобы оба получили шанс до остановки по `want`.
@@ -324,7 +314,7 @@ pub fn find(tor_dir: &Path, kinds: &[&str], want: usize, proxy: Option<u16>, via
         }
     }
     if all.is_empty() {
-        return Err(if rep.errors.is_empty() { crate::tr!("списки мостов пусты", "bridge lists are empty") } else { rep.errors.join("; ") });
+        return Err(if rep.errors.is_empty() { crate::tr!("списки мостов пусты", "bridge lists are empty") } else { rep.errors.join("\n") });
     }
 
     // 1. TCP: живые адреса, по задержке.

@@ -106,11 +106,18 @@ zapret2 (winws2 + Lua) в один клик, прокси-обходчик бе�
 
 ## Установка
 
-1. Скачайте `digital-bypass_x.y.z_x64-setup.exe` со страницы [Releases](https://github.com/digital-bombyx/digital-bypass/releases/latest) и установите. Рядом лежит `.sha256`.
-2. Запустите. Приложение попросит права администратора: они нужны WinDivert, службам, hosts и смене DNS.
+1. Скачайте `digital-bypass_x.y.z_x64-setup.exe` со страницы [Releases](https://github.com/digital-bombyx/digital-bypass/releases/latest).
+2. Сверьте контрольную сумму: SHA-256 указан в описании релиза и в файле `.sha256` рядом с установщиком. Установщик собирает GitHub Actions из открытого кода, сумма считается там же.
+
+   ```powershell
+   (Get-FileHash .\digital-bypass_x.y.z_x64-setup.exe -Algorithm SHA256).Hash
+   ```
+
+   Строка должна совпасть с суммой из релиза (регистр букв не важен). Не совпала — не запускайте файл.
+3. Запустите. Приложение попросит права администратора: они нужны WinDivert, службам, hosts и смене DNS.
 
 > [!NOTE]
-> Внутри лежат `winws2.exe` и драйвер WinDivert. Некоторые антивирусы помечают такие файлы как угрозу. Проверить их можно по контрольным суммам релиза [zapret2](https://github.com/bol-van/zapret2/releases).
+> Внутри лежат `winws2.exe`, драйвер WinDivert и `tor.exe`. Некоторые антивирусы помечают такие файлы как угрозу. Их можно сверить с первоисточниками: `winws2` и WinDivert — по контрольным суммам релиза [zapret2](https://github.com/bol-van/zapret2/releases), tor и lyrebird — по [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt) (сумма архива Tor Expert Bundle проверяется при сборке).
 
 ## Сборка из исходников
 

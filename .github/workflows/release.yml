@@ -99,6 +99,8 @@ jobs:
           "hash=$hash" >> $env:GITHUB_OUTPUT
           $bundle = Get-Content src-tauri/zapret/bundle.json -Raw | ConvertFrom-Json
           "zapret=$($bundle.version)" >> $env:GITHUB_OUTPUT
+          $tor = Get-Content src-tauri/tor/bundle.json -Raw | ConvertFrom-Json
+          "tor=$($tor.version)" >> $env:GITHUB_OUTPUT
 
       - uses: actions/upload-artifact@v4
         with:
@@ -114,6 +116,7 @@ jobs:
           --sha "${{ steps.sum.outputs.hash }}"
           --file "${{ steps.sum.outputs.name }}"
           --zapret "${{ steps.sum.outputs.zapret }}"
+          --tor "${{ steps.sum.outputs.tor }}"
 
       - name: GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')

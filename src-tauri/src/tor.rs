@@ -423,8 +423,18 @@ fn supervise(sh: &Arc<Shared>, cfg: &Config, tor_dir: &Path, work_dir: &Path, da
             let exited = sh.child.lock().unwrap().as_mut().map(|c| c.try_wait().ok().flatten().is_some()).unwrap_or(true);
             if exited {
                 READY_PORT.store(0, Ordering::SeqCst);
-                if sh.error.lock().unwrap().is_none() {
-                    *sh.error.lock().unwrap() = Some(crate::tr!("tor завершился", "tor exited"));
+                let quick = sh.started.lock().unwrap().is_some_and(|t| t.elapsed() < Duration::from_secs(10));
+                let mut err = sh.error.lock().unwrap();
+                if err.is_none() || quick {
+                    let detail = err.take().map(|e| format!(": {e}")).unwrap_or_default();
+                    *err = Some(if quick {
+                        crate::tr!(
+                            "tor.exe завершился сразу после запуска{detail} — проверьте, не блокирует ли его антивирус или брандмауэр (например, simplewall)",
+                            "tor.exe exited right after start{detail} — check whether an antivirus or firewall (e.g. simplewall) blocks it"
+                        )
+                    } else {
+                        crate::tr!("tor завершился{detail}", "tor exited{detail}")
+                    });
                 }
                 break;
             }
@@ -440,9 +450,10 @@ fn supervise(sh: &Arc<Shared>, cfg: &Config, tor_dir: &Path, work_dir: &Path, da
         }
     }
     if !sh.stop.load(Ordering::SeqCst) {
+        let last = sh.error.lock().unwrap().take().map(|e| format!(" ({e})")).unwrap_or_default();
         *sh.error.lock().unwrap() = Some(crate::tr!(
-            "не удалось подключиться ни одним способом — найдите свежие мосты",
-            "could not connect by any method — find fresh bridges"
+            "не удалось подключиться ни одним способом{last} — найдите свежие мосты (поиск мостов ниже); если lyrebird.exe блокирует брандмауэр, мосты не ответят вовсе",
+            "could not connect by any method{last} — find fresh bridges (bridge search below); if a firewall blocks lyrebird.exe, no bridge will answer"
         ));
     }
 }

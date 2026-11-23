@@ -449,6 +449,32 @@ pub enum Action {
     Tor,
 }
 
+/// Понятная причина отказа своего Worker'а по ответу на WebSocket-запрос
+/// (коды — из кода Worker, который даёт приложение).
+pub fn worker_reason(err: &str) -> String {
+    let code = err.split("HTTP ").nth(1).and_then(|r| r.split_whitespace().next()).unwrap_or("");
+    match code {
+        "403" => crate::tr!("неверный ключ (403) — ключ в приложении и в коде Worker'а должен совпадать", "wrong key (403) — the key in the app and in the Worker code must match"),
+        "502" => crate::tr!(
+            "Worker не смог подключиться к сайту (502) — сайт стоит за Cloudflare или недоступен",
+            "the Worker could not reach the site (502) — the site is behind Cloudflare or down"
+        ),
+        "404" | "426" | "200" => crate::tr!(
+            "по этому адресу не наш Worker (HTTP {code}) — задеплойте код из приложения",
+            "this address is not our Worker (HTTP {code}) — deploy the code from the app"
+        ),
+        "1101" | "500" | "503" => crate::tr!(
+            "ошибка или лимит Cloudflare (HTTP {code}) — бесплатный тариф: 100 000 запросов в день",
+            "a Cloudflare error or limit (HTTP {code}) — the free plan allows 100,000 requests a day"
+        ),
+        "" if err.contains("timed out") || err.contains("10060") => crate::tr!(
+            "нет ответа от Cloudflare — попробуйте включить нарезку ClientHello",
+            "no answer from Cloudflare — try turning on ClientHello splitting"
+        ),
+        _ => err.to_string(),
+    }
+}
+
 /// Адрес скрытого сервиса Tor.
 pub fn is_onion(host: &str) -> bool {
     host.trim_end_matches('.').to_ascii_lowercase().ends_with(".onion")
@@ -1013,11 +1039,21 @@ impl Shared {
         let w = &self.cfg.worker;
         let wh = w.host.trim();
         let path = worker_path(host, port, w.key.trim());
-        let mut last = std::io::Error::other("worker: no address");
+        let mut last = std::io::Error::other(crate::tr!(
+            "Worker {wh}: адрес не найден (DNS) — проверьте адрес Worker'а",
+            "Worker {wh}: address not found (DNS) — check the Worker address"
+        ));
         for a in self.resolve(wh, 443).into_iter().filter(|a| a.is_ipv4()).take(3) {
             match crate::telegram::Ws::connect(a, wh, &path, w.fragment) {
                 Ok(r) => return Ok(r),
-                Err(e) => last = std::io::Error::other(format!("worker {wh}: {e}")),
+                Err(e) => {
+                    let why = worker_reason(&e.to_string());
+                    last = std::io::Error::other(format!("Worker {wh}: {why}"));
+                    // Ответ самого Worker'а — другие адреса Cloudflare ответят так же.
+                    if e.to_string().contains("HTTP ") {
+                        break;
+                    }
+                }
             }
         }
         Err(last)
@@ -2226,6 +2262,9 @@ mod tests {
         assert_eq!(Matcher::new(&tor, &[]).action("rutracker.org"), Action::Bypass);
         assert_eq!(Matcher::new(&tor, &[]).action("duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion"), Action::Tor);
         assert!(is_onion("x.ONION.") && !is_onion("onion.com"));
+        assert!(worker_reason("websocket: HTTP 403").contains("403"));
+        assert!(worker_reason("websocket: HTTP 502").contains("502"));
+        assert_eq!(worker_reason("connection reset"), "connection reset");
         // Режимы Tor: только при подключённом Tor; «не резать» и Worker важнее режима.
         let z = ["youtube.com".to_string()];
         let all = Rules { tor_scope: "all".into(), skip: vec!["sberbank.ru".into()], ..Default::default() };

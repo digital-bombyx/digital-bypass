@@ -166,17 +166,10 @@ pub fn apply(entries: &[Entry]) -> Result<(), String> {
     Ok(())
 }
 
-/// Скачать актуальный файл с GitHub в кэш приложения.
-pub fn update_upstream(cache: &Path) -> Result<usize, String> {
+/// Скачать актуальный файл с GitHub в кэш приложения (`proxy` — запасной путь).
+pub fn update_upstream(cache: &Path, proxy: Option<u16>) -> Result<usize, String> {
     let url = format!("{UPSTREAM_URL}?t={}", crate::util::now_secs());
-    let out = crate::util::hidden(crate::util::system32("curl.exe"))
-        .args(["-L", "-s", "-f", "-m", "15", &url])
-        .output()
-        .map_err(|e| format!("curl: {e}"))?;
-    if !out.status.success() {
-        return Err(crate::tr!("не удалось скачать hosts с GitHub", "failed to download hosts from GitHub"));
-    }
-    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let text = crate::util::fetch("hosts Flowseal", &url, 15, proxy)?;
     let n = parse(&text).len();
     if n == 0 {
         return Err(crate::tr!("скачанный файл пуст или некорректен", "downloaded file is empty or invalid"));
