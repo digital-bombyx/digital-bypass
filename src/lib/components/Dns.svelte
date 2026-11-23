@@ -230,7 +230,9 @@
     <div class="actions">
       <button class="btn" disabled={app.busy} onclick={flush} title="ipconfig /flushdns"><Eraser size={13} /> {t("Сброс кэша", "Flush cache")}</button>
       <span class="grow"></span>
-      <button class="btn" disabled={app.busy || !admin || !adapter || (!useV4 && !useV6)} onclick={reset}><Undo2 size={13} /> DHCP</button>
+      <button class="btn" disabled={app.busy || !admin || !adapter || (!useV4 && !useV6)} onclick={reset}
+        title={t("Вернуть автоматический DNS (от роутера или провайдера), снять DoH адаптера и сбросить кэш", "Revert to automatic DNS (from the router or ISP), remove the adapter's DoH and flush the cache")}
+        ><Undo2 size={13} /> DHCP</button>
       <button class="btn primary" disabled={!canApply} onclick={apply}><Check size={13} /> {t("Применить", "Apply")}</button>
     </div>
     {#if !admin}
