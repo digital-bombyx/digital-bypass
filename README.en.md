@@ -77,6 +77,10 @@ Entries from `.service\hosts` go into the system hosts file as a separate block 
 
 Tray with quick zapret2 and bypass proxy toggles, strategy switch and DoH resolver state, autostart with admin rights, Russian and English UI.
 
+### MCP for AI assistants
+
+Settings → MCP (off by default). Claude, Cursor and other MCP clients connect to `http://127.0.0.1:8899/mcp` with a token. Ask "why won't Discord load?" — the assistant calls `diagnose_site` (DNS, TCP, TLS, where DPI cuts) and, if needed, `find_zapret_strategy` (tries zapret2 strategies against that very site). Status, proxy and winws2 logs, the DNS check and test results are available too. Changing settings (turning zapret2 and the proxy on, picking a strategy, editing lists) needs "Allow changes".
+
 ## Other countries
 
 digital-bypass is built and tested in Russia. Outside it, keep two things in mind:

@@ -4,6 +4,7 @@
   import Switch from "./Switch.svelte";
   import Segmented from "./Segmented.svelte";
   import NetRules from "./NetRules.svelte";
+  import McpCard from "./McpCard.svelte";
   import { t, i18n, type Lang } from "$lib/i18n.svelte";
   import { FolderOpen, Power } from "@lucide/svelte";
 
@@ -97,6 +98,8 @@
   </section>
 
   <NetRules />
+
+  <McpCard />
 
   <section class="card blk">
     <div class="label">{t("тесты", "tests")}</div>

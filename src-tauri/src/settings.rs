@@ -31,6 +31,8 @@ pub struct Settings {
     pub tg: crate::telegram::Config,
     /// Включение по сети.
     pub net: crate::netrules::NetRules,
+    /// MCP-сервер для ИИ-ассистентов.
+    pub mcp: crate::mcp::Settings,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -72,6 +74,7 @@ impl Default for Settings {
             window: None,
             tg: Default::default(),
             net: Default::default(),
+            mcp: Default::default(),
         }
     }
 }
@@ -103,6 +106,10 @@ pub fn load(config_dir: &Path) -> Settings {
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default();
     s.proxy.normalize();
+    if s.mcp.token.is_empty() {
+        s.mcp.token = crate::mcp::new_token();
+        save(config_dir, &s);
+    }
     // Секрет Telegram-прокси создаётся один раз и дальше не меняется сам.
     if crate::telegram::parse_secret(&s.tg.secret).is_err() {
         s.tg.secret = crate::telegram::new_secret();

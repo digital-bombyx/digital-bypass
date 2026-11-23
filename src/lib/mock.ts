@@ -134,6 +134,13 @@ const tg: any = {
   default_cf: Array.from({ length: 20 }, (_, i) => `cf${i}.co.uk`),
 };
 
+const mcp: any = {
+  settings: { enabled: false, port: 8899, token: "3b1f0c9e7a5d4c2b1a0f9e8d7c6b5a49e1d2c3b4", allow_changes: false },
+  running: false,
+  url: "http://127.0.0.1:8899/mcp",
+  error: null,
+};
+
 const net: any = {
   rules: { enabled: false, mode: "except", networks: [], zapret: true, proxy: true },
   current: ["HomeWiFi"],
@@ -305,6 +312,16 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
     case "evolve_start":
     case "evolve_save":
       return "general (AUTO 1).bat";
+    case "mcp_status":
+      return structuredClone(mcp);
+    case "mcp_set":
+      mcp.settings = { ...mcp.settings, enabled: args.enabled, allow_changes: args.allowChanges, port: args.port };
+      mcp.running = args.enabled;
+      mcp.url = `http://127.0.0.1:${args.port}/mcp`;
+      return structuredClone(mcp);
+    case "mcp_regen_token":
+      mcp.settings.token = "9f2c" + Math.random().toString(16).slice(2, 14);
+      return structuredClone(mcp);
     case "net_status":
       return structuredClone(net);
     case "net_set":

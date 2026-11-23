@@ -295,6 +295,13 @@ export type EvolveRun = {
   ceiling: number | null;
 };
 
+export type McpStatus = {
+  settings: { enabled: boolean; port: number; token: string; allow_changes: boolean };
+  running: boolean;
+  url: string;
+  error: string | null;
+};
+
 export type NetRules = { enabled: boolean; mode: "only" | "except"; networks: string[]; zapret: boolean; proxy: boolean };
 export type NetStatus = { rules: NetRules; current: string[]; allowed: boolean; paused: boolean };
 
@@ -360,6 +367,9 @@ export const api = {
   dnsCheckDefaults: () => invoke<string[]>("dns_check_defaults"),
   lanAddresses: () => invoke<string[]>("lan_addresses"),
   tgStatus: () => invoke<TgStatus>("tg_status"),
+  mcpStatus: () => invoke<McpStatus>("mcp_status"),
+  mcpSet: (enabled: boolean, allowChanges: boolean, port: number) => invoke<McpStatus>("mcp_set", { enabled, allowChanges, port }),
+  mcpRegenToken: () => invoke<McpStatus>("mcp_regen_token"),
   netStatus: () => invoke<NetStatus>("net_status"),
   netSet: (rules: NetRules) => invoke<NetStatus>("net_set", { rules }),
   tgStart: (config: TgConfig) => invoke<TgStatus>("tg_start", { config }),

@@ -10,6 +10,7 @@ mod hosts;
 mod i18n;
 mod ipset;
 mod lists;
+mod mcp;
 mod netrules;
 mod proxy;
 mod proxytest;
@@ -55,6 +56,8 @@ pub struct AppState {
     net_paused_zapret: AtomicBool,
     net_paused_proxy: AtomicBool,
     last_evolve: Mutex<Option<evolve::EvolveRun>>,
+    mcp: Mutex<Option<mcp::Server>>,
+    mcp_error: Mutex<Option<String>>,
 }
 
 impl AppState {
@@ -878,6 +881,65 @@ fn net_set(app: AppHandle, state: State<AppState>, mut rules: netrules::NetRules
     net_status_of(&state)
 }
 
+#[derive(Serialize)]
+struct McpStatus {
+    settings: mcp::Settings,
+    running: bool,
+    url: String,
+    error: Option<String>,
+}
+
+fn mcp_status_of(state: &AppState) -> McpStatus {
+    let settings = state.settings.lock().unwrap().mcp.clone();
+    McpStatus {
+        running: state.mcp.lock().unwrap().is_some(),
+        url: format!("http://127.0.0.1:{}/mcp", settings.port),
+        error: state.mcp_error.lock().unwrap().clone(),
+        settings,
+    }
+}
+
+/// Запустить или остановить MCP-сервер по настройкам.
+fn mcp_apply(app: &AppHandle) {
+    let st = app.state::<AppState>();
+    st.mcp.lock().unwrap().take();
+    let s = st.settings.lock().unwrap().mcp.clone();
+    *st.mcp_error.lock().unwrap() = None;
+    if s.enabled {
+        match mcp::start(app.clone(), &s) {
+            Ok(srv) => *st.mcp.lock().unwrap() = Some(srv),
+            Err(e) => *st.mcp_error.lock().unwrap() = Some(e),
+        }
+    }
+}
+
+#[tauri::command(async)]
+fn mcp_status(state: State<AppState>) -> McpStatus {
+    mcp_status_of(&state)
+}
+
+#[tauri::command(async)]
+fn mcp_set(app: AppHandle, state: State<AppState>, enabled: bool, allow_changes: bool, port: u16) -> R<McpStatus> {
+    if port < 1024 {
+        return Err(tr!("порт должен быть от 1024 до 65535", "port must be 1024–65535"));
+    }
+    state.update(|s| {
+        s.mcp.enabled = enabled;
+        s.mcp.allow_changes = allow_changes;
+        s.mcp.port = port;
+    });
+    mcp_apply(&app);
+    Ok(mcp_status_of(&state))
+}
+
+/// Новый токен: старые подключения ассистентов перестанут работать.
+#[tauri::command(async)]
+fn mcp_regen_token(app: AppHandle, state: State<AppState>) -> McpStatus {
+    state.update(|s| s.mcp.token = mcp::new_token());
+    mcp_apply(&app);
+    mcp_status_of(&state)
+}
+
 #[tauri::command(async)]
 fn tg_status(state: State<AppState>) -> TgStatus {
     tg_status_of(&state)
@@ -1322,6 +1384,8 @@ pub fn run() {
                 net_paused_zapret: AtomicBool::new(false),
                 net_paused_proxy: AtomicBool::new(false),
                 last_evolve: Mutex::new(None),
+                mcp: Mutex::new(None),
+                mcp_error: Mutex::new(None),
             });
 
             let handle = app.handle().clone();
@@ -1393,6 +1457,8 @@ pub fn run() {
                 }
                 refresh_tray(&handle);
             });
+
+            mcp_apply(app.handle());
 
             // Включение по сети: следить за сменой подключений.
             let handle = app.handle().clone();
@@ -1496,6 +1562,9 @@ pub fn run() {
             lan_addresses,
             tg_status,
             net_status,
+            mcp_status,
+            mcp_set,
+            mcp_regen_token,
             evolve_start,
             evolve_last,
             evolve_save,

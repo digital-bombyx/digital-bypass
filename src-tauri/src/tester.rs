@@ -373,6 +373,16 @@ pub struct Bench {
 
 impl Bench {
     pub fn open(ctx: &Ctx, kind: &str, params: Params) -> Result<Bench, String> {
+        Self::open_with(ctx, kind, params, None)
+    }
+
+    /// Стенд со своими целями (HTTP / TLS 1.2 / TLS 1.3 по адресам) — например,
+    /// подбор стратегии под один сайт.
+    pub fn open_urls(ctx: &Ctx, params: Params, urls: Vec<(String, String)>) -> Result<Bench, String> {
+        Self::open_with(ctx, "standard", params, Some(urls))
+    }
+
+    fn open_with(ctx: &Ctx, kind: &str, params: Params, urls: Option<Vec<(String, String)>>) -> Result<Bench, String> {
         if crate::service::state(crate::service::NAME).1 {
             return Err(crate::tr!("Работает служба zapret — остановите её перед тестом", "The zapret service is running — stop it before testing"));
         }
@@ -380,7 +390,11 @@ impl Bench {
             let st = ctx.runner.status();
             (st.mode == "process").then_some(st.strategy).flatten()
         };
-        let targets = if kind == "dpi" { dpi_targets(params.timeout)? } else { standard_targets(ctx.dir) };
+        let targets = match urls {
+            Some(u) => u.into_iter().map(|(key, url)| Target { key, url: Some(url), ping_host: None, dpi_host: None }).collect(),
+            None if kind == "dpi" => dpi_targets(params.timeout)?,
+            None => standard_targets(ctx.dir),
+        };
         if targets.is_empty() {
             return Err(crate::tr!("нет целей для проверки (utils\\targets.txt)", "no targets to check (utils\\targets.txt)"));
         }
