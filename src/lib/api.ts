@@ -291,6 +291,8 @@ export type EvolveRun = {
   cancelled: boolean;
   message: string | null;
   saved: string[];
+  baseline: number;
+  ceiling: number | null;
 };
 
 export type NetRules = { enabled: boolean; mode: "only" | "except"; networks: string[]; zapret: boolean; proxy: boolean };

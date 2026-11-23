@@ -300,7 +300,7 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
           { name: "general (ALT3)", parent: "general (ALT3).bat", changes: [], ok: 19, fail: 5, score: 18.5, complexity: 9, unstable: true, error: null, seed: true },
           { name: "AUTO 2.4", parent: "general (ALT3).bat", changes: ["multisplit → multidisorder"], ok: 18, fail: 6, score: 17.6, complexity: 8, unstable: false, error: null, seed: false },
         ],
-        tried: [], finished: false, cancelled: false, message: null, saved: [],
+        tried: [], finished: false, cancelled: false, message: null, saved: [], baseline: 19, ceiling: 24,
       };
     case "evolve_start":
     case "evolve_save":

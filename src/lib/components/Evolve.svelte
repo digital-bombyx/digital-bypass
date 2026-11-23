@@ -91,7 +91,9 @@
     {/if}
     {#if ev.message}<div class="msg mono">{ev.message}</div>{/if}
     {#if ev.hall.length}
-      <div class="label sub">{t("лучшие", "best")}</div>
+      <div class="label sub">{t("лучшие", "best")}
+        {#if ev.baseline}<span class="faint mono nocase">· {t("в тесте", "in the test")} {ev.baseline}{ev.ceiling !== null ? ` · ${t("потолок", "ceiling")} ${ev.ceiling}` : ""}</span>{/if}
+      </div>
       {#each ev.hall as c (c.name)}
         <div class="cand">
           <div class="chead mono">
@@ -133,6 +135,10 @@
     display: flex;
     align-items: center;
     gap: 6px;
+  }
+  .nocase {
+    text-transform: none;
+    letter-spacing: 0;
   }
   .label.sub {
     margin-top: 4px;

@@ -53,6 +53,31 @@
     return rs;
   });
 
+  /** Потолок: проверки, которые не прошли ни с одной стратегией, недостижимы
+   *  нарезкой (обычно блокировка подсети по IP). Считаем, когда стратегий ≥ 2. */
+  const ceiling = $derived.by(() => {
+    if (!run?.finished) return null;
+    const started = run.results.filter((r) => r.started && !r.error);
+    if (started.length < 2) return null;
+    const passed = new Set<string>();
+    const all = new Set<string>();
+    for (const r of started)
+      for (const tg of r.targets)
+        for (const [label, s] of tg.checks) {
+          const k = `${tg.key} | ${label}`;
+          all.add(k);
+          if (s === "OK") passed.add(k);
+        }
+    const dead = new Map<string, string[]>();
+    for (const k of all)
+      if (!passed.has(k)) {
+        const [key, label] = k.split(" | ");
+        dead.set(key, [...(dead.get(key) ?? []), label]);
+      }
+    return { max: passed.size, total: all.size, dead };
+  });
+  let showDead = $state(false);
+
   function liveTally(r: StrategyResult) {
     if (r.ok + r.fail + r.unsup + r.blocked > 0) return r;
     // Во время прогона счётчики ещё не посчитаны бэкендом — считаем на лету.
@@ -143,6 +168,28 @@
           disabled={app.busy || ov.selected === run.best}
           onclick={() => act(() => api.selectStrategy(run!.best!), t("Стратегия выбрана", "Strategy selected"))}
           >{ov.selected === run.best ? t("Выбрана", "Selected") : t("Применить", "Apply")}</button>
+      </section>
+    {/if}
+
+    {#if ceiling && ceiling.max < ceiling.total}
+      <section class="card ceil">
+        <button class="ceilhead mono" onclick={() => (showDead = !showDead)}>
+          <ChevronRight size={14} class={showDead ? "rot" : ""} />
+          <span>
+            {t("потолок", "ceiling")} <b>{ceiling.max}</b>/{ceiling.total}:
+            {t(
+              `${ceiling.total - ceiling.max} из ${ceiling.total} проверок не прошли ни с одной стратегией — вероятно, блокировка по IP, нарезка тут не поможет`,
+              `${ceiling.total - ceiling.max} of ${ceiling.total} checks failed with every strategy — probably an IP block that splitting can't fix`,
+            )}
+          </span>
+        </button>
+        {#if showDead}
+          <div class="dead mono">
+            {#each [...ceiling.dead] as [key, labels] (key)}
+              <div><span class="faint">{key}</span> · {labels.join(", ")}</div>
+            {/each}
+          </div>
+        {/if}
       </section>
     {/if}
 
@@ -311,6 +358,40 @@
     font-size: 14px;
     font-weight: 700;
     margin-top: 2px;
+  }
+  .ceil {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+  .ceilhead {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    font-size: 12px;
+  }
+  .ceilhead b {
+    color: var(--text);
+  }
+  .ceilhead :global(svg) {
+    flex-shrink: 0;
+    margin-top: 1px;
+    transition: transform 0.15s;
+  }
+  .ceilhead :global(.rot) {
+    transform: rotate(90deg);
+  }
+  .dead {
+    margin-top: 6px;
+    font-size: 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
   .results {
     display: flex;

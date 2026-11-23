@@ -311,6 +311,10 @@ pub struct EvolveRun {
     pub message: Option<String>,
     /// Сохранённые bat-файлы.
     pub saved: Vec<String>,
+    /// Лучший результат засева в обычном тесте (планка для сохранения).
+    pub baseline: u32,
+    /// Потолок по обычному тесту: проверки, прошедшие хоть с одной стратегией.
+    pub ceiling: Option<u32>,
 }
 
 pub struct Opts {
@@ -320,6 +324,34 @@ pub struct Opts {
     /// Мутантов на каждого из зала славы за раунд.
     pub per_parent: usize,
     pub hall: usize,
+    /// Лучший OK засева в обычном тесте того же вида (0 — теста не было).
+    pub baseline: u32,
+    pub ceiling: Option<u32>,
+}
+
+/// Планка и потолок из обычного теста того же вида: лучший OK среди
+/// `seeds` и число проверок, прошедших хотя бы с одной стратегией
+/// (остальные недостижимы нарезкой — обычно блокировка по IP).
+pub fn baseline_from(test: &crate::tester::TestRun, kind: &str, seeds: &[String]) -> (u32, Option<u32>) {
+    if !test.finished || test.kind != kind {
+        return (0, None);
+    }
+    let started: Vec<&crate::tester::StrategyResult> = test.results.iter().filter(|r| r.started && r.error.is_none()).collect();
+    let baseline = started.iter().filter(|r| seeds.contains(&r.file)).map(|r| r.ok).max().unwrap_or(0);
+    let ceiling = (started.len() >= 2).then(|| {
+        let mut passed = HashSet::new();
+        for r in &started {
+            for t in &r.targets {
+                for (label, st) in &t.checks {
+                    if st == "OK" {
+                        passed.insert((t.key.clone(), label.clone()));
+                    }
+                }
+            }
+        }
+        passed.len() as u32
+    });
+    (baseline, ceiling)
 }
 
 fn rank(hall: &mut Vec<Cand>, keep: usize) {
@@ -382,7 +414,7 @@ pub fn save(dir: &Path, c: &Cand) -> Result<String, String> {
 }
 
 pub fn run(ctx: crate::tester::Ctx, params: crate::tester::Params, opts: Opts, emit: impl Fn(&EvolveRun)) -> EvolveRun {
-    let mut st = EvolveRun { kind: opts.kind.clone(), rounds: opts.rounds, ..Default::default() };
+    let mut st = EvolveRun { kind: opts.kind.clone(), rounds: opts.rounds, baseline: opts.baseline, ceiling: opts.ceiling, ..Default::default() };
     let finish = |mut st: EvolveRun, msg: Option<String>| {
         st.finished = true;
         st.current = None;
@@ -493,16 +525,19 @@ pub fn run(ctx: crate::tester::Ctx, params: crate::tester::Params, opts: Opts, e
     }
     bench.close(&ctx);
 
-    // Сохранить лучшего, если он открыл больше, чем лучший из засева.
-    if let Some(best) = hall.iter().find(|c| !c.seed && c.ok > seed_best) {
+    // Сохранить лучшего, только если он открыл больше засева и в нашей
+    // перепроверке, и в обычном тесте: иначе «улучшение» — это шум DPI
+    // (засев в перепроверке мог случайно недобрать).
+    let bar = seed_best.max(opts.baseline);
+    if let Some(best) = hall.iter().find(|c| !c.seed && c.ok > bar) {
         match save(ctx.dir, best) {
             Ok(f) => st.saved.push(f),
             Err(e) => st.message = Some(e),
         }
     } else if !ctx.cancel.load(Ordering::Relaxed) {
         st.message = Some(crate::tr!(
-            "Лучше засева ничего не нашлось — попробуйте больше раундов или другие стратегии для засева",
-            "Nothing beat the seeds — try more rounds or other seed strategies"
+            "Лучше засева ({bar} OK) ничего не нашлось — попробуйте больше раундов или другие стратегии для засева",
+            "Nothing beat the seeds ({bar} OK) — try more rounds or other seed strategies"
         ));
     }
     finish(st, None)
@@ -544,6 +579,29 @@ mod tests {
             assert!(args.iter().any(|a| a == "--hostlist=C:\\z\\lists\\list general.txt"));
         }
         assert!(changed > 200);
+    }
+
+    #[test]
+    fn baseline_and_ceiling() {
+        use crate::tester::{StrategyResult, TargetResult, TestRun};
+        let tr = |key: &str, st: &[&str]| TargetResult {
+            key: key.into(),
+            checks: st.iter().enumerate().map(|(i, s)| (format!("c{i}"), s.to_string())).collect(),
+            ..Default::default()
+        };
+        let sr = |f: &str, ok, targets| StrategyResult { file: f.into(), started: true, ok, targets, ..Default::default() };
+        let run = TestRun {
+            kind: "dpi".into(),
+            finished: true,
+            results: vec![
+                sr("a.bat", 2, vec![tr("x", &["OK", "OK"]), tr("y", &["FAIL", "FAIL"]), tr("dead", &["FAIL"])]),
+                sr("b.bat", 1, vec![tr("x", &["FAIL", "FAIL"]), tr("y", &["OK", "FAIL"]), tr("dead", &["FAIL"])]),
+            ],
+            ..Default::default()
+        };
+        let seeds = vec!["b.bat".to_string()];
+        assert_eq!(baseline_from(&run, "dpi", &seeds), (1, Some(3)));
+        assert_eq!(baseline_from(&run, "standard", &seeds), (0, None));
     }
 
     #[test]

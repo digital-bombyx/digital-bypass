@@ -489,7 +489,9 @@ fn evolve_start(app: AppHandle, state: State<AppState>, kind: String, seeds: Vec
         let s = state.settings.lock().unwrap();
         tester::Params { timeout: s.test_timeout.clamp(2, 30), parallel: s.test_parallel.clamp(1, 32) }
     };
-    let opts = evolve::Opts { kind, seeds: seeds.into_iter().take(6).collect(), rounds: rounds.clamp(1, 5), per_parent: 3, hall: 4 };
+    let seeds: Vec<String> = seeds.into_iter().take(6).collect();
+    let (baseline, ceiling) = state.last_test.lock().unwrap().as_ref().map(|t| evolve::baseline_from(t, &kind, &seeds)).unwrap_or((0, None));
+    let opts = evolve::Opts { kind, seeds, rounds: rounds.clamp(1, 5), per_parent: 3, hall: 4, baseline, ceiling };
     std::thread::spawn(move || {
         let st = app.state::<AppState>();
         let gf = game_filter::load(&dir);
@@ -1297,6 +1299,11 @@ pub fn run() {
                 _ => None,
             };
 
+            // Последний тест — из истории: его используют засев и планка автоподбора.
+            let last_test = std::fs::read(config_dir.join("test-history.json"))
+                .ok()
+                .and_then(|b| serde_json::from_slice::<Vec<tester::TestRun>>(&b).ok())
+                .and_then(|h| h.into_iter().next());
             app.manage(AppState {
                 bundled_dir,
                 bundle_error: Mutex::new(bundle_error),
@@ -1305,7 +1312,7 @@ pub fn run() {
                 runner: runner::Runner::new(),
                 testing: AtomicBool::new(false),
                 cancel: AtomicBool::new(false),
-                last_test: Mutex::new(None),
+                last_test: Mutex::new(last_test),
                 proxy: Mutex::new(None),
                 proxy_testing: AtomicBool::new(false),
                 tg: Mutex::new(None),
