@@ -115,7 +115,8 @@ const diagSample = (domain: string) => ({
   verdict: "dpi",
   stage: "response",
   freeze: null,
-  extra: { ip: "157.240.205.174", split_ok: false, small_buf_ok: true, ip_clean: true, name_anywhere: false },
+  via_proxy: { port: 8881, result: "ok", ms: 412, detail: null },
+  extra: { ip: "157.240.205.174", split_ok: false, small_buf_ok: true, ip_clean: true, name_anywhere: false, sni_pass: null },
 });
 
 const tg: any = {

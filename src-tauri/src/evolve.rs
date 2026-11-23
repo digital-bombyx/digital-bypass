@@ -43,6 +43,8 @@ const SWAPS: &[(&str, &str)] = &[
 const ESSENTIAL: &[&str] = &["blob", "host"];
 /// Пауза между кандидатами, мс.
 const PAUSE_MS: u64 = 1500;
+/// Сколько раз подтверждать победителя перед сохранением.
+const CONFIRM: usize = 3;
 
 /// Действие `--lua-desync=техника:k=v:...` в тексте bat-файла.
 #[derive(Debug, Clone, PartialEq)]
@@ -523,21 +525,46 @@ pub fn run(ctx: crate::tester::Ctx, params: crate::tester::Params, opts: Opts, e
             }
         }
     }
-    bench.close(&ctx);
-
     // Сохранить лучшего, только если он открыл больше засева и в нашей
     // перепроверке, и в обычном тесте: иначе «улучшение» — это шум DPI
-    // (засев в перепроверке мог случайно недобрать).
+    // (засев в перепроверке мог случайно недобрать). Перед сохранением —
+    // подтверждение (как в b4 Discovery): ещё CONFIRM прогонов, каждый должен
+    // быть выше планки; провалил хоть один — очередь следующего кандидата.
     let bar = seed_best.max(opts.baseline);
-    if let Some(best) = hall.iter().find(|c| !c.seed && c.ok > bar) {
-        match save(ctx.dir, best) {
+    let candidates: Vec<Cand> = hall.iter().filter(|c| !c.seed && c.ok > bar).cloned().collect();
+    let mut winner: Option<Cand> = None;
+    for c in candidates {
+        if ctx.cancel.load(Ordering::Relaxed) {
+            break;
+        }
+        let name = &c.name;
+        st.current = Some(crate::tr!("подтверждение {name}", "confirming {name}"));
+        emit(&st);
+        let mut ok = true;
+        for _ in 0..CONFIRM {
+            std::thread::sleep(std::time::Duration::from_millis(PAUSE_MS));
+            let args = crate::strategy::args_from_text(&c.name, &c.text, &bench.vars);
+            let r = bench.eval(&ctx, &c.name, args, Some(rng.next()), |_| {});
+            if r.error.is_some() || r.ok <= bar {
+                ok = false;
+                break;
+            }
+        }
+        if ok {
+            winner = Some(c);
+            break;
+        }
+    }
+    bench.close(&ctx);
+    if let Some(best) = winner {
+        match save(ctx.dir, &best) {
             Ok(f) => st.saved.push(f),
             Err(e) => st.message = Some(e),
         }
     } else if !ctx.cancel.load(Ordering::Relaxed) {
         st.message = Some(crate::tr!(
-            "Лучше засева ({bar} OK) ничего не нашлось — попробуйте больше раундов или другие стратегии для засева",
-            "Nothing beat the seeds ({bar} OK) — try more rounds or other seed strategies"
+            "Лучше засева ({bar} OK) ничего не нашлось или не подтвердилось — попробуйте больше раундов или другие стратегии для засева",
+            "Nothing beat the seeds ({bar} OK) or it did not hold up — try more rounds or other seed strategies"
         ));
     }
     finish(st, None)

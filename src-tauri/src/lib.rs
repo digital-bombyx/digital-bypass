@@ -1019,8 +1019,13 @@ fn dns_check_defaults() -> &'static [&'static str] {
 }
 
 #[tauri::command(async)]
-fn diag_run(domain: String) -> R<diag::Report> {
-    diag::run(&domain)
+fn diag_run(state: State<AppState>, domain: String) -> R<diag::Report> {
+    diag::run_with(&domain, proxy_port_if_running(&state))
+}
+
+/// Порт прокси-обходчика, если он работает (проверка сайта и через него).
+fn proxy_port_if_running(state: &AppState) -> Option<u16> {
+    state.proxy.lock().unwrap().is_some().then(|| state.settings.lock().unwrap().proxy.port)
 }
 
 #[tauri::command(async)]

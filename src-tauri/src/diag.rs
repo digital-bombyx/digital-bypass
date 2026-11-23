@@ -67,6 +67,9 @@ pub struct Extra {
     pub ip_clean: Option<bool>,
     /// Имя сайта режется и на постороннем адресе (1.1.1.1) — DPI по имени везде.
     pub name_anywhere: Option<bool>,
+    /// Для ограничения по сети назначения: имена (обычно из белых списков),
+    /// с которыми этот адрес всё же отвечает. Пусто — не проходит ни одно.
+    pub sni_pass: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -106,6 +109,52 @@ pub struct Report {
     pub extra: Option<Extra>,
     /// Проверка «замирания»: маленький запрос и 64 КБ (если TLS прошёл).
     pub freeze: Option<FreezeProbe>,
+    /// Тот же сайт через наш прокси-обходчик (если он включён).
+    pub via_proxy: Option<ProxyCheck>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProxyCheck {
+    pub port: u16,
+    pub result: Probe,
+    pub ms: Option<u64>,
+    pub detail: Option<String>,
+}
+
+/// TLS к сайту через HTTP CONNECT нашего прокси.
+pub fn probe_via_proxy(port: u16, host: &str) -> ProxyCheck {
+    use std::io::{Read, Write};
+    let t0 = Instant::now();
+    let fail = |result, d: String| ProxyCheck { port, result, ms: None, detail: Some(d) };
+    let mut tcp = match TcpStream::connect_timeout(&SocketAddr::from(([127, 0, 0, 1], port)), TIMEOUT) {
+        Ok(s) => s,
+        Err(e) => return fail(Probe::TcpFail, format!("proxy: {e}")),
+    };
+    let _ = tcp.set_read_timeout(Some(TIMEOUT * 2));
+    if let Err(e) = write!(tcp, "CONNECT {host}:443 HTTP/1.1\r\nHost: {host}:443\r\n\r\n") {
+        return fail(Probe::TcpFail, e.to_string());
+    }
+    // Ответ прокси до пустой строки.
+    let mut head = Vec::new();
+    let mut b = [0u8; 1];
+    while !head.ends_with(b"\r\n\r\n") && head.len() < 4096 {
+        match tcp.read(&mut b) {
+            Ok(1) => head.push(b[0]),
+            Ok(_) => return fail(Probe::TcpFail, "proxy closed".into()),
+            Err(e) => return fail(Probe::TcpFail, e.to_string()),
+        }
+    }
+    let status = String::from_utf8_lossy(&head);
+    if !status.starts_with("HTTP/1.1 200") && !status.starts_with("HTTP/1.0 200") {
+        return fail(Probe::TcpFail, status.lines().next().unwrap_or("").to_string());
+    }
+    match crate::doh::tls_handshake(tcp, host, TIMEOUT * 2) {
+        Ok(_) => ProxyCheck { port, result: Probe::Ok, ms: Some(t0.elapsed().as_millis() as u64), detail: None },
+        Err(e) => {
+            let (p, d) = classify(&e);
+            fail(p, d)
+        }
+    }
 }
 
 /// Замирание соединения после N пакетов (с 2025 года — к Hetzner, OVH,
@@ -362,6 +411,7 @@ pub fn extra(ip: IpAddr, host: &str, stage: Option<Stage>) -> Extra {
         small_buf_ok: small.and_then(join).map(|p| p == Probe::Ok),
         ip_clean: join(other).filter(|p| *p != Probe::TcpFail).map(|p| !cut(p)),
         name_anywhere: join(anywhere).filter(|p| *p != Probe::TcpFail).map(cut),
+        sni_pass: None,
     }
 }
 
@@ -398,7 +448,13 @@ pub fn verdict(system: &[IpAddr], doh: &[IpAddr], bogus: bool, checks: &[Check])
 }
 
 /// Проверка домена. DoH — Cloudflare, при ошибке Google (по IP, без системного DNS).
+#[cfg(test)]
 pub fn run(input: &str) -> Result<Report, String> {
+    run_with(input, None)
+}
+
+/// `proxy_port` — порт включённого прокси-обходчика: сайт проверяется и через него.
+pub fn run_with(input: &str, proxy_port: Option<u16>) -> Result<Report, String> {
     let domain = normalize(input)?;
     let (system, system_error) = match (domain.as_str(), 443).to_socket_addrs() {
         Ok(it) => {
@@ -479,9 +535,17 @@ pub fn run(input: &str) -> Result<Report, String> {
         (Verdict::Dpi, Some(c)) => c.ip.parse().ok().map(|ip| self::extra(ip, &domain, stage)),
         _ => None,
     };
-    if extra.as_ref().is_some_and(dest_net) {
+    let mut extra = extra;
+    if let Some(x) = extra.as_mut().filter(|x| dest_net(x)) {
         v = Verdict::DestNet;
+        // Какие имена этот адрес пропускает: если есть из белых списков —
+        // VLESS+Reality с таким SNI на этом хостинге может работать.
+        let snis: Vec<String> = crate::sniscan::DEFAULT_SNIS.iter().map(|s| s.to_string()).collect();
+        x.sni_pass = crate::sniscan::run(&format!("{}:443", x.ip), &snis, 4).ok().map(|r| {
+            r.items.into_iter().filter(|i| i.outcome == crate::sniscan::Outcome::Pass).map(|i| i.sni).take(8).collect()
+        });
     }
+    let via_proxy = proxy_port.map(|p| probe_via_proxy(p, &domain));
     Ok(Report {
         domain,
         system: system.iter().map(|i| i.to_string()).collect(),
@@ -494,6 +558,7 @@ pub fn run(input: &str) -> Result<Report, String> {
         stage,
         extra,
         freeze,
+        via_proxy,
     })
 }
 
@@ -511,6 +576,8 @@ mod tests {
     #[test]
     fn dest_net_rule() {
         let x = |split_ok, ip_clean, name_anywhere| Extra { split_ok, ip_clean, name_anywhere, ..Default::default() };
+        // Структура с новым полем по умолчанию — без SNI.
+        assert!(x(None, None, None).sni_pass.is_none());
         assert!(dest_net(&x(Some(false), Some(false), Some(false))));
         assert!(!dest_net(&x(Some(true), Some(false), Some(false))));
         assert!(!dest_net(&x(Some(false), Some(true), Some(false))));
@@ -574,6 +641,18 @@ mod tests {
         assert_eq!(verdict(&[], &[], false, &[]), Verdict::NoDomain);
         // Системный DNS ничего не вернул, DoH — вернул и работает.
         assert_eq!(verdict(&[], &d2, false, &[c("5.6.7.8", "doh", Probe::Ok)]), Verdict::Dns);
+    }
+
+    /// Сеть: проверка через временный прокси-обходчик (DIAG_DOMAIN, по умолчанию x.com).
+    #[test]
+    #[ignore]
+    fn live_via_proxy() {
+        let d = std::env::var("DIAG_DOMAIN").unwrap_or_else(|_| "x.com".into());
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let cfg = crate::proxy::Config { port, system: false, ..Default::default() };
+        let _p = crate::proxy::Proxy::start(cfg, &[]).unwrap();
+        let r = run_with(&d, Some(port)).unwrap();
+        println!("verdict {:?}, via proxy {:?}", r.verdict, r.via_proxy);
     }
 
     /// Сеть: проверка домена (DIAG_DOMAIN, по умолчанию example.com). Только чтение.

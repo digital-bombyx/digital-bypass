@@ -140,6 +140,7 @@ Our code is original; these projects contributed techniques and approaches:
 - **[GreenTunnel](https://github.com/SadeghHayeri/GreenTunnel)** (Sadegh Hayeri) — DNS-over-TLS, connection log.
 - **[sni-spoofing-rust](https://github.com/therealaleph/sni-spoofing-rust)** (therealaleph) — SNI scanner, LAN sharing.
 - **[Geneva](https://geneva.cs.umd.edu/)** (Bock et al., ACM CCS 2019) — the auto-tune approach: seeding with known strategies, repeated evaluation, complexity penalty, hall of fame.
+- **[B4](https://github.com/DanielLavrushin/b4)** and **[tspu-docs](https://github.com/DanielLavrushin/tspu-docs)** (DanielLavrushin) — stripping ECH keys from DNS, "direct vs through the bypass" checks, SNI search for hostings, winner confirmation; how TSPU restricts hostings.
 - **[zapret](https://github.com/bol-van/zapret)** (bol-van) — blockcheck methodology for the block type, small receive buffer (like `--wssize`), per-network switching (`--ssid-filter`).
 
 ## License

@@ -288,6 +288,22 @@ fn advice(r: &crate::diag::Report, in_zapret: Option<bool>) -> String {
     if r.verdict == crate::diag::Verdict::Dpi && in_zapret == Some(false) {
         s.push_str(" The domain is NOT in the zapret2 lists, so zapret2 ignores it — add it first (add_domains_to_list list=zapret, or find_zapret_strategy add_to_list=true).");
     }
+    if let Some(p) = &r.via_proxy {
+        let direct_ok = r.verdict == crate::diag::Verdict::Ok;
+        match (direct_ok, p.result == crate::diag::Probe::Ok) {
+            (false, true) => s.push_str(" Through the running bypass proxy the site OPENS — the proxy fixes it (the browser must use the proxy)."),
+            (true, false) => s.push_str(" The site opens directly but NOT through the running bypass proxy — the proxy breaks it; add it to proxy_skip."),
+            (false, false) => s.push_str(" It does not open through the running bypass proxy either."),
+            _ => {}
+        }
+    }
+    if let Some(sn) = r.extra.as_ref().and_then(|x| x.sni_pass.as_ref()) {
+        if sn.is_empty() {
+            s.push_str(" No candidate SNI passes to this address either.");
+        } else {
+            s.push_str(&format!(" With these SNI names the address still answers: {} — a VLESS+Reality server on this network with such an SNI may work.", sn.join(", ")));
+        }
+    }
     if r.checks.iter().any(|c| c.unstable) {
         s.push_str(" Repeated checks disagreed: the ISP balances traffic or runs several DPIs.");
     }
@@ -316,7 +332,7 @@ pub fn call(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
         }
         "diagnose_site" => {
             let d = arg_str(a, "domain").ok_or("domain is required")?;
-            let r = crate::diag::run(d)?;
+            let r = crate::diag::run_with(d, crate::proxy_port_if_running(&st))?;
             let in_zapret = st.dir().ok().map(|dir| in_lists(&crate::lists::bypass_domains(&dir), &r.domain));
             Ok(json!({"advice": advice(&r, in_zapret), "in_zapret_lists": in_zapret, "report": to_value(&r)}))
         }

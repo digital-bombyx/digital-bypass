@@ -540,6 +540,8 @@ impl CachedResolver {
 pub struct StubStats {
     pub queries: u64,
     pub cached: u64,
+    /// Запросов HTTPS-записей (с ключами ECH), на которые отдан пустой ответ.
+    pub ech_stripped: u64,
     pub errors: u64,
     pub last_error: Option<String>,
     pub ipv6: bool,
@@ -553,8 +555,66 @@ struct Shared {
     cache: Mutex<HashMap<Vec<u8>, (Vec<u8>, Instant)>>,
     queries: AtomicU64,
     cached: AtomicU64,
+    ech_stripped: AtomicU64,
     errors: AtomicU64,
     last_error: Mutex<Option<String>>,
+}
+
+/// Тип записи HTTPS (RFC 9460): в ней сайты за CDN публикуют ключ ECH.
+pub const QTYPE_HTTPS: u16 = 65;
+
+/// Тип запроса из первого вопроса DNS-сообщения.
+pub fn query_type(q: &[u8]) -> Option<u16> {
+    if q.len() < 12 || u16::from_be_bytes([q[4], q[5]]) == 0 {
+        return None;
+    }
+    let mut i = 12;
+    loop {
+        let l = *q.get(i)? as usize;
+        if l == 0 {
+            i += 1;
+            break;
+        }
+        if l & 0xc0 != 0 {
+            i += 2;
+            break;
+        }
+        i += 1 + l;
+    }
+    Some(u16::from_be_bytes([*q.get(i)?, *q.get(i + 1)?]))
+}
+
+/// Ответ без записей (NOERROR/NODATA) на тот же вопрос.
+pub fn empty_answer(q: &[u8]) -> Vec<u8> {
+    let mut r = q.to_vec();
+    // QR=1, RD как в запросе; RA=1, RCODE=0; ANCOUNT=NSCOUNT=ARCOUNT=0.
+    r[2] = 0x80 | (q[2] & 0x01);
+    r[3] = 0x80;
+    for b in &mut r[6..12] {
+        *b = 0;
+    }
+    // Хвост после вопроса (например, EDNS) не нужен: ARCOUNT=0.
+    if let Some(end) = question_end(q) {
+        r.truncate(end);
+    }
+    r
+}
+
+fn question_end(q: &[u8]) -> Option<usize> {
+    let mut i = 12;
+    loop {
+        let l = *q.get(i)? as usize;
+        if l == 0 {
+            i += 1;
+            break;
+        }
+        if l & 0xc0 != 0 {
+            i += 2;
+            break;
+        }
+        i += 1 + l;
+    }
+    (i + 4 <= q.len()).then_some(i + 4)
 }
 
 impl Shared {
@@ -562,6 +622,13 @@ impl Shared {
         self.queries.fetch_add(1, Ordering::Relaxed);
         if query.len() < 12 {
             return Vec::new();
+        }
+        // Ключ ECH из HTTPS-записи заставляет браузер слать ClientHello с именем
+        // cloudflare-ech.com, а такие ТСПУ отбрасывает (с ноября 2024). Без записи
+        // браузер шлёт обычный ClientHello с именем сайта — его можно обойти.
+        if query_type(query) == Some(QTYPE_HTTPS) {
+            self.ech_stripped.fetch_add(1, Ordering::Relaxed);
+            return empty_answer(query);
         }
         let key = query[2..].to_vec();
         if let Some((resp, exp)) = self.cache.lock().unwrap().get(&key) {
@@ -633,6 +700,7 @@ impl Stub {
             cache: Mutex::new(HashMap::new()),
             queries: AtomicU64::new(0),
             cached: AtomicU64::new(0),
+            ech_stripped: AtomicU64::new(0),
             errors: AtomicU64::new(0),
             last_error: Mutex::new(None),
         });
@@ -659,6 +727,7 @@ impl Stub {
         StubStats {
             queries: self.shared.queries.load(Ordering::Relaxed),
             cached: self.shared.cached.load(Ordering::Relaxed),
+            ech_stripped: self.shared.ech_stripped.load(Ordering::Relaxed),
             errors: self.shared.errors.load(Ordering::Relaxed),
             last_error: self.shared.last_error.lock().unwrap().clone(),
             ipv6: self.ipv6,
@@ -856,6 +925,21 @@ mod tests {
     }
 
     /// Сеть: резолвер на 127.0.0.1:53 отвечает по UDP и TCP. Адаптеры не трогает.
+    #[test]
+    fn https_records_are_emptied() {
+        let q = build_query(0x1234, "www.cloudflare.com", QTYPE_HTTPS).unwrap();
+        assert_eq!(query_type(&q), Some(QTYPE_HTTPS));
+        assert_eq!(query_type(&build_query(1, "a.ru", 1).unwrap()), Some(1));
+        let r = empty_answer(&q);
+        assert_eq!(&r[..2], &[0x12, 0x34]);
+        assert_eq!(r[2] & 0x80, 0x80);
+        assert_eq!(r[3] & 0x0f, 0);
+        assert_eq!(&r[6..12], &[0, 0, 0, 0, 0, 0]);
+        assert_eq!(u16::from_be_bytes([r[4], r[5]]), 1);
+        assert_eq!(r.len(), q.len());
+        assert!(parse_answers(&r).is_none_or(|(ips, _)| ips.is_empty()));
+    }
+
     #[test]
     #[ignore]
     fn live_stub() {

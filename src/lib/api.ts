@@ -140,7 +140,7 @@ export type StubConfig = {
 export type StubStatus = {
   running: boolean;
   config: StubConfig | null;
-  stats: { queries: number; cached: number; errors: number; last_error: string | null; ipv6: boolean; addr: string; template: string } | null;
+  stats: { queries: number; cached: number; ech_stripped?: number; errors: number; last_error: string | null; ipv6: boolean; addr: string; template: string } | null;
 };
 
 export type ProxyRules = { scope: "all" | "listed"; zapret_lists: boolean; bypass: string[]; skip: string[]; block: string[] };
@@ -258,12 +258,14 @@ export type DiagReport = {
   verdict: Verdict;
   stage: Stage | null;
   freeze: { ip: string; small_ok: boolean; big_ok: boolean; detail: string | null } | null;
+  via_proxy: { port: number; result: Probe; ms: number | null; detail: string | null } | null;
   extra: {
     ip: string;
     split_ok: boolean | null;
     small_buf_ok: boolean | null;
     ip_clean: boolean | null;
     name_anywhere: boolean | null;
+    sni_pass: string[] | null;
   } | null;
 };
 export type Stage = "request" | "response";

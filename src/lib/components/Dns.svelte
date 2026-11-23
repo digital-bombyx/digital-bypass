@@ -252,7 +252,7 @@
           <span class="k">{t("сервер", "server")}</span><span class="wrap">{stub.config.template}</span>
           {#if stub.stats}
             <span class="k">{t("запросы", "queries")}</span>
-            <span>{stub.stats.queries} · {t("кэш", "cache")} {stub.stats.cached} · {t("ошибки", "errors")} {stub.stats.errors}</span>
+            <span>{stub.stats.queries} · {t("кэш", "cache")} {stub.stats.cached} · {t("ошибки", "errors")} {stub.stats.errors}{#if stub.stats.ech_stripped} · <span title={t("Запросы HTTPS-записей с ключами ECH, на которые отдан пустой ответ: браузер шлёт обычный ClientHello, который можно обойти", "HTTPS-record queries (ECH keys) answered empty: the browser sends an ordinary ClientHello that can be bypassed")}>ECH {stub.stats.ech_stripped}</span>{/if}</span>
           {/if}
           {#if stub.config.fallback}<span class="k">{t("резерв", "fallback")}</span><span>{stub.config.fallback}</span>{/if}
         </div>

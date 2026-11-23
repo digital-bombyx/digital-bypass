@@ -155,6 +155,33 @@
           {/if}
         </ul>
       {/if}
+      {#if report.extra?.sni_pass}
+        <div class="vx">
+          {#if report.extra.sni_pass.length}
+            {t("С этими именами адрес всё же отвечает:", "The address still answers with these names:")}
+            <span class="mono">{report.extra.sni_pass.join(", ")}</span>.
+            {t("Сервер VLESS+Reality в этой сети с таким SNI может работать.", "A VLESS+Reality server in this network with such an SNI may work.")}
+          {:else}
+            {t("Ни одно имя из списка сканера SNI к этому адресу не проходит.", "No name from the SNI scanner list gets through to this address.")}
+          {/if}
+        </div>
+      {/if}
+      {#if report.via_proxy}
+        {@const pOk = report.via_proxy.result === "ok"}
+        {@const dOk = report.verdict === "ok"}
+        <div class="vx proxyline" class:good={pOk && !dOk} class:badline={dOk && !pOk}>
+          {#if pOk && !dOk}
+            {t("Через прокси-обходчик сайт открывается — прокси это исправляет (браузер должен ходить через прокси).", "Through the bypass proxy the site opens — the proxy fixes it (the browser must use the proxy).")}
+          {:else if dOk && !pOk}
+            {t("Напрямую открывается, а через прокси — нет: прокси ломает сайт. Добавьте его в «не резать».", "Opens directly but not through the proxy: the proxy breaks it. Add it to “don't split”.")}
+          {:else if pOk}
+            {t("Через прокси-обходчик тоже открывается.", "Opens through the bypass proxy too.")}
+          {:else}
+            {t("Через прокси-обходчик тоже не открывается.", "Does not open through the bypass proxy either.")}
+          {/if}
+          <span class="faint mono">({probeText(report.via_proxy.result)}{report.via_proxy.ms !== null ? ` · ${report.via_proxy.ms} ms` : ""})</span>
+        </div>
+      {/if}
       {#if report.checks.some((c) => c.unstable)}
         <div class="vx muted">{t("Повторы проверки дали разный результат — у провайдера балансировка или несколько DPI. Засчитан худший.", "Repeated checks disagreed — the ISP balances traffic or runs several DPIs. The worst result is shown.")}</div>
       {/if}
@@ -205,6 +232,12 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+  }
+  .proxyline.good {
+    color: var(--sage);
+  }
+  .proxyline.badline {
+    color: var(--yellow);
   }
   .facts {
     margin: 0;
