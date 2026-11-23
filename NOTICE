@@ -63,3 +63,39 @@ https://github.com/therealaleph/sni-spoofing-rust; the code is original.
 digital-bypass is based on Zapret2-RustGUI by the same author
 (https://github.com/digital-bombyx/Zapret2-RustGUI). Earlier releases of
 Zapret2-RustGUI remain available under the MIT License.
+
+Ideas without copied code (credited as a courtesy): NoDPI by GVCoder09
+(GPL-3.0), https://github.com/GVCoder09/NoDPI; SpoofDPI by xvzc (Apache-2.0),
+https://github.com/xvzc/spoofdpi; GreenTunnel by Sadegh Hayeri (MIT),
+https://github.com/SadeghHayeri/GreenTunnel; zapret by bol-van,
+https://github.com/bol-van/zapret (blockcheck methodology, --wssize and
+--ssid-filter ideas).
+
+------------------------------------------------------------------------------
+THIRD-PARTY LICENSE TEXTS
+------------------------------------------------------------------------------
+
+tg-ws-proxy (src-tauri/src/telegram.rs, src/lib/tgWorker.ts, default CF proxy
+domain list), https://github.com/Flowseal/tg-ws-proxy:
+
+MIT License
+
+Copyright (c) 2026 Flowseal
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

@@ -110,6 +110,18 @@ npm run tauri build
 - Авторы [PR #18202](https://github.com/Flowseal/zapret-discord-youtube/pull/18202) — перевод сборки на zapret2.
 - **[basil00/WinDivert](https://github.com/basil00/WinDivert)** — драйвер перехвата пакетов.
 - **[hyperion-cs/dpi-checkers](https://github.com/hyperion-cs/dpi-checkers)** — цели для DPI-теста «16-20 КБ».
+- **[Flowseal/tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy)** (MIT) — модуль Telegram портирован с него, скрипт Worker и список CF-доменов взяты оттуда.
+
+### Идеи
+
+Код ниже — свой, из этих проектов взяты приёмы и подходы:
+
+- **[ByeDPI](https://github.com/hufrea/byedpi)** (hufrea) — автоматический режим прокси, OOB, синтаксис своих позиций разреза.
+- **[SpoofDPI](https://github.com/xvzc/spoofdpi)** (xvzc) — способы нарезки, правила по доменам, кэш DNS.
+- **[NoDPI](https://github.com/GVCoder09/NoDPI)** (GVCoder09) — проверка домена, прокси без прав администратора, DoH на Windows 10, наборы доменов.
+- **[GreenTunnel](https://github.com/SadeghHayeri/GreenTunnel)** (Sadegh Hayeri) — DNS-over-TLS, журнал соединений.
+- **[sni-spoofing-rust](https://github.com/therealaleph/sni-spoofing-rust)** (therealaleph) — сканер SNI, раздача в локальную сеть.
+- **[zapret](https://github.com/bol-van/zapret)** (bol-van) — методика blockcheck для определения типа блокировки, маленький буфер приёма (аналог `--wssize`), включение по сети (`--ssid-filter`).
 
 Бинарники и Lua-скрипты встроенной сборки распространяются под лицензиями их авторов (см. `LICENSE.txt` в папке сборки).
 
@@ -122,5 +134,9 @@ npm run tauri build
 - изменённые версии помечаются как отличные от оригинала (другое название или суффикс версии).
 
 Форки и производные работы остаются открытыми под GPL-3.0.
+
+## Supported by GOAT VLESS
+
+<a href="https://t.me/goatvless_bot?start=ref_8840005712"><img src="docs/goatvless-banner-transparent.webp" alt="GOAT VLESS" width="100%"></a>
 
 <div align="center"><sub><a href="https://github.com/digital-bombyx">digital-bombyx</a></sub></div>

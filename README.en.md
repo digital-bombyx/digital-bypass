@@ -100,6 +100,18 @@ npm run tauri build
 - **[Flowseal](https://github.com/Flowseal)** and the [zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube) contributors.
 - Authors of [PR #18202](https://github.com/Flowseal/zapret-discord-youtube/pull/18202) — the zapret2 port.
 - **[basil00/WinDivert](https://github.com/basil00/WinDivert)**, **[hyperion-cs/dpi-checkers](https://github.com/hyperion-cs/dpi-checkers)**.
+- **[Flowseal/tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy)** (MIT) — the Telegram module is a port of it; the Worker script and the CF domain list come from it.
+
+### Ideas
+
+Our code is original; these projects contributed techniques and approaches:
+
+- **[ByeDPI](https://github.com/hufrea/byedpi)** (hufrea) — proxy auto mode, OOB, custom split positions syntax.
+- **[SpoofDPI](https://github.com/xvzc/spoofdpi)** (xvzc) — split methods, per-domain rules, DNS cache.
+- **[NoDPI](https://github.com/GVCoder09/NoDPI)** (GVCoder09) — domain check, proxy without admin rights, DoH on Windows 10, domain sets.
+- **[GreenTunnel](https://github.com/SadeghHayeri/GreenTunnel)** (Sadegh Hayeri) — DNS-over-TLS, connection log.
+- **[sni-spoofing-rust](https://github.com/therealaleph/sni-spoofing-rust)** (therealaleph) — SNI scanner, LAN sharing.
+- **[zapret](https://github.com/bol-van/zapret)** (bol-van) — blockcheck methodology for the block type, small receive buffer (like `--wssize`), per-network switching (`--ssid-filter`).
 
 ## License
 
