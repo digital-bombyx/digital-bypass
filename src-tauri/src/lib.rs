@@ -1230,7 +1230,11 @@ fn refresh_tray(app: &AppHandle) {
 }
 
 /// Вернуть окну сохранённые размер и положение (если монитор на месте).
+/// Масштаб интерфейса: всё на 10% крупнее.
+const UI_ZOOM: f64 = 1.1;
+
 fn restore_geometry(app: &AppHandle, w: &tauri::WebviewWindow) {
+    let _ = w.set_zoom(UI_ZOOM);
     let Some(g) = app.state::<AppState>().settings.lock().unwrap().window else { return };
     let monitors: Vec<(i32, i32, u32, u32)> = w
         .available_monitors()

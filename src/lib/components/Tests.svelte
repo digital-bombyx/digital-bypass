@@ -14,6 +14,17 @@
   let history = $state<TestRun[]>([]);
   let expanded = $state<string | null>(null);
   let showHistory = $state(false);
+  // Свернуть длинный список результатов (запоминается).
+  let showResults = $state(true);
+  try {
+    showResults = localStorage.getItem("tests.results") !== "0";
+  } catch {}
+  function toggleResults() {
+    showResults = !showResults;
+    try {
+      localStorage.setItem("tests.results", showResults ? "1" : "0");
+    } catch {}
+  }
 
   onMount(() => {
     picked = new Set(ov.strategies.map((s) => s.file));
@@ -213,7 +224,14 @@
       </section>
     {/if}
 
-    <section class="results">
+    <button class="reshdr mono" onclick={toggleResults}>
+      <ChevronRight size={14} class={showResults ? "rot" : ""} />
+      <span>{t("результаты", "results")}</span>
+      <span class="faint">{run.results.length}</span>
+      {#if !showResults && sorted.length}<span class="faint">· {t("лучшие", "best")}: {sorted.slice(0, 3).map((r) => `${strategyName(r.file)} ${r.ok}`).join(", ")}</span>{/if}
+    </button>
+
+    <section class="results" class:hidden={!showResults}>
       {#each sorted as r0 (r0.file)}
         {@const r = liveTally(r0)}
         {@const total = Math.max(checksTotal(r), 1)}
@@ -420,6 +438,34 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+  }
+  .reshdr {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 2px 2px;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-align: left;
+  }
+  .reshdr span:last-child:not(:nth-child(3)) {
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .reshdr :global(svg) {
+    transition: transform 0.15s;
+    flex-shrink: 0;
+  }
+  .reshdr :global(.rot) {
+    transform: rotate(90deg);
+  }
+  .results.hidden {
+    display: none;
   }
   .results {
     display: flex;
