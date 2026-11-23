@@ -232,7 +232,8 @@ fn tools() -> Vec<Value> {
         }), &[]),
         tool("get_zapret_log", "Last lines of winws2 output (errors, startup problems).", json!({"lines": {"type":"integer","description":"Default 80"}}), &[]),
         tool("tor_control", "Tor: start, stop, status (bootstrap %, current transport tier, last error, recent log) or new_identity (fresh circuits). Starting uses the saved transport (auto tries found/own bridges, then built-in obfs4, snowflake, meek); bootstrap takes 10 s to a few minutes. Tor gives a SOCKS5 proxy and serves the bypass proxy's 'through Tor' domains. It bypasses blocks, it is not anonymity for the browser. start/stop/new_identity need 'allow changes'.", json!({
-            "action": {"type":"string","enum":["start","stop","status","new_identity"]},
+            "action": {"type":"string","enum":["start","stop","status","new_identity","set_scope"]},
+            "scope": {"type":"string","enum":["list","zapret","all"],"description":"For set_scope: what the bypass proxy sends through Tor besides .onion — only the Tor domain list, plus zapret2 list domains, or all traffic (except the proxy's skip and Worker lists)"},
             "transport": {"type":"string","enum":["auto","obfs4","webtunnel","snowflake","meek","custom","direct"],"description":"Optional for start: save and use this transport"}
         }), &["action"]),
         tool("find_tor_bridges", "Find working Tor bridges: downloads fresh obfs4/webtunnel lists, TCP-checks them and verifies each through lyrebird up to the Tor relay's TLS reply. Found bridges are saved and used first. ~30-90 s. Needs 'allow changes'.", json!({
@@ -330,7 +331,7 @@ pub fn call(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
             let mcp = st.settings.lock().unwrap().mcp.clone();
             let tor = crate::tor_status_of(&st);
             Ok(json!({
-                "tor": {"running": tor.status.running, "connected": tor.status.ready, "bootstrap_percent": tor.status.percent, "socks": format!("127.0.0.1:{}", tor.config.socks_port), "transport": tor.config.transport, "domains_through_tor": tor.domains},
+                "tor": {"running": tor.status.running, "connected": tor.status.ready, "bootstrap_percent": tor.status.percent, "socks": format!("127.0.0.1:{}", tor.config.socks_port), "transport": tor.config.transport, "domains_through_tor": tor.domains, "tor_scope": tor.tor_scope},
                 "admin": ov.admin,
                 "zapret2": {"status": to_value(&ov.status), "selected_strategy": ov.selected, "mode": ov.mode, "build_found": ov.dir.is_some(), "testing": ov.testing},
                 "proxy": {"running": px.stats.running, "address": format!("127.0.0.1:{}", px.config.port), "config": to_value(&px.config), "stats": to_value(&px.stats)},
@@ -461,13 +462,18 @@ pub fn call(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
                     crate::tor_stop(app.clone(), app.state());
                 }
                 "new_identity" => crate::tor_new_identity(app.state())?,
+                "set_scope" => {
+                    let sc = arg_str(a, "scope").filter(|s| crate::proxy::TOR_SCOPES.contains(s)).ok_or("scope must be list, zapret or all")?;
+                    let d = st.settings.lock().unwrap().proxy.rules.tor.clone();
+                    crate::tor_set_domains(app.clone(), app.state(), d, Some(sc.into()))?;
+                }
                 "status" => {}
-                _ => return Err("action must be start, stop, status or new_identity".into()),
+                _ => return Err("action must be start, stop, status, new_identity or set_scope".into()),
             }
             let _ = app.emit("tor-changed", ());
             let t = crate::tor_status_of(&st);
             let log: Vec<String> = crate::tor_log(app.state()).into_iter().rev().take(25).collect();
-            Ok(json!({"status": to_value(&t.status), "transport": t.config.transport, "found_bridges": t.config.found.len(), "own_bridges": t.config.bridges.len(), "domains_through_tor": t.domains, "log_tail": log}))
+            Ok(json!({"status": to_value(&t.status), "transport": t.config.transport, "tor_scope": t.tor_scope, "found_bridges": t.config.found.len(), "own_bridges": t.config.bridges.len(), "domains_through_tor": t.domains, "log_tail": log}))
         }
         "find_tor_bridges" => {
             need_changes(&st)?;
@@ -508,7 +514,7 @@ fn add_to(app: &AppHandle, list: &str, domains: &[String]) -> R<Vec<String>> {
             let mut have = st.settings.lock().unwrap().proxy.rules.tor.clone();
             let added: Vec<String> = domains.iter().filter(|d| !have.contains(d)).cloned().collect();
             have.extend(added.iter().cloned());
-            crate::tor_set_domains(app.clone(), app.state(), have)?;
+            crate::tor_set_domains(app.clone(), app.state(), have, None)?;
             Ok(added)
         }
         "proxy_bypass" | "proxy_skip" | "proxy_block" | "proxy_worker" => {

@@ -3,10 +3,10 @@
   import Segmented from "./Segmented.svelte";
   import Switch from "./Switch.svelte";
   import { onMount } from "svelte";
-  import { api, on, type TorConfig, type TorStatus, type TorTransport, type BridgeReport, type BridgeProgress } from "$lib/api";
+  import { api, on, type TorConfig, type TorStatus, type TorTransport, type TorScope, type BridgeReport, type BridgeProgress } from "$lib/api";
   import { app, act, toast } from "$lib/state.svelte";
   import { t } from "$lib/i18n.svelte";
-  import { Copy, RefreshCw, Search, Square, Globe, ScrollText, TriangleAlert } from "@lucide/svelte";
+  import { Copy, RefreshCw, Search, Square, Globe, ScrollText, TriangleAlert, ListPlus, MonitorCog } from "@lucide/svelte";
 
   let st = $state<TorStatus | null>(null);
   let cfg = $state<TorConfig | null>(null);
@@ -115,6 +115,30 @@
     const r = await act(() => api.torSetDomains(fromWords(domainsText)), t("Список сохранён", "List saved"));
     if (r) sync(r);
   }
+  async function setScope(scope: TorScope) {
+    const r = await act(() => api.torSetDomains(fromWords(domainsText), scope));
+    if (r) sync(r);
+  }
+  async function setSystem(on: boolean) {
+    const r = await act(
+      () => api.torSystemProxy(on),
+      on ? t("Прокси-обходчик прописан системным прокси", "The bypass proxy is now the system proxy") : t("Системный прокси снят", "System proxy removed"),
+    );
+    if (r) sync(r);
+  }
+  /** Найденные мосты — в «свои» (без повторов). */
+  async function toOwn() {
+    if (!cfg || !report) return;
+    const have = new Set(cfg.bridges);
+    const add = report.found.map((f) => f.line).filter((l) => !have.has(l));
+    if (!add.length) return toast(t("Эти мосты уже в своих", "These bridges are already in your list"), "ok");
+    await save({ bridges: [...cfg.bridges, ...add] }, t(`Добавлено в свои мосты: ${add.length}`, `Added to own bridges: ${add.length}`));
+  }
+  const scopes: { value: TorScope; label: () => string; hint: () => string }[] = [
+    { value: "list", label: () => t("Только список", "List only"), hint: () => t("в Tor идут домены из списка ниже и .onion, остальное — как обычно", "the domains below and .onion go to Tor, the rest as usual") },
+    { value: "zapret", label: () => t("Списки zapret", "zapret lists"), hint: () => t("плюс все домены из списков zapret2 (YouTube, Discord и т. д.) — когда zapret не справляется", "plus every domain from the zapret2 lists (YouTube, Discord, etc.) — when zapret cannot cope") },
+    { value: "all", label: () => t("Весь трафик", "All traffic"), hint: () => t("всё, что идёт через прокси-обходчик, кроме «не резать» и Worker. Медленнее, а часть сайтов покажет капчу", "everything that goes through the bypass proxy except “do not split” and Worker. Slower, and some sites show a captcha") },
+  ];
   async function newIdentity() {
     await act(() => api.torNewIdentity(), t("Новые цепочки для новых соединений", "New circuits for new connections"));
   }
@@ -254,9 +278,12 @@
               </div>
             {/each}
           </div>
-          {#if running}
-            <div class="actions"><span class="grow"></span><button class="btn sm" disabled={app.busy} onclick={reconnect}>{t("Переподключить с найденными", "Reconnect with found bridges")}</button></div>
-          {/if}
+          <div class="actions">
+            <button class="btn sm" onclick={() => copy(report!.found.map((f) => f.line).join("\n"), t(`Скопировано мостов: ${report!.found.length}`, `Bridges copied: ${report!.found.length}`))}><Copy size={12} /> {t("Скопировать все", "Copy all")}</button>
+            <button class="btn sm" disabled={app.busy} onclick={toOwn}><ListPlus size={12} /> {t("В свои мосты", "To own bridges")}</button>
+            <span class="grow"></span>
+            {#if running}<button class="btn sm" disabled={app.busy} onclick={reconnect}>{t("Переподключить с найденными", "Reconnect with found bridges")}</button>{/if}
+          </div>
         {/if}
       {/if}
     </section>
@@ -274,8 +301,26 @@
         </div>
         {#if st.proxy_running}<span class="chip sage">{t("прокси включён", "proxy on")}</span>{:else}<span class="chip">{t("прокси выключен", "proxy off")}</span>{/if}
       </div>
+      <Segmented small options={scopes.map((x) => ({ value: x.value, label: x.label() }))} value={st.tor_scope} disabled={app.busy} onchange={setScope} />
+      <div class="hint faint mono">{scopes.find((x) => x.value === st!.tor_scope)?.hint()}</div>
       <textarea class="textarea" rows="4" spellcheck="false" placeholder="rutracker.org&#10;linkedin.com" bind:value={domainsText} disabled={app.busy}></textarea>
       <div class="actions"><span class="grow"></span><button class="btn sm" disabled={app.busy || !domainsDirty} onclick={saveDomains}>{t("Сохранить", "Save")}</button></div>
+    </section>
+
+    <section class="card block">
+      <div class="opt">
+        <div>
+          <div class="label"><MonitorCog size={11} /> {t("системный прокси windows", "windows system proxy")}</div>
+          <div class="hint faint mono">
+            {t(
+              "Системный прокси у Windows один, поэтому им всегда становится прокси-обходчик, а Tor работает через него по режиму выше. Так браузеры и программы, которые слушают системный прокси, пойдут через Tor без настройки. Переключатель тот же, что «системный прокси» на вкладке «Прокси».",
+              "Windows has a single system proxy, so it is always the bypass proxy, and Tor works through it according to the mode above. Browsers and programs that follow the system proxy then use Tor with no setup. This is the same switch as “system proxy” on the Proxy tab.",
+            )}
+            {#if st.proxy_system && !ready}<span class="warn"> {t("Пока Tor не подключён, сайты идут как обычно.", "Until Tor is connected, sites go as usual.")}</span>{/if}
+          </div>
+        </div>
+        <Switch checked={st.proxy_system} disabled={app.busy} onchange={setSystem} />
+      </div>
     </section>
 
     <section class="card block note">

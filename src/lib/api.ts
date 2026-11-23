@@ -147,7 +147,7 @@ export type StubStatus = {
   stats: { queries: number; cached: number; ech_stripped?: number; errors: number; last_error: string | null; ipv6: boolean; addr: string; template: string } | null;
 };
 
-export type ProxyRules = { scope: "all" | "listed"; zapret_lists: boolean; bypass: string[]; skip: string[]; block: string[]; worker: string[]; tor?: string[] };
+export type ProxyRules = { scope: "all" | "listed"; zapret_lists: boolean; bypass: string[]; skip: string[]; block: string[]; worker: string[]; tor?: string[]; tor_scope?: TorScope };
 export type ProxyWorker = { host: string; key: string; fragment: boolean };
 export type ProxyConfig = {
   port: number;
@@ -211,6 +211,7 @@ export type DnsCheckReport = {
   stubs: number;
 };
 
+export type TorScope = "list" | "zapret" | "all";
 export type TorTransport = "auto" | "obfs4" | "webtunnel" | "snowflake" | "meek" | "custom" | "direct";
 export type TorConfig = { socks_port: number; transport: TorTransport; bridges: string[]; found: string[]; via_proxy: boolean; enabled: boolean };
 export type TorRun = { running: boolean; ready: boolean; percent: number; phase: string; tier: string; tiers: string[]; socks_port: number; error: string | null; elapsed: number };
@@ -220,7 +221,9 @@ export type TorStatus = {
   available: boolean;
   version: string | null;
   domains: string[];
+  tor_scope: TorScope;
   proxy_running: boolean;
+  proxy_system: boolean;
   proxy_port: number;
   finding: boolean;
 };
@@ -412,7 +415,8 @@ export const api = {
   torSetConfig: (config: TorConfig) => invoke<TorStatus>("tor_set_config", { config }),
   torNewIdentity: () => invoke<void>("tor_new_identity"),
   torLog: () => invoke<string[]>("tor_log"),
-  torSetDomains: (domains: string[]) => invoke<TorStatus>("tor_set_domains", { domains }),
+  torSetDomains: (domains: string[], scope?: TorScope) => invoke<TorStatus>("tor_set_domains", { domains, scope: scope ?? null }),
+  torSystemProxy: (on: boolean) => invoke<TorStatus>("tor_system_proxy", { on }),
   torFindBridges: (kinds: string[], want: number) => invoke<BridgeReport>("tor_find_bridges", { kinds, want }),
   torFindCancel: () => invoke<void>("tor_find_cancel"),
   sniDefaults: () => invoke<{ target: string; snis: string[] }>("sni_defaults"),

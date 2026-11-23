@@ -124,11 +124,21 @@ pub struct Rules {
     /// Через Tor (когда он подключён). Адреса .onion идут в Tor всегда.
     #[serde(default)]
     pub tor: Vec<String>,
+    /// Что ещё отправлять в Tor, пока он подключён: list — только `tor`,
+    /// zapret — плюс домены списков zapret2, all — весь трафик (кроме `skip`, `worker`).
+    #[serde(default = "default_tor_scope")]
+    pub tor_scope: String,
 }
+
+fn default_tor_scope() -> String {
+    "list".into()
+}
+
+pub const TOR_SCOPES: [&str; 3] = ["list", "zapret", "all"];
 
 impl Default for Rules {
     fn default() -> Self {
-        Rules { scope: "all".into(), zapret_lists: true, bypass: Vec::new(), skip: Vec::new(), block: Vec::new(), worker: Vec::new(), tor: Vec::new() }
+        Rules { scope: "all".into(), zapret_lists: true, bypass: Vec::new(), skip: Vec::new(), block: Vec::new(), worker: Vec::new(), tor: Vec::new(), tor_scope: default_tor_scope() }
     }
 }
 
@@ -381,7 +391,10 @@ impl Config {
         if self.rules.scope != "listed" {
             self.rules.scope = "all".into();
         }
-        for list in [&mut self.rules.bypass, &mut self.rules.skip, &mut self.rules.block] {
+        if !TOR_SCOPES.contains(&self.rules.tor_scope.as_str()) {
+            self.rules.tor_scope = "list".into();
+        }
+        for list in [&mut self.rules.bypass, &mut self.rules.skip, &mut self.rules.block, &mut self.rules.tor] {
             let mut v: Vec<String> = list.iter().filter_map(|d| normalize_domain(d)).collect();
             v.dedup();
             *list = v;
@@ -448,19 +461,32 @@ pub struct Matcher {
     block: DomainSet,
     worker: DomainSet,
     tor: DomainSet,
+    /// Домены списков zapret2 для режима Tor «списки zapret».
+    tor_zapret: DomainSet,
+    tor_all: bool,
 }
 
 impl Matcher {
+    /// `extra_bypass` добавляется к `bypass` как есть (для тестов правил).
     #[cfg(test)]
     pub fn new(r: &Rules, extra_bypass: &[String]) -> Self {
-        Self::with_worker(r, extra_bypass, false)
+        Self::build(r, extra_bypass, &[], false)
     }
 
-    /// `worker_on` — Worker настроен: домены `rules.worker` идут через него.
-    pub fn with_worker(r: &Rules, extra_bypass: &[String], worker_on: bool) -> Self {
+    /// `zapret` — домены списков zapret2: идут в `bypass` при `zapret_lists` и в Tor
+    /// при `tor_scope = zapret`. `worker_on` — Worker настроен: `rules.worker` идут через него.
+    pub fn with_worker(r: &Rules, zapret: &[String], worker_on: bool) -> Self {
+        let bypass_extra = if r.zapret_lists { zapret } else { &[] };
+        let tor_extra = if r.tor_scope == "zapret" { zapret } else { &[] };
+        Self::build(r, bypass_extra, tor_extra, worker_on)
+    }
+
+    fn build(r: &Rules, extra_bypass: &[String], tor_zapret: &[String], worker_on: bool) -> Self {
         Matcher {
             worker: DomainSet::new(if worker_on { &r.worker[..] } else { &[] }),
             tor: DomainSet::new(&r.tor),
+            tor_zapret: DomainSet::new(tor_zapret),
+            tor_all: r.tor_scope == "all",
             scope_listed: r.scope == "listed",
             bypass: DomainSet::new(r.bypass.iter().chain(extra_bypass.iter())),
             skip: DomainSet::new(&r.skip),
@@ -468,15 +494,22 @@ impl Matcher {
         }
     }
     pub fn action(&self, host: &str) -> Action {
+        self.action_with(host, crate::tor::ready_port().is_some())
+    }
+
+    /// Правила Tor действуют, только пока он подключён (`tor_ready`); иначе — обычные.
+    /// Порядок: блок → .onion → список Tor → Worker → «не резать» → режим Tor → нарезка.
+    pub fn action_with(&self, host: &str, tor_ready: bool) -> Action {
         if self.block.matches(host) {
             Action::Block
-        } else if is_onion(host) || (self.tor.matches(host) && crate::tor::ready_port().is_some()) {
-            // Список «через Tor» действует, только пока Tor подключён; иначе — обычные правила.
+        } else if is_onion(host) || (tor_ready && self.tor.matches(host)) {
             Action::Tor
         } else if self.worker.matches(host) {
             Action::Worker
         } else if self.skip.matches(host) {
             Action::Pass
+        } else if tor_ready && (self.tor_all || self.tor_zapret.matches(host)) {
+            Action::Tor
         } else if self.scope_listed && !self.bypass.matches(host) {
             Action::Pass
         } else {
@@ -1446,8 +1479,7 @@ impl Proxy {
             .map_err(|e| crate::tr!("порт {port} занят: {e}", "port {port} is busy: {e}"))?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
         let resolver = cfg.doh.then(|| crate::doh::CachedResolver::public(cfg.ipv6));
-        let extra: &[String] = if cfg.rules.zapret_lists { extra_bypass } else { &[] };
-        let matcher = Matcher::with_worker(&cfg.rules, extra, cfg.worker.ready());
+        let matcher = Matcher::with_worker(&cfg.rules, extra_bypass, cfg.worker.ready());
         let shared = Arc::new(Shared {
             matcher,
             resolver,
@@ -1986,6 +2018,7 @@ mod tests {
             block: vec!["ads.example.com".into()],
             worker: vec![],
             tor: vec![],
+            tor_scope: "list".into(),
         };
         let m = Matcher::new(&r, &[]);
         assert_eq!(m.action("www.youtube.com"), Action::Bypass);
@@ -2193,6 +2226,24 @@ mod tests {
         assert_eq!(Matcher::new(&tor, &[]).action("rutracker.org"), Action::Bypass);
         assert_eq!(Matcher::new(&tor, &[]).action("duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion"), Action::Tor);
         assert!(is_onion("x.ONION.") && !is_onion("onion.com"));
+        // Режимы Tor: только при подключённом Tor; «не резать» и Worker важнее режима.
+        let z = ["youtube.com".to_string()];
+        let all = Rules { tor_scope: "all".into(), skip: vec!["sberbank.ru".into()], ..Default::default() };
+        let m = Matcher::with_worker(&all, &z, false);
+        assert_eq!(m.action_with("example.com", true), Action::Tor);
+        assert_eq!(m.action_with("sberbank.ru", true), Action::Pass);
+        assert_eq!(m.action_with("example.com", false), Action::Bypass);
+        let zr = Rules { tor_scope: "zapret".into(), zapret_lists: false, ..Default::default() };
+        let m = Matcher::with_worker(&zr, &z, false);
+        assert_eq!(m.action_with("www.youtube.com", true), Action::Tor);
+        assert_eq!(m.action_with("example.com", true), Action::Bypass);
+        let list = Rules { tor: vec!["a.org".into()], ..Default::default() };
+        assert_eq!(Matcher::with_worker(&list, &z, false).action_with("youtube.com", true), Action::Bypass);
+        assert_eq!(Matcher::with_worker(&list, &z, false).action_with("x.a.org", true), Action::Tor);
+        let mut bad = Config::default();
+        bad.rules.tor_scope = "everything".into();
+        bad.normalize();
+        assert_eq!(bad.rules.tor_scope, "list");
         // Старый конфиг без новых полей читается.
         let c: Config = serde_json::from_str(r#"{"rules":{"scope":"all","zapret_lists":true,"bypass":[],"skip":[],"block":[]}}"#).unwrap();
         assert!(c.rules.worker.is_empty() && c.worker.fragment);

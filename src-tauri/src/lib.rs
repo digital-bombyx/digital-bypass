@@ -163,7 +163,8 @@ impl AppState {
         self.proxy_stop_inner();
         cfg.normalize();
         // Домены списков zapret2 для правила «только списки» (если папка есть).
-        let lists = if cfg.rules.zapret_lists { self.dir().map(|d| lists::bypass_domains(&d)).unwrap_or_default() } else { Vec::new() };
+        let need = cfg.rules.zapret_lists || cfg.rules.tor_scope == "zapret";
+        let lists = if need { self.dir().map(|d| lists::bypass_domains(&d)).unwrap_or_default() } else { Vec::new() };
         let p = proxy::Proxy::start(cfg.clone(), &lists)?;
         *self.proxy.lock().unwrap() = Some(p);
         // Раздача в LAN: правило брандмауэра (только с правами администратора).
@@ -921,21 +922,28 @@ struct TorStatus {
     version: Option<String>,
     /// Домены прокси-обходчика «через Tor».
     domains: Vec<String>,
+    /// list | zapret | all
+    tor_scope: String,
     proxy_running: bool,
+    /// Прокси-обходчик прописан системным прокси Windows.
+    proxy_system: bool,
     proxy_port: u16,
     finding: bool,
 }
 
 fn tor_status_of(state: &AppState) -> TorStatus {
-    let (config, domains, proxy_port) = {
+    let (config, domains, tor_scope, proxy_port) = {
         let s = state.settings.lock().unwrap();
-        (s.tor.clone(), s.proxy.rules.tor.clone(), s.proxy.port)
+        (s.tor.clone(), s.proxy.rules.tor.clone(), s.proxy.rules.tor_scope.clone(), s.proxy.port)
     };
+    let proxy_stats = state.proxy.lock().unwrap().as_ref().map(|p| p.stats());
     let status = state.tor.lock().unwrap().as_ref().map(|t| t.status()).unwrap_or_else(|| tor::Status { socks_port: config.socks_port, ..Default::default() });
     TorStatus {
         available: state.tor_dir.is_some(),
         version: state.tor_dir.as_deref().and_then(tor::version),
-        proxy_running: state.proxy.lock().unwrap().is_some(),
+        proxy_running: proxy_stats.is_some(),
+        proxy_system: proxy_stats.is_some_and(|s| s.system),
+        tor_scope,
         finding: state.tor_finding.load(Ordering::SeqCst),
         config,
         status,
@@ -1012,9 +1020,10 @@ fn tor_log(state: State<AppState>) -> Vec<String> {
     state.tor.lock().unwrap().as_ref().map(|t| t.log()).unwrap_or_default()
 }
 
-/// Домены прокси-обходчика, которые идут через Tor; работающий прокси перезапускается.
+/// Что прокси-обходчик отправляет через Tor: домены списка и режим (`scope`:
+/// list | zapret | all, None — не менять). Работающий прокси перезапускается.
 #[tauri::command(async)]
-fn tor_set_domains(app: AppHandle, state: State<AppState>, domains: Vec<String>) -> R<TorStatus> {
+fn tor_set_domains(app: AppHandle, state: State<AppState>, domains: Vec<String>, scope: Option<String>) -> R<TorStatus> {
     let mut d: Vec<String> = domains
         .iter()
         .map(|x| x.trim().trim_start_matches("*.").trim_start_matches("https://").trim_start_matches("http://").split('/').next().unwrap_or("").to_ascii_lowercase())
@@ -1023,6 +1032,10 @@ fn tor_set_domains(app: AppHandle, state: State<AppState>, domains: Vec<String>)
     d.dedup();
     let mut cfg = state.settings.lock().unwrap().proxy.clone();
     cfg.rules.tor = d;
+    if let Some(sc) = scope {
+        cfg.rules.tor_scope = sc;
+    }
+    cfg.normalize();
     if state.proxy.lock().unwrap().is_some() {
         let r = state.proxy_start(cfg);
         refresh_tray(&app);
@@ -1059,6 +1072,24 @@ fn tor_find_bridges(app: AppHandle, state: State<AppState>, kinds: Vec<String>, 
         state.update(|s| s.tor.found = r.found.iter().map(|f| f.line.clone()).collect());
     }
     Ok(r)
+}
+
+/// Системный прокси Windows — один на всех: им всегда остаётся прокси-обходчик,
+/// а Tor работает через него (по списку, спискам zapret или для всего трафика).
+/// Включение запускает прокси, если он выключен; выключение оставляет его работать.
+#[tauri::command(async)]
+fn tor_system_proxy(app: AppHandle, state: State<AppState>, on: bool) -> R<TorStatus> {
+    let mut cfg = state.settings.lock().unwrap().proxy.clone();
+    cfg.system = on;
+    if on || state.proxy.lock().unwrap().is_some() {
+        let r = state.proxy_start(cfg);
+        refresh_tray(&app);
+        r?;
+    } else {
+        state.update(|s| s.proxy = cfg);
+    }
+    let _ = app.emit("proxy-changed", ());
+    Ok(tor_status_of(&state))
 }
 
 #[tauri::command]
@@ -1862,6 +1893,7 @@ pub fn run() {
             tor_set_domains,
             tor_find_bridges,
             tor_find_cancel,
+            tor_system_proxy,
             sni_defaults,
             sni_scan,
             list_presets,

@@ -34,7 +34,9 @@ const tor: any = {
   available: true,
   version: "16.0.1",
   domains: ["rutracker.org"],
+  tor_scope: "list",
   proxy_running: true,
+  proxy_system: false,
   proxy_port: 8881,
   finding: false,
 };
@@ -371,6 +373,11 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
       return ["--- bridges (6 bridges) ---", "Nov 24 02:28:35.000 [notice] Bootstrapped 30% (loading_status): Loading networkstatus consensus", "Nov 24 02:28:46.000 [notice] Bootstrapped 100% (done): Done"];
     case "tor_set_domains":
       tor.domains = args.domains;
+      if (args.scope) tor.tor_scope = args.scope;
+      return structuredClone(tor);
+    case "tor_system_proxy":
+      tor.proxy_system = args.on;
+      if (args.on) tor.proxy_running = true;
       return structuredClone(tor);
     case "tor_find_bridges":
       await new Promise((r) => setTimeout(r, 1500));
