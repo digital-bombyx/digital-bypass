@@ -118,6 +118,13 @@ fn serve(token: &str, c: TcpStream, handler: &dyn Fn(&Value) -> Option<Value>) -
             }
         }
     }
+    // Тело читаем до любых ответов: если закрыть соединение с непрочитанными
+    // данными, Windows шлёт RST и клиент не увидит ответ.
+    if len > MAX_BODY {
+        return respond(&c, "413 Payload Too Large", "text/plain", b"too large");
+    }
+    let mut body = vec![0u8; len];
+    r.read_exact(&mut body)?;
     if origin.as_deref().is_some_and(|o| !local_origin(o)) {
         return respond(&c, "403 Forbidden", "text/plain", b"origin not allowed");
     }
@@ -131,11 +138,6 @@ fn serve(token: &str, c: TcpStream, handler: &dyn Fn(&Value) -> Option<Value>) -
     if token.is_empty() || !same(given, token) {
         return respond(&c, "401 Unauthorized", "text/plain", b"bad token");
     }
-    if len > MAX_BODY {
-        return respond(&c, "413 Payload Too Large", "text/plain", b"too large");
-    }
-    let mut body = vec![0u8; len];
-    r.read_exact(&mut body)?;
     let req: Value = match serde_json::from_slice(&body) {
         Ok(v) => v,
         Err(e) => {
