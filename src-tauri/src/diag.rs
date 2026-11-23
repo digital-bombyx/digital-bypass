@@ -80,6 +80,10 @@ pub enum Verdict {
     Dpi,
     /// Блокировка по IP: только VPN.
     Ip,
+    /// Ограничение по сети назначения (с 2025 года — зарубежные хостинги по AS):
+    /// TLS к адресу обрывается при любом имени сайта, или передача замирает
+    /// после нескольких пакетов. Нарезка не помогает.
+    DestNet,
     /// Имя не разрешается нигде.
     NoDomain,
     /// Не удалось определить.
@@ -100,6 +104,79 @@ pub struct Report {
     /// Для вердикта «DPI»: на чём режут (по первому заблокированному адресу).
     pub stage: Option<Stage>,
     pub extra: Option<Extra>,
+    /// Проверка «замирания»: маленький запрос и 64 КБ (если TLS прошёл).
+    pub freeze: Option<FreezeProbe>,
+}
+
+/// Замирание соединения после N пакетов (с 2025 года — к Hetzner, OVH,
+/// DigitalOcean и др. по сети назначения: передача встаёт без сброса).
+#[derive(Debug, Clone, Serialize)]
+pub struct FreezeProbe {
+    pub ip: String,
+    /// Ответ на маленький запрос получен.
+    pub small_ok: bool,
+    /// Ответ после отправки 64 КБ получен.
+    pub big_ok: bool,
+    pub detail: Option<String>,
+}
+
+const FREEZE_BYTES: usize = 64 * 1024;
+
+/// Режут адрес, а не имя: нарезка не помогает, с другим именем адрес тоже
+/// режется, а это имя на постороннем адресе проходит.
+pub fn dest_net(x: &Extra) -> bool {
+    x.split_ok != Some(true) && x.ip_clean == Some(false) && x.name_anywhere == Some(false)
+}
+
+/// TLS к `ip` и HTTP-запрос с телом `body` байт; Ok(true) — пришёл хоть байт ответа,
+/// Ok(false) — тишина до таймаута (замирание), Err — сброс или другая ошибка.
+fn exchange(ip: IpAddr, host: &str, body: usize) -> std::io::Result<bool> {
+    use std::io::{Read, Write};
+    let tcp = TcpStream::connect_timeout(&SocketAddr::new(ip, 443), TIMEOUT)?;
+    tcp.set_nodelay(true)?;
+    tcp.set_read_timeout(Some(TIMEOUT))?;
+    tcp.set_write_timeout(Some(TIMEOUT))?;
+    let name = rustls::pki_types::ServerName::try_from(host.to_string()).map_err(std::io::Error::other)?;
+    let conn = rustls::ClientConnection::new(crate::doh::tls_config(), name).map_err(std::io::Error::other)?;
+    let mut tls = rustls::StreamOwned::new(conn, tcp);
+    let head = if body == 0 {
+        format!("HEAD / HTTP/1.1\r\nHost: {host}\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n")
+    } else {
+        format!("POST / HTTP/1.1\r\nHost: {host}\r\nUser-Agent: Mozilla/5.0\r\nContent-Type: application/octet-stream\r\nContent-Length: {body}\r\nConnection: close\r\n\r\n")
+    };
+    tls.write_all(head.as_bytes())?;
+    let chunk = vec![b'x'; 4096];
+    let mut left = body;
+    while left > 0 {
+        let n = left.min(chunk.len());
+        match tls.write_all(&chunk[..n]) {
+            Ok(()) => left -= n,
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => return Ok(false),
+            Err(e) => return Err(e),
+        }
+    }
+    tls.flush()?;
+    let mut b = [0u8; 1];
+    match tls.read(&mut b) {
+        Ok(n) => Ok(n > 0),
+        Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
+/// Маленький запрос отвечается, а после 64 КБ — тишина: замирание.
+pub fn freeze_probe(ip: IpAddr, host: &str) -> FreezeProbe {
+    let small = exchange(ip, host, 0);
+    let big = if matches!(small, Ok(true)) { exchange(ip, host, FREEZE_BYTES) } else { Ok(false) };
+    let detail = [small.as_ref().err(), big.as_ref().err()].into_iter().flatten().next().map(|e| e.to_string());
+    FreezeProbe { ip: ip.to_string(), small_ok: matches!(small, Ok(true)), big_ok: matches!(big, Ok(true)), detail }
+}
+
+impl FreezeProbe {
+    /// Замирание — только если маленький ответ пришёл, а большой утонул в тишине (не сброс).
+    pub fn frozen(&self) -> bool {
+        self.small_ok && !self.big_ok && self.detail.is_none()
+    }
 }
 
 /// Домен из того, что вставил пользователь: схема, путь, порт, `*.` отбрасываются.
@@ -386,13 +463,25 @@ pub fn run(input: &str) -> Result<Report, String> {
         })
         .collect();
     let checks: Vec<Check> = handles.into_iter().filter_map(|h| h.join().ok()).collect();
-    let v = verdict(&system, &doh, bogus, &checks);
+    let mut v = verdict(&system, &doh, bogus, &checks);
+    // TLS прошёл — проверить, не замирает ли передача после нескольких пакетов.
+    let freeze = if v == Verdict::Ok {
+        checks.iter().find(|c| c.result == Probe::Ok).and_then(|c| c.ip.parse().ok()).map(|ip| freeze_probe(ip, &domain))
+    } else {
+        None
+    };
+    if freeze.as_ref().is_some_and(|f| f.frozen()) {
+        v = Verdict::DestNet;
+    }
     let cutc = checks.iter().find(|c| cut(c.result) && !(bogus && c.source == "system"));
     let stage = if v == Verdict::Dpi { cutc.and_then(|c| c.stage) } else { None };
     let extra = match (v, cutc) {
         (Verdict::Dpi, Some(c)) => c.ip.parse().ok().map(|ip| self::extra(ip, &domain, stage)),
         _ => None,
     };
+    if extra.as_ref().is_some_and(dest_net) {
+        v = Verdict::DestNet;
+    }
     Ok(Report {
         domain,
         system: system.iter().map(|i| i.to_string()).collect(),
@@ -404,6 +493,7 @@ pub fn run(input: &str) -> Result<Report, String> {
         verdict: v,
         stage,
         extra,
+        freeze,
     })
 }
 
@@ -416,6 +506,25 @@ mod tests {
     }
     fn c(ip: &str, source: &'static str, result: Probe) -> Check {
         Check { ip: ip.into(), source, result, ms: None, detail: None, stage: None, unstable: false }
+    }
+
+    #[test]
+    fn dest_net_rule() {
+        let x = |split_ok, ip_clean, name_anywhere| Extra { split_ok, ip_clean, name_anywhere, ..Default::default() };
+        assert!(dest_net(&x(Some(false), Some(false), Some(false))));
+        assert!(!dest_net(&x(Some(true), Some(false), Some(false))));
+        assert!(!dest_net(&x(Some(false), Some(true), Some(false))));
+        assert!(!dest_net(&x(Some(false), Some(false), Some(true))));
+        assert!(!dest_net(&x(Some(false), None, Some(false))));
+    }
+
+    #[test]
+    fn freeze_flag() {
+        let f = |small_ok, big_ok, detail: Option<&str>| FreezeProbe { ip: String::new(), small_ok, big_ok, detail: detail.map(String::from) };
+        assert!(f(true, false, None).frozen());
+        assert!(!f(true, true, None).frozen());
+        assert!(!f(false, false, None).frozen());
+        assert!(!f(true, false, Some("reset")).frozen());
     }
 
     #[test]

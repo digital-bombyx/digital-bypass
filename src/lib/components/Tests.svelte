@@ -162,6 +162,15 @@
         <div class="grow">
           <div class="label">{t("лучшая", "best")}</div>
           <div class="mono bname">{strategyName(run.best)}</div>
+          {#if run.recheck_ok != null}
+            {@const first = run.results.find((r) => r.file === run!.best)?.ok ?? 0}
+            <div class="mono recheck" class:warnc={Math.abs(first - run.recheck_ok) > Math.max(2, first * 0.1)}>
+              {t("перепроверка", "re-check")}: {run.recheck_ok} {t("вместо", "vs")} {first}
+              {#if Math.abs(first - run.recheck_ok) > Math.max(2, first * 0.1)}
+                — {t("результаты нестабильны, прогоните тест ещё раз", "results are unstable, run the test again")}
+              {/if}
+            </div>
+          {/if}
         </div>
         <button
           class="btn primary"
@@ -178,8 +187,8 @@
           <span>
             {t("потолок", "ceiling")} <b>{ceiling.max}</b>/{ceiling.total}:
             {t(
-              `${ceiling.total - ceiling.max} из ${ceiling.total} проверок не прошли ни с одной стратегией — вероятно, блокировка по IP, нарезка тут не поможет`,
-              `${ceiling.total - ceiling.max} of ${ceiling.total} checks failed with every strategy — probably an IP block that splitting can't fix`,
+              `${ceiling.total - ceiling.max} из ${ceiling.total} проверок не прошли ни с одной стратегией — вероятно, ограничение по сети назначения (зарубежные хостинги замирают после ~16–33 КБ) или блокировка по IP; нарезка тут не поможет`,
+              `${ceiling.total - ceiling.max} of ${ceiling.total} checks failed with every strategy — likely destination-network throttling (foreign hostings freeze after ~16–33 KB) or an IP block; splitting can't fix it`,
             )}
           </span>
         </button>
@@ -352,6 +361,14 @@
   .grow {
     flex: 1;
     min-width: 0;
+  }
+  .recheck {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .recheck.warnc {
+    color: var(--yellow);
   }
   .bname {
     color: var(--text);

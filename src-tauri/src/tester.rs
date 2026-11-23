@@ -57,6 +57,10 @@ pub struct TestRun {
     pub finished: bool,
     pub cancelled: bool,
     pub message: Option<String>,
+    /// Повторная проверка лучшей стратегии в конце (OK): блокировка после
+    /// срабатывания держится 40–420 с, и порядок проверки мог повлиять.
+    #[serde(default)]
+    pub recheck_ok: Option<u32>,
 }
 
 #[derive(Clone)]
@@ -507,6 +511,15 @@ pub fn run(ctx: Ctx, kind: &str, files: Vec<String>, params: Params, emit: impl 
                 *last = r.clone();
             }
         });
+    }
+    // Перепроверить лучшую: если результат сильно другой, порядок стратегий
+    // или нестабильность DPI повлияли на прогон.
+    let leader = best(&run.lock().unwrap().results);
+    if let Some(file) = leader.filter(|_| files.len() > 1 && !ctx.cancel.load(Ordering::Relaxed)) {
+        push(&|g| g.current = Some(file.clone()));
+        let args = crate::strategy::build_args(ctx.dir, &file, &bench.vars);
+        let r = bench.eval(&ctx, &file, args, Some(crate::util::now_secs()), |_| {});
+        push(&|g| g.recheck_ok = r.error.is_none().then_some(r.ok));
     }
     bench.close(&ctx);
     finish(None)

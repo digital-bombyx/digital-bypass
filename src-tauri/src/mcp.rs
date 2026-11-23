@@ -266,6 +266,7 @@ fn advice(r: &crate::diag::Report, in_zapret: Option<bool>) -> String {
         Verdict::Ok => "The site opens from this machine. If it still fails in the browser, check the browser's own DNS/proxy settings or QUIC (UDP), which only zapret2 bypasses.".to_string(),
         Verdict::Dns => "DNS spoofing by the ISP: the system DNS returns a stub or a wrong address, while DoH addresses work. Fix: switch DNS in the DNS tab (or enable the local DoH/DoT resolver), or use the bypass proxy with DoH on.".to_string(),
         Verdict::Ip => "IP block: TCP to every address fails. zapret2 and the proxy cannot help; a VPN with a server abroad is needed.".to_string(),
+        Verdict::DestNet => "Destination-network restriction, not a block by site name: either TLS to this address fails with ANY site name while this name passes on other addresses, or TLS works but the connection freezes after a few packets (~16-33 KB at home, less on mobile) without a reset. Since 2025 this hits foreign hostings by AS (Hetzner, OVH, DigitalOcean, Vultr, Scaleway, M247...). ClientHello splitting (zapret2, proxy) does not help; a UDP-based transport or a server in another network does.".to_string(),
         Verdict::NoDomain => "The domain does not resolve anywhere — check the spelling.".to_string(),
         Verdict::Unknown => "Could not determine the cause; see the per-address checks.".to_string(),
         Verdict::Dpi => match r.stage {

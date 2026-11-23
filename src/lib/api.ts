@@ -63,6 +63,7 @@ export type StrategyResult = {
 };
 
 export type TestRun = {
+  recheck_ok?: number | null;
   id: number;
   kind: "standard" | "dpi";
   total: number;
@@ -237,7 +238,7 @@ export type TgStatus = {
 };
 
 export type Probe = "ok" | "tcp_fail" | "tls_reset" | "tls_timeout" | "tls_cert" | "tls_error";
-export type Verdict = "ok" | "dns" | "dpi" | "ip" | "no_domain" | "unknown";
+export type Verdict = "ok" | "dns" | "dpi" | "ip" | "dest_net" | "no_domain" | "unknown";
 export type DiagReport = {
   domain: string;
   system: string[];
@@ -256,6 +257,7 @@ export type DiagReport = {
   }[];
   verdict: Verdict;
   stage: Stage | null;
+  freeze: { ip: string; small_ok: boolean; big_ok: boolean; detail: string | null } | null;
   extra: {
     ip: string;
     split_ok: boolean | null;

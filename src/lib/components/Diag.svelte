@@ -52,6 +52,16 @@
       text: () => t("Ни к одному адресу сайта не подключиться. Обход DPI и смена DNS тут не помогут — нужен VPN.", "No address of the site accepts connections. DPI bypass and DNS will not help — a VPN is needed."),
       tabs: [],
     },
+    dest_net: {
+      cls: "bad",
+      title: () => t("Ограничение по сети назначения", "Destination-network restriction"),
+      text: () =>
+        t(
+          "Режут адрес, а не имя сайта: TLS к нему обрывается с любым именем (а это имя на постороннем адресе проходит), либо передача замирает после ~16–33 КБ без сброса. Так с 2025 года ограничивают зарубежные хостинги по сети назначения (Hetzner, OVH, DigitalOcean, Vultr, Scaleway и др.). Нарезка zapret2 и прокси не поможет — нужен VPN с UDP-транспортом или сервер в другой сети.",
+          "The address is cut, not the site name: TLS to it fails with any name (while this name passes on another address), or the transfer stalls after ~16–33 KB without a reset. Since 2025 foreign hostings are restricted this way by destination network (Hetzner, OVH, DigitalOcean, Vultr, Scaleway, etc.). zapret2 and proxy splitting won't help — a VPN over UDP or a server in another network will.",
+        ),
+      tabs: [],
+    },
     no_domain: {
       cls: "bad",
       title: () => t("Домен не найден", "Domain not found"),

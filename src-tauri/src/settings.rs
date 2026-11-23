@@ -64,7 +64,8 @@ impl Default for Settings {
             mode: "process".into(),
             close_to_tray: true,
             test_timeout: 4,
-            test_parallel: 16,
+            // Часть провайдеров ограничивает число TLS-соединений (~12) — не больше 8 потоков.
+            test_parallel: 8,
             hosts_custom: vec![],
             language: "ru".into(),
             proxy: Default::default(),
