@@ -233,7 +233,12 @@ pub fn build_args(dir: &Path, file: &str, vars: &Vars) -> Result<Vec<String>, St
     }
     let path = dir.join(file);
     let text = crate::util::read_text(&path).map_err(|e| format!("{file}: {e}"))?;
-    let raw = extract_command(&text).ok_or_else(|| crate::tr!("{file}: не найден запуск winws2.exe", "{file}: winws2.exe launch not found"))?;
+    args_from_text(file, &text, vars)
+}
+
+/// Аргументы winws2.exe из текста bat-файла (`file` — для сообщений об ошибках).
+pub fn args_from_text(file: &str, text: &str, vars: &Vars) -> Result<Vec<String>, String> {
+    let raw = extract_command(text).ok_or_else(|| crate::tr!("{file}: не найден запуск winws2.exe", "{file}: winws2.exe launch not found"))?;
     let expanded = expand(&raw, vars).map_err(|e| format!("{file}: {e}"))?;
     let args = tokenize(&expanded);
     if args.is_empty() {

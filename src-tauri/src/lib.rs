@@ -3,6 +3,7 @@ mod bundled;
 mod diag;
 mod dns;
 mod dnscheck;
+mod evolve;
 mod doh;
 mod game_filter;
 mod hosts;
@@ -53,6 +54,7 @@ pub struct AppState {
     /// Что остановлено правилом сети (вернуть, когда сеть снова разрешена).
     net_paused_zapret: AtomicBool,
     net_paused_proxy: AtomicBool,
+    last_evolve: Mutex<Option<evolve::EvolveRun>>,
 }
 
 impl AppState {
@@ -469,6 +471,56 @@ fn test_start(app: AppHandle, state: State<AppState>, kind: String, files: Vec<S
         refresh_tray(&app);
     });
     Ok(())
+}
+
+/// Автоподбор стратегии (см. evolve.rs — упрощённый, не полный ГА).
+#[tauri::command(async)]
+fn evolve_start(app: AppHandle, state: State<AppState>, kind: String, seeds: Vec<String>, rounds: u32) -> R<()> {
+    state.require_admin()?;
+    let dir = state.dir()?;
+    if seeds.is_empty() {
+        return Err(tr!("Не выбраны стратегии для засева", "No seed strategies selected"));
+    }
+    if state.testing.swap(true, Ordering::SeqCst) {
+        return Err(tr!("Тест уже идёт", "A test is already running"));
+    }
+    state.cancel.store(false, Ordering::SeqCst);
+    let params = {
+        let s = state.settings.lock().unwrap();
+        tester::Params { timeout: s.test_timeout.clamp(2, 30), parallel: s.test_parallel.clamp(1, 32) }
+    };
+    let opts = evolve::Opts { kind, seeds: seeds.into_iter().take(6).collect(), rounds: rounds.clamp(1, 5), per_parent: 3, hall: 4 };
+    std::thread::spawn(move || {
+        let st = app.state::<AppState>();
+        let gf = game_filter::load(&dir);
+        let ctx = tester::Ctx { dir: &dir, runner: &st.runner, cancel: &st.cancel, game_vars: game_filter::vars(&gf) };
+        let emit_app = app.clone();
+        let run = evolve::run(ctx, params, opts, move |r| {
+            let _ = emit_app.emit("evolve-progress", r);
+        });
+        *st.last_evolve.lock().unwrap() = Some(run);
+        st.testing.store(false, Ordering::SeqCst);
+        let _ = app.emit("evolve-finished", ());
+        refresh_tray(&app);
+    });
+    Ok(())
+}
+
+#[tauri::command]
+fn evolve_last(state: State<AppState>) -> Option<evolve::EvolveRun> {
+    state.last_evolve.lock().unwrap().clone()
+}
+
+/// Сохранить кандидата из последнего автоподбора как стратегию.
+#[tauri::command(async)]
+fn evolve_save(state: State<AppState>, name: String) -> R<String> {
+    let dir = state.dir()?;
+    let mut g = state.last_evolve.lock().unwrap();
+    let run = g.as_mut().ok_or_else(|| tr!("Автоподбор ещё не запускался", "Auto-tune has not run yet"))?;
+    let c = run.tried.iter().find(|c| c.name == name && !c.seed).cloned().ok_or_else(|| tr!("Кандидат не найден", "Candidate not found"))?;
+    let file = evolve::save(&dir, &c)?;
+    run.saved.push(file.clone());
+    Ok(file)
 }
 
 #[tauri::command]
@@ -1262,6 +1314,7 @@ pub fn run() {
                 net_names: Mutex::new(Vec::new()),
                 net_paused_zapret: AtomicBool::new(false),
                 net_paused_proxy: AtomicBool::new(false),
+                last_evolve: Mutex::new(None),
             });
 
             let handle = app.handle().clone();
@@ -1436,6 +1489,9 @@ pub fn run() {
             lan_addresses,
             tg_status,
             net_status,
+            evolve_start,
+            evolve_last,
+            evolve_save,
             net_set,
             tg_start,
             tg_stop,

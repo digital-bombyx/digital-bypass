@@ -359,6 +359,86 @@ pub struct Ctx<'a> {
     pub game_vars: (String, String),
 }
 
+/// Подготовленный стенд: цели, payload, ipset — для серии проверок
+/// (тест стратегий и автоподбор).
+pub struct Bench {
+    params: Params,
+    targets: Vec<Target>,
+    payload: Option<PathBuf>,
+    ipset_switched: bool,
+    /// Стратегия, работавшая до теста (вернуть в конце).
+    prior: Option<String>,
+    pub vars: crate::strategy::Vars,
+}
+
+impl Bench {
+    pub fn open(ctx: &Ctx, kind: &str, params: Params) -> Result<Bench, String> {
+        if crate::service::state(crate::service::NAME).1 {
+            return Err(crate::tr!("Работает служба zapret — остановите её перед тестом", "The zapret service is running — stop it before testing"));
+        }
+        let prior = {
+            let st = ctx.runner.status();
+            (st.mode == "process").then_some(st.strategy).flatten()
+        };
+        let targets = if kind == "dpi" { dpi_targets(params.timeout)? } else { standard_targets(ctx.dir) };
+        if targets.is_empty() {
+            return Err(crate::tr!("нет целей для проверки (utils\\targets.txt)", "no targets to check (utils\\targets.txt)"));
+        }
+        let payload = if kind == "dpi" { Some(write_payload()?) } else { None };
+        let ipset_switched = kind == "dpi" && crate::ipset::status(ctx.dir) != "any";
+        if ipset_switched {
+            crate::ipset::test_switch_any(ctx.dir).map_err(|e| format!("ipset: {e}"))?;
+        }
+        let vars = crate::strategy::Vars::new(ctx.dir, &ctx.game_vars.0, &ctx.game_vars.1);
+        Ok(Bench { params, targets, payload, ipset_switched, prior, vars })
+    }
+
+    /// Запустить winws2 с `args` и проверить цели. `shuffle` — перемешать
+    /// порядок целей (против штрафной паузы DPI на пару «клиент ↔ сайт»).
+    pub fn eval(&self, ctx: &Ctx, label: &str, args: Result<Vec<String>, String>, shuffle: Option<u64>, on_done: impl Fn(Vec<TargetResult>) + Sync) -> StrategyResult {
+        let mut r = StrategyResult { file: label.into(), ..Default::default() };
+        if let Err(e) = args.and_then(|a| ctx.runner.start(ctx.dir, label, &a)) {
+            r.error = Some(e);
+            return r;
+        }
+        r.started = true;
+        let mut targets = self.targets.clone();
+        if let Some(seed) = shuffle {
+            let mut x = seed | 1;
+            for i in (1..targets.len()).rev() {
+                x ^= x << 13;
+                x ^= x >> 7;
+                x ^= x << 17;
+                targets.swap(i, (x % (i as u64 + 1)) as usize);
+            }
+        }
+        let (timeout, parallel) = (self.params.timeout, self.params.parallel);
+        r.targets = match &self.payload {
+            Some(p) => run_targets(&targets, parallel, ctx.cancel, |t| check_dpi(t, timeout, p), on_done),
+            None => run_targets(&targets, parallel, ctx.cancel, |t| check_standard(t, timeout), on_done),
+        };
+        tally(&mut r);
+        r
+    }
+
+    /// Остановить winws2, вернуть ipset и стратегию, работавшую до теста.
+    pub fn close(self, ctx: &Ctx) {
+        ctx.runner.stop_processes();
+        if self.ipset_switched {
+            crate::ipset::test_restore(ctx.dir);
+        }
+        if let Some(p) = &self.payload {
+            let _ = std::fs::remove_file(p);
+        }
+        if let Some(file) = &self.prior {
+            if let Ok(args) = crate::strategy::build_args(ctx.dir, file, &self.vars) {
+                let _ = ctx.runner.start(ctx.dir, file, &args);
+            }
+        }
+        ctx.runner.notify_changed();
+    }
+}
+
 /// Прогон тестов. emit получает снимок состояния после каждого шага.
 pub fn run(ctx: Ctx, kind: &str, files: Vec<String>, params: Params, emit: impl Fn(&TestRun) + Sync) -> TestRun {
     let run = Arc::new(Mutex::new(TestRun {
@@ -385,41 +465,10 @@ pub fn run(ctx: Ctx, kind: &str, files: Vec<String>, params: Params, emit: impl 
         g.clone()
     };
 
-    if crate::service::state(crate::service::NAME).1 {
-        return finish(Some(crate::tr!("Работает служба zapret — остановите её перед тестом", "The zapret service is running — stop it before testing")));
-    }
-    let prior = {
-        let st = ctx.runner.status();
-        (st.mode == "process").then_some(st.strategy).flatten()
+    let bench = match Bench::open(&ctx, kind, params) {
+        Ok(b) => b,
+        Err(e) => return finish(Some(e)),
     };
-
-    let targets = if kind == "dpi" {
-        match dpi_targets(params.timeout) {
-            Ok(t) => t,
-            Err(e) => return finish(Some(e)),
-        }
-    } else {
-        standard_targets(ctx.dir)
-    };
-    if targets.is_empty() {
-        return finish(Some(crate::tr!("нет целей для проверки (utils\\targets.txt)", "no targets to check (utils\\targets.txt)")));
-    }
-    let payload = if kind == "dpi" {
-        match write_payload() {
-            Ok(p) => Some(p),
-            Err(e) => return finish(Some(e)),
-        }
-    } else {
-        None
-    };
-    let ipset_switched = kind == "dpi" && crate::ipset::status(ctx.dir) != "any";
-    if ipset_switched {
-        if let Err(e) = crate::ipset::test_switch_any(ctx.dir) {
-            return finish(Some(format!("ipset: {e}")));
-        }
-    }
-
-    let vars = crate::strategy::Vars::new(ctx.dir, &ctx.game_vars.0, &ctx.game_vars.1);
     for (i, file) in files.iter().enumerate() {
         if ctx.cancel.load(Ordering::Relaxed) {
             break;
@@ -429,54 +478,23 @@ pub fn run(ctx: Ctx, kind: &str, files: Vec<String>, params: Params, emit: impl 
             g.current = Some(file.clone());
             g.results.push(StrategyResult { file: file.clone(), ..Default::default() });
         });
-        let started = crate::strategy::build_args(ctx.dir, file, &vars)
-            .and_then(|args| ctx.runner.start(ctx.dir, file, &args));
-        if let Err(e) = started {
-            push(&|g| {
-                if let Some(last) = g.results.last_mut() {
-                    last.error = Some(e.clone());
-                }
-            });
-            continue;
-        }
-        push(&|g| {
-            if let Some(last) = g.results.last_mut() {
-                last.started = true;
-            }
-        });
         let on_done = |partial: Vec<TargetResult>| {
             push(&|g| {
                 if let Some(last) = g.results.last_mut() {
+                    last.started = true;
                     last.targets = partial.clone();
                 }
             })
         };
-        let results = match &payload {
-            Some(p) => run_targets(&targets, params.parallel, ctx.cancel, |t| check_dpi(t, params.timeout, p), on_done),
-            None => run_targets(&targets, params.parallel, ctx.cancel, |t| check_standard(t, params.timeout), on_done),
-        };
+        let args = crate::strategy::build_args(ctx.dir, file, &bench.vars);
+        let r = bench.eval(&ctx, file, args, None, on_done);
         push(&|g| {
             if let Some(last) = g.results.last_mut() {
-                last.targets = results.clone();
-                tally(last);
+                *last = r.clone();
             }
         });
     }
-
-    ctx.runner.stop_processes();
-    if ipset_switched {
-        crate::ipset::test_restore(ctx.dir);
-    }
-    if let Some(p) = payload {
-        let _ = std::fs::remove_file(p);
-    }
-    // Вернуть то, что работало до теста.
-    if let Some(file) = prior {
-        if let Ok(args) = crate::strategy::build_args(ctx.dir, &file, &vars) {
-            let _ = ctx.runner.start(ctx.dir, &file, &args);
-        }
-    }
-    ctx.runner.notify_changed();
+    bench.close(&ctx);
     finish(None)
 }
 

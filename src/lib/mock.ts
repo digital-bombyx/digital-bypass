@@ -290,6 +290,19 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
           { domain: "nnmclub.to", system: ["172.67.144.20"], public: ["188.114.97.3"], trusted: ["172.67.144.20"], verdict: "differs", cert_check: "188.114.97.3: TcpFail" },
         ],
       };
+    case "evolve_last":
+      return {
+        kind: "standard", round: 2, rounds: 3, done: 17, planned: 40, current: "AUTO 2.9",
+        hall: [
+          { name: "AUTO 1.3", parent: "general (ALT3).bat", changes: ["multisplit: seqovl=681 → 568", "fake: −tcp_ts=-600000"], ok: 21, fail: 3, score: 20.6, complexity: 8, unstable: false, error: null, seed: false },
+          { name: "general (ALT3)", parent: "general (ALT3).bat", changes: [], ok: 19, fail: 5, score: 18.5, complexity: 9, unstable: true, error: null, seed: true },
+          { name: "AUTO 2.4", parent: "general (ALT3).bat", changes: ["multisplit → multidisorder"], ok: 18, fail: 6, score: 17.6, complexity: 8, unstable: false, error: null, seed: false },
+        ],
+        tried: [], finished: false, cancelled: false, message: null, saved: [],
+      };
+    case "evolve_start":
+    case "evolve_save":
+      return "general (AUTO 1).bat";
     case "net_status":
       return structuredClone(net);
     case "net_set":

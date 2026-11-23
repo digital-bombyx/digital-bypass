@@ -3,6 +3,7 @@
   import { api, on, strategyName, type TestRun, type StrategyResult } from "$lib/api";
   import { app, act, toast, refresh } from "$lib/state.svelte";
   import Segmented from "./Segmented.svelte";
+  import Evolve from "./Evolve.svelte";
   import { t, locale } from "$lib/i18n.svelte";
   import { Play, Square, Trophy, History, ChevronRight, FlaskConical } from "@lucide/svelte";
 
@@ -196,6 +197,8 @@
       {/each}
     </section>
   {/if}
+
+  <Evolve {kind} {picked} last={run} busy={testing} />
 
   {#if history.length}
     <section class="card hist">

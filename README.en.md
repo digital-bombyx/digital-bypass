@@ -27,6 +27,7 @@ One-click zapret2 (winws2 + Lua), a bypass proxy without admin rights, DNS switc
 - **One-click bypass.** `winws2.exe` runs directly, without a console: as a process (while the app is open) or as the `zapret` service, compatible with `service.bat`.
 - **Strategies as-is.** Arguments are read straight from `general*.bat`.
 - **Strategy tests** modelled on `utils\test zapret.ps1`: HTTP / TLS 1.2 / TLS 1.3 + ping and the "16-20 KB" DPI test, best pick and history.
+- **Strategy auto-tune** (experimental, inspired by [Geneva](https://geneva.cs.umd.edu/)): the best strategies are mutated (technique, `pos`, `seqovl`, `repeats`, fooling, fake — values come from the bundled strategies), each candidate is checked by the tester twice with the worst result counted, the simpler one wins a tie. The best one, if it beats the seeds, is saved as `general (AUTO N).bat`. It is a simplified local search, not a full genetic algorithm: no crossover and no population.
 - **Game Filter, IPSet, user lists** — the same files `service.bat` writes.
 - **Domain sets**: Telegram, Instagram/Facebook/WhatsApp, X, Roblox, SoundCloud are added to the list in one click (YouTube and Discord are already in the built-in lists).
 
@@ -111,6 +112,7 @@ Our code is original; these projects contributed techniques and approaches:
 - **[NoDPI](https://github.com/GVCoder09/NoDPI)** (GVCoder09) — domain check, proxy without admin rights, DoH on Windows 10, domain sets.
 - **[GreenTunnel](https://github.com/SadeghHayeri/GreenTunnel)** (Sadegh Hayeri) — DNS-over-TLS, connection log.
 - **[sni-spoofing-rust](https://github.com/therealaleph/sni-spoofing-rust)** (therealaleph) — SNI scanner, LAN sharing.
+- **[Geneva](https://geneva.cs.umd.edu/)** (Bock et al., ACM CCS 2019) — the auto-tune approach: seeding with known strategies, repeated evaluation, complexity penalty, hall of fame.
 - **[zapret](https://github.com/bol-van/zapret)** (bol-van) — blockcheck methodology for the block type, small receive buffer (like `--wssize`), per-network switching (`--ssid-filter`).
 
 ## License

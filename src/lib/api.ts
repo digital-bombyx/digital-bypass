@@ -266,6 +266,33 @@ export type DiagReport = {
 };
 export type Stage = "request" | "response";
 
+export type EvolveCand = {
+  name: string;
+  parent: string;
+  changes: string[];
+  ok: number;
+  fail: number;
+  score: number;
+  complexity: number;
+  unstable: boolean;
+  error: string | null;
+  seed: boolean;
+};
+export type EvolveRun = {
+  kind: string;
+  round: number;
+  rounds: number;
+  done: number;
+  planned: number;
+  current: string | null;
+  hall: EvolveCand[];
+  tried: EvolveCand[];
+  finished: boolean;
+  cancelled: boolean;
+  message: string | null;
+  saved: string[];
+};
+
 export type NetRules = { enabled: boolean; mode: "only" | "except"; networks: string[]; zapret: boolean; proxy: boolean };
 export type NetStatus = { rules: NetRules; current: string[]; allowed: boolean; paused: boolean };
 
@@ -297,6 +324,9 @@ export const api = {
   testTargets: () => invoke<[string, string][]>("test_targets"),
   testStart: (kind: string, files: string[]) => invoke<void>("test_start", { kind, files }),
   testCancel: () => invoke<void>("test_cancel"),
+  evolveStart: (kind: string, seeds: string[], rounds: number) => invoke<void>("evolve_start", { kind, seeds, rounds }),
+  evolveLast: () => invoke<EvolveRun | null>("evolve_last"),
+  evolveSave: (name: string) => invoke<string>("evolve_save", { name }),
   testLast: () => invoke<TestRun | null>("test_last"),
   testHistory: () => invoke<TestRun[]>("test_history"),
   setTestParams: (timeout: number, parallel: number) => invoke<void>("set_test_params", { timeout, parallel }),
