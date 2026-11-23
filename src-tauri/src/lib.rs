@@ -1,4 +1,5 @@
 mod addons;
+mod addons_strats;
 mod autostart;
 mod bundled;
 mod diag;
@@ -368,6 +369,7 @@ fn set_zapret_dir(state: State<AppState>, path: String) -> R<Overview> {
         return Err(tr!("В папке нет bin\\winws2.exe, lua\\ или lists\\", "Folder has no bin\\winws2.exe, lua\\ or lists\\"));
     }
     state.update(|s| s.zapret_dir = Some(p.to_string_lossy().into_owned()));
+    let _ = addons::ensure_files(&p);
     Ok(overview_of(&state))
 }
 
@@ -1517,6 +1519,8 @@ pub fn run() {
                 let st = handle.state::<AppState>();
                 if let Ok(dir) = st.dir() {
                     ipset::test_restore(&dir);
+                    // Дополнения и коллекция стратегий kinlay0 — сразу в списке стратегий.
+                    let _ = addons::ensure_files(&dir);
                     // Обновление встроенной сборки возвращает обычный WinDivert.dll.
                     let hide = st.settings.lock().unwrap().addons.hide_windivert;
                     if hide && winapi::is_admin() && !addons::hidden(&dir) && !st.runner.status().running {

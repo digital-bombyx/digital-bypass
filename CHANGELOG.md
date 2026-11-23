@@ -8,6 +8,8 @@
 
 ### Что нового
 
+- **Ещё 38 стратегий zapret2** из коллекции [kinlay0/zapret2-discord-youtube-strats](https://github.com/kinlay0/zapret2-discord-youtube-strats): ALT14–16, CIRCULAR, DOUBLE/SINGLE FAKE, EXP1–10, HOSTFAKESPLIT TS, LEGACY, SYNDATA и др. В списке — с префиксом «K-», имена фейков приведены к сборке Flowseal, два новых фейка добавлены. Обновление коллекции — `scripts/import-kinlay-strats.py`.
+
 - **Дополнения к zapret2** (из официальной сборки bol-van для Windows):
   - **Авто-стратегия** — кнопка в результатах теста собирает `general (AUTO ROTATE).bat`: основа — лучшая стратегия, а в TCP-профилях действия 2–4 следующих становятся запасными. winws2 сам переключает их для каждого сайта при сбоях (RST от DPI, ретрансмиссии) — оркестратор `circular` из `zapret-auto.lua`.
   - **Разблокировать WireGuard** — фейк перед рукопожатием WireGuard/AmneziaWG на любых портах.

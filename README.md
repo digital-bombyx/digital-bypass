@@ -28,6 +28,7 @@ zapret2 (winws2 + Lua) в один клик, прокси-обходчик бе�
 - **Стратегии без переделок.** Аргументы берутся прямо из `general*.bat`.
 - **Тесты стратегий** по образцу `utils\test zapret.ps1`: HTTP / TLS 1.2 / TLS 1.3 + ping и DPI-тест «16-20 КБ», выбор лучшей, история.
 - **Автоподбор стратегии** (эксперимент, по мотивам [Geneva](https://geneva.cs.umd.edu/)): лучшие стратегии мутируются (техника, `pos`, `seqovl`, `repeats`, порча пакетов, фейк — значения берутся из стратегий сборки), каждый кандидат проверяется тестером дважды с худшим результатом, при равенстве побеждает более простой. Лучший, если он обошёл исходные, сохраняется как `general (AUTO N).bat`. Это упрощённый локальный поиск, а не полный генетический алгоритм: без скрещивания и популяции.
+- **Ещё 38 стратегий** из коллекции [kinlay0](https://github.com/kinlay0/zapret2-discord-youtube-strats) (с префиксом «K-») — тестируются и выбираются вместе со стратегиями Flowseal.
 - **Авто-стратегия**: из лучших стратегий теста собирается одна, в которой winws2 сам переключает варианты для каждого сайта при сбоях (`circular` из `zapret-auto.lua`).
 - **Дополнения** (из сборки bol-van): разблокировка WireGuard/AmneziaWG, экономный перехват UDP фильтрами в драйвере (меньше нагрузка при видео и звонках), скрытие WinDivert от античитов.
 - **Game Filter, IPSet, пользовательские списки** — те же файлы, что пишет `service.bat`.
@@ -114,6 +115,7 @@ npm run tauri build
 ## Благодарности
 
 - **[bol-van](https://github.com/bol-van)** — [zapret](https://github.com/bol-van/zapret) и [zapret2](https://github.com/bol-van/zapret2): движок `winws` / `winws2` и Lua-библиотеки.
+- **[kinlay0](https://github.com/kinlay0/zapret2-discord-youtube-strats)** — коллекция стратегий zapret2 (K-*).
 - **[Flowseal](https://github.com/Flowseal)** и контрибьюторы [zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube) — сборка, стратегии, списки и скрипты.
 - Авторы [PR #18202](https://github.com/Flowseal/zapret-discord-youtube/pull/18202) — перевод сборки на zapret2.
 - **[basil00/WinDivert](https://github.com/basil00/WinDivert)** — драйвер перехвата пакетов.

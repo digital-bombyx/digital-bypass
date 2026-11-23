@@ -28,6 +28,7 @@ One-click zapret2 (winws2 + Lua), a bypass proxy without admin rights, DNS switc
 - **Strategies as-is.** Arguments are read straight from `general*.bat`.
 - **Strategy tests** modelled on `utils\test zapret.ps1`: HTTP / TLS 1.2 / TLS 1.3 + ping and the "16-20 KB" DPI test, best pick and history.
 - **Strategy auto-tune** (experimental, inspired by [Geneva](https://geneva.cs.umd.edu/)): the best strategies are mutated (technique, `pos`, `seqovl`, `repeats`, fooling, fake — values come from the bundled strategies), each candidate is checked by the tester twice with the worst result counted, the simpler one wins a tie. The best one, if it beats the seeds, is saved as `general (AUTO N).bat`. It is a simplified local search, not a full genetic algorithm: no crossover and no population.
+- **38 more strategies** from the [kinlay0](https://github.com/kinlay0/zapret2-discord-youtube-strats) collection (prefixed "K-") — tested and picked alongside the Flowseal ones.
 - **Auto strategy**: the best strategies of a test are combined into one where winws2 switches variants per site on failures (`circular` from `zapret-auto.lua`).
 - **Add-ons** (from the bol-van bundle): WireGuard/AmneziaWG unblocking, lean UDP capture with in-driver filters (less CPU during video and calls), hiding WinDivert from anti-cheats.
 - **Game Filter, IPSet, user lists** — the same files `service.bat` writes.
@@ -127,6 +128,7 @@ npm run tauri build
 ## Credits
 
 - **[bol-van](https://github.com/bol-van)** — [zapret](https://github.com/bol-van/zapret) and [zapret2](https://github.com/bol-van/zapret2).
+- **[kinlay0](https://github.com/kinlay0/zapret2-discord-youtube-strats)** — a collection of zapret2 strategies (K-*).
 - **[Flowseal](https://github.com/Flowseal)** and the [zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube) contributors.
 - Authors of [PR #18202](https://github.com/Flowseal/zapret-discord-youtube/pull/18202) — the zapret2 port.
 - **[basil00/WinDivert](https://github.com/basil00/WinDivert)**, **[hyperion-cs/dpi-checkers](https://github.com/hyperion-cs/dpi-checkers)**.

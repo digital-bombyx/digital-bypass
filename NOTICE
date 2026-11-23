@@ -78,6 +78,12 @@ copy of WinDivert64.sys and WinDivert-monkey.dll a patched WinDivert.dll from
 the same bundle; WinDivert by basil00 is licensed under LGPL-3.0 / GPL-2.0,
 https://github.com/basil00/WinDivert.
 
+Strategies "general (K-*).bat" (src-tauri/addons/strats) come from
+zapret2-discord-youtube-strats by kinlay0 (MIT),
+https://github.com/kinlay0/zapret2-discord-youtube-strats; fake names were
+mapped to the Flowseal build, tls_clienthello_firpo_ru.bin and
+tls_clienthello_retext_ai.bin with blobs-extra.lua come from the same project.
+
 ------------------------------------------------------------------------------
 THIRD-PARTY LICENSE TEXTS
 ------------------------------------------------------------------------------

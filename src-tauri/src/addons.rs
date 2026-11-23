@@ -19,6 +19,10 @@ const F_RST_IN: &str = "inbound and tcp and tcp.Rst and (tcp.SrcPort == 443 or t
 /// Копия WinDivert64.sys под именем службы «Monkey» и пропатченная WinDivert.dll.
 const MONKEY_SYS: &[u8] = include_bytes!("../addons/Monkey64.sys");
 const MONKEY_DLL: &[u8] = include_bytes!("../addons/WinDivert-monkey.dll");
+/// Фейки коллекции kinlay0, которых нет в сборке Flowseal.
+const BLOBS_EXTRA: &str = include_str!("../addons/blobs-extra.lua");
+const BLOB_FIRPO: &[u8] = include_bytes!("../addons/tls_clienthello_firpo_ru.bin");
+const BLOB_RETEXT: &[u8] = include_bytes!("../addons/tls_clienthello_retext_ai.bin");
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -57,7 +61,15 @@ pub fn ensure_files(dir: &Path) -> Result<(), String> {
     ] {
         write_if_changed(&f.join(name), body.as_bytes()).map_err(|e| format!("{name}: {e}"))?;
     }
-    write_if_changed(&dir.join("lua").join("zapret-auto.lua"), AUTO_LUA.as_bytes()).map_err(|e| format!("zapret-auto.lua: {e}"))
+    write_if_changed(&dir.join("lua").join("zapret-auto.lua"), AUTO_LUA.as_bytes()).map_err(|e| format!("zapret-auto.lua: {e}"))?;
+    write_if_changed(&dir.join("lua").join("blobs-extra.lua"), BLOBS_EXTRA.as_bytes()).map_err(|e| format!("blobs-extra.lua: {e}"))?;
+    write_if_changed(&dir.join("bin").join("tls_clienthello_firpo_ru.bin"), BLOB_FIRPO).map_err(|e| e.to_string())?;
+    write_if_changed(&dir.join("bin").join("tls_clienthello_retext_ai.bin"), BLOB_RETEXT).map_err(|e| e.to_string())?;
+    // Коллекция стратегий kinlay0 — рядом со стратегиями сборки.
+    for (name, text) in crate::addons_strats::STRATS {
+        write_if_changed(&dir.join(name), text.as_bytes()).map_err(|e| format!("{name}: {e}"))?;
+    }
+    Ok(())
 }
 
 fn raw_part(dir: &Path, name: &str) -> String {
@@ -336,6 +348,33 @@ mod tests {
         assert!(s.contains("--lua-desync=fake:blob=quic_google:repeats=6 --new"));
         assert!(s.contains("--hostlist=%LISTS%list general.txt") || s.contains("list general.txt"));
         assert_eq!(args.iter().filter(|a| *a == "--new").count(), 2);
+    }
+
+    /// Коллекция kinlay0: каждая стратегия разбирается, а все фейки известны
+    /// (из blobs.lua сборки или blobs-extra.lua).
+    #[test]
+    fn kinlay_strategies_parse() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("zapret");
+        let known = {
+            let mut s = crate::util::read_text(&dir.join("lua").join("blobs.lua")).unwrap_or_default();
+            s.push_str(BLOBS_EXTRA);
+            s
+        };
+        let vars = crate::strategy::Vars::new(&dir, "12", "12");
+        assert!(crate::addons_strats::STRATS.len() >= 30);
+        for (name, text) in crate::addons_strats::STRATS {
+            let args = crate::strategy::args_from_text(name, text, &vars).unwrap();
+            for a in args.iter().filter(|a| a.starts_with("--lua-desync=")) {
+                for p in a.split(':') {
+                    if let Some(b) = p.strip_prefix("blob=").or_else(|| p.strip_prefix("seqovl_pattern=")) {
+                        if b.starts_with("0x") || b == "ch_clone" {
+                            continue;
+                        }
+                        assert!(known.contains(&format!("{b} ")) || known.contains(&format!("{b}\t")) || known.contains(&format!("{b}=")), "{name}: blob {b}");
+                    }
+                }
+            }
+        }
     }
 
     /// Реальная сборка: авто-стратегия из лучших разбирается; печать результата.
