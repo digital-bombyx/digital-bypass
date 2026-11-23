@@ -210,6 +210,11 @@ pub fn resolve_positions(positions: &[Pos], len: usize, sni: Option<(usize, usiz
     cuts
 }
 
+/// Единицы нарезки: TLS-записи, TCP-сегменты одной записи и TLS-записи с
+/// разными версиями (первая 0x0303, остальные 0x0301 — DPI, разбирающий
+/// только первую запись или сверяющий версии, теряет нить; CircumVolve, CCS'26).
+pub const UNITS: [&str; 3] = ["records", "tcp", "mixed"];
+
 /// Один способ нарезки — то, что перебирают подбор и автоматический режим.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(default)]
@@ -319,7 +324,7 @@ impl Config {
         if !SPLITS.contains(&self.split.as_str()) {
             self.split = "sni".into();
         }
-        if self.unit != "tcp" {
+        if !UNITS.contains(&self.unit.as_str()) {
             self.unit = "records".into();
         }
         self.auto_timeout = self.auto_timeout.clamp(2, 15);
@@ -485,6 +490,8 @@ pub fn cut_points(len: usize, sni: Option<(usize, usize)>, split: &str, chunk: u
 pub struct SplitOpts {
     pub split: String,
     pub records: bool,
+    /// Для записей: первая с версией 0x0303, остальные 0x0301.
+    pub mixver: bool,
     pub chunk: usize,
     pub seed: u64,
     /// Для `custom`.
@@ -493,7 +500,7 @@ pub struct SplitOpts {
 
 impl Default for SplitOpts {
     fn default() -> Self {
-        SplitOpts { split: "sni".into(), records: true, chunk: 4, seed: 0, positions: Vec::new() }
+        SplitOpts { split: "sni".into(), records: true, mixver: false, chunk: 4, seed: 0, positions: Vec::new() }
     }
 }
 
@@ -530,9 +537,15 @@ pub fn split_with(data: &[u8], o: &SplitOpts) -> Vec<Vec<u8>> {
     let mut out: Vec<Vec<u8>> = cuts
         .windows(2)
         .filter(|w| w[1] > w[0])
-        .map(|w| {
+        .enumerate()
+        .map(|(i, w)| {
             let part = &payload[w[0]..w[1]];
-            let mut r = vec![0x16, data[1], data[2]];
+            let (v1, v2) = match (o.mixver, i) {
+                (true, 0) => (0x03, 0x03),
+                (true, _) => (0x03, 0x01),
+                _ => (data[1], data[2]),
+            };
+            let mut r = vec![0x16, v1, v2];
             r.extend_from_slice(&(part.len() as u16).to_be_bytes());
             r.extend_from_slice(part);
             r
@@ -910,7 +923,7 @@ impl Shared {
             return up.write_all(first);
         }
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(7);
-        let o = SplitOpts { split: v.split.clone(), records: v.unit != "tcp", chunk: self.cfg.chunk as usize, seed, positions: self.positions.clone() };
+        let o = SplitOpts { split: v.split.clone(), records: v.unit != "tcp", mixver: v.unit == "mixed", chunk: self.cfg.chunk as usize, seed, positions: self.positions.clone() };
         send_parts(up, &split_with(first, &o), v.disorder, v.oob)
     }
 
@@ -1977,6 +1990,19 @@ mod tests {
 
     /// Сквозной тест на loopback: «сервер» получает три TLS-записи, склейка
     /// их payload равна исходному ClientHello.
+    #[test]
+    fn mixed_record_versions() {
+        let h = hello("www.example.com");
+        let o = SplitOpts { mixver: true, ..Default::default() };
+        let parts = split_with(&h, &o);
+        assert!(parts.len() >= 2);
+        assert_eq!(&parts[0][..3], &[0x16, 0x03, 0x03]);
+        assert!(parts[1..].iter().all(|p| p[..3] == [0x16, 0x03, 0x01]));
+        // Содержимое записей — тот же ClientHello.
+        let body: Vec<u8> = parts.iter().flat_map(|p| p[5..].to_vec()).collect();
+        assert_eq!(body, h[5..].to_vec());
+    }
+
     /// Перезапуск на том же порту сразу после остановки (смена настроек).
     #[test]
     fn restart_same_port() {

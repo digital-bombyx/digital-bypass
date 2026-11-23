@@ -55,6 +55,12 @@ pub fn variants() -> Vec<Variant> {
             }
         }
     }
+    // Записи с разными версиями — для разрезов, где записей несколько.
+    for split in ["sni", "first-byte"] {
+        for disorder in [false, true] {
+            v.push(Variant::new(split, "mixed", disorder, false));
+        }
+    }
     v
 }
 
@@ -213,9 +219,9 @@ mod tests {
     #[test]
     fn variant_list() {
         let v = variants();
-        assert_eq!(v.len(), 33);
+        assert_eq!(v.len(), 37);
         assert_eq!(v[0].split, "none");
-        assert_eq!(v.iter().filter(|x| x.disorder).count(), 16);
+        assert_eq!(v.iter().filter(|x| x.disorder).count(), 18);
         assert_eq!(v.iter().filter(|x| x.oob).count(), 16);
     }
 

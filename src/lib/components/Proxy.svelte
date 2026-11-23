@@ -76,7 +76,7 @@
   }
   function variantName(v: ProxyConfig["auto_chain"][number]) {
     const split = ({ sni: "SNI", "first-byte": t("первый байт", "first byte"), chunk: t("куски", "chunks"), random: t("случайно", "random"), custom: t("свои позиции", "custom positions"), none: t("без нарезки", "no split") } as Record<string, string>)[v.split];
-    return `${split} · ${v.unit === "tcp" ? "TCP" : "TLS"}${v.disorder ? " · disorder" : ""}${v.oob ? " · OOB" : ""}`;
+    return `${split} · ${v.unit === "tcp" ? "TCP" : v.unit === "mixed" ? "TLS±ver" : "TLS"}${v.disorder ? " · disorder" : ""}${v.oob ? " · OOB" : ""}`;
   }
 
   function saveRules() {
@@ -192,7 +192,9 @@
           <div class="hint faint mono">
             {cfg.unit === "records"
               ? t("каждая часть — отдельная TLS-запись", "each part is a separate TLS record")
-              : t("TCP-сегменты одной TLS-записи", "TCP segments of one TLS record")}
+              : cfg.unit === "mixed"
+                ? t("TLS-записи с разными версиями: первая 1.2, остальные 1.0", "TLS records with different versions: first 1.2, the rest 1.0")
+                : t("TCP-сегменты одной TLS-записи", "TCP segments of one TLS record")}
           </div>
         </div>
         <div class="inline">
@@ -207,6 +209,7 @@
             options={[
               { value: "records", label: t("TLS-записи", "TLS records") },
               { value: "tcp", label: t("TCP-сегменты", "TCP segments") },
+              { value: "mixed", label: t("Разные версии", "Mixed versions") },
             ]} />
         </div>
       </div>

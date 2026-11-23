@@ -147,7 +147,7 @@ export type ProxyConfig = {
   port: number;
   split: "sni" | "first-byte" | "chunk" | "random" | "custom" | "none";
   positions: string;
-  unit: "records" | "tcp";
+  unit: "records" | "tcp" | "mixed";
   chunk: number;
   disorder: boolean;
   oob: boolean;

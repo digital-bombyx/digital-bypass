@@ -29,7 +29,7 @@
     running = true;
     results = [];
     best = null;
-    total = 17;
+    total = 37;
     try {
       const r = await api.proxyTest(targets, timeout);
       results = r.results;
@@ -48,7 +48,7 @@
   const name = (v: ProxyVariant) => {
     const split = ({ sni: "SNI", "first-byte": t("первый байт", "first byte"), chunk: t("куски", "chunks"), random: t("случайно", "random"), custom: t("свои позиции", "custom positions"), none: t("без нарезки", "no split") } as Record<string, string>)[v.split];
     if (v.split === "none") return split;
-    return `${split} · ${v.unit === "tcp" ? "TCP" : "TLS"}${v.disorder ? " · disorder" : ""}${v.oob ? " · OOB" : ""}`;
+    return `${split} · ${v.unit === "tcp" ? "TCP" : v.unit === "mixed" ? "TLS±ver" : "TLS"}${v.disorder ? " · disorder" : ""}${v.oob ? " · OOB" : ""}`;
   };
   /** Выбранный способ — основной, следующие рабочие (до 4) — запасные для автоматического режима. */
   function pick(v: ProxyVariant) {
