@@ -1231,6 +1231,25 @@ fn relay(client: TcpStream, up: TcpStream) -> std::io::Result<()> {
 
 pub struct Proxy {
     shared: Arc<Shared>,
+    /// Поток приёма соединений: при остановке ждём его, чтобы порт освободился
+    /// до запуска нового прокси (перезапуск при смене настроек).
+    accept: Option<std::thread::JoinHandle<()>>,
+}
+
+/// Занять порт; старый слушатель может отпускать его ещё мгновение — повторяем.
+fn bind_retry(host: &str, port: u16) -> std::io::Result<TcpListener> {
+    let mut last = None;
+    for _ in 0..20 {
+        match TcpListener::bind((host, port)) {
+            Ok(l) => return Ok(l),
+            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+                last = Some(e);
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Err(last.unwrap_or_else(|| std::io::Error::from(std::io::ErrorKind::AddrInUse)))
 }
 
 impl Proxy {
@@ -1243,7 +1262,7 @@ impl Proxy {
         let positions = if uses_custom { parse_positions(&cfg.positions)? } else { Vec::new() };
         let port = cfg.port;
         let host = if cfg.lan { "0.0.0.0" } else { "127.0.0.1" };
-        let listener = TcpListener::bind((host, port))
+        let listener = bind_retry(host, port)
             .map_err(|e| crate::tr!("порт {port} занят: {e}", "port {port} is busy: {e}"))?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
         let resolver = cfg.doh.then(|| crate::doh::CachedResolver::public(cfg.ipv6));
@@ -1267,7 +1286,7 @@ impl Proxy {
             last_error: Mutex::new(None),
         });
         let sh = shared.clone();
-        std::thread::spawn(move || {
+        let accept = std::thread::spawn(move || {
             while !sh.stop.load(Ordering::SeqCst) {
                 match listener.accept() {
                     Ok((s, peer)) => {
@@ -1293,7 +1312,7 @@ impl Proxy {
                 }
             }
         });
-        Ok(Proxy { shared })
+        Ok(Proxy { shared, accept: Some(accept) })
     }
 
     /// Журнал, новые записи первыми.
@@ -1330,6 +1349,10 @@ impl Proxy {
 impl Drop for Proxy {
     fn drop(&mut self) {
         self.shared.stop.store(true, Ordering::SeqCst);
+        // Цикл приёма проверяет флаг раз в 50 мс; с его выходом закрывается слушатель.
+        if let Some(t) = self.accept.take() {
+            let _ = t.join();
+        }
     }
 }
 
@@ -1954,6 +1977,17 @@ mod tests {
 
     /// Сквозной тест на loopback: «сервер» получает три TLS-записи, склейка
     /// их payload равна исходному ClientHello.
+    /// Перезапуск на том же порту сразу после остановки (смена настроек).
+    #[test]
+    fn restart_same_port() {
+        let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let cfg = Config { port, doh: false, system: false, ..Default::default() };
+        for _ in 0..5 {
+            let p = Proxy::start(cfg.clone(), &[]).expect("port must be free after drop");
+            drop(p);
+        }
+    }
+
     #[test]
     fn end_to_end_loopback() {
         let server = TcpListener::bind("127.0.0.1:0").unwrap();

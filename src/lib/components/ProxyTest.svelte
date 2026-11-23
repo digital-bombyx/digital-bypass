@@ -109,7 +109,7 @@
         </div>
       {/each}
       {#if running}
-        <div class="it faint"><span class="spin"><Loader size={12} /></span> {results.length}/{total}</div>
+        <div class="it pending faint"><span class="spin"><Loader size={12} /></span> {results.length}/{total}</div>
       {/if}
     </div>
   {/if}
@@ -200,8 +200,17 @@
   .ms {
     text-align: right;
   }
+  .it.pending {
+    display: flex;
+    gap: 8px;
+  }
+  /* Размер — по значку: иначе крутится вся ячейка, и значок «летает» по окну. */
   .spin {
     display: inline-grid;
+    place-items: center;
+    width: 12px;
+    height: 12px;
+    flex: none;
     animation: spin 1s linear infinite;
   }
   @keyframes spin {
