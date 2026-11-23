@@ -77,6 +77,25 @@ Entries from `.service\hosts` go into the system hosts file as a separate block 
 
 Tray with quick zapret2 and bypass proxy toggles, strategy switch and DoH resolver state, autostart with admin rights, Russian and English UI.
 
+## Other countries
+
+digital-bypass is built and tested in Russia. Outside it, keep two things in mind:
+
+- **The `zapret2` module is tuned for Russia.** The bundled strategies target the Russian TSPU (some fakes even mimic Russian services), the built-in lists cover what is blocked in Russia, and the "16-20 KB" DPI test uses Russian targets. Elsewhere use **Strategy auto-tune** and your own lists rather than relying on the bundled picks.
+- **The other modules are country-neutral:** DNS switching, the DoH/DoT resolver, the bypass proxy with ClientHello splitting and auto mode, the domain check, the DNS tampering check and the SNI scanner. Start with **Check**: it tells you whether a site is blocked by DNS, by DPI on the site name, or by IP.
+
+What to expect, based on public reports of how each country filters traffic (not tested there by us):
+
+| Country | Main techniques | What helps | What does not |
+|---|---|---|---|
+| 🇹🇷 Turkey | ISP DNS spoofing, DPI on the site name (SNI) for some sites | DNS module or DoH resolver, the bypass proxy — usually enough | bandwidth throttling during events, IP blocks |
+| 🇮🇷 Iran | DPI on SNI, DNS spoofing, wide IP blocking, throttling of foreign TLS, whitelists and shutdowns during unrest | the proxy and DoH for sites filtered by name; the SNI scanner to see what passes; the Telegram module if Cloudflare is reachable | anything blocked by IP, whitelist mode, shutdowns |
+| 🇨🇳 China | the Great Firewall: IP blocking of major services, DNS injection, TCP reassembly, blocking of DoH/DoT | little: the check will show what is going on | Google, YouTube, X and similar are blocked by IP — you need a VPN with your own server (for example VLESS + Reality) |
+
+If something works or fails for you in another country, an issue with the **Check** result is welcome.
+
+> Circumventing censorship can be illegal or risky in some countries. You are responsible for how you use this software.
+
 ## Install
 
 1. Download `digital-bypass_x.y.z_x64-setup.exe` from [Releases](https://github.com/digital-bombyx/digital-bypass/releases/latest). A `.sha256` file is attached.
