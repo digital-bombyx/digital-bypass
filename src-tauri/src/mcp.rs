@@ -222,9 +222,9 @@ fn tools() -> Vec<Value> {
         }), &["action"]),
         tool("proxy_control", "Start or stop the bypass proxy (no admin rights needed). Needs 'allow changes'.", json!({"action":{"type":"string","enum":["start","stop"]}}), &["action"]),
         tool("proxy_set_options", "Change bypass proxy settings (restarts it if running). Keys: split (sni|first-byte|chunk|random|custom|none), unit (records|tcp|mixed), disorder, oob, auto, doh, system, ipv6, log, rcvbuf (bytes, 0 = off), port. Needs 'allow changes'.", json!({"options":{"type":"object"}}), &["options"]),
-        tool("add_domains_to_list", "Add domains to a list: zapret (zapret2 hostlist), zapret_exclude (never touch), proxy_bypass (proxy splits only these when scope=listed), proxy_skip (proxy passes as is), proxy_block. Needs 'allow changes'.", json!({
+        tool("add_domains_to_list", "Add domains to a list: zapret (zapret2 hostlist), zapret_exclude (never touch), proxy_bypass (proxy splits only these when scope=listed), proxy_skip (proxy passes as is), proxy_block, proxy_worker (through the user's Cloudflare Worker — for IP-blocked or geo-restricted sites; works only if the Worker is set up in the proxy tab). Needs 'allow changes'.", json!({
             "domains": {"type":"array","items":{"type":"string"}},
-            "list": {"type":"string","enum":["zapret","zapret_exclude","proxy_bypass","proxy_skip","proxy_block"]}
+            "list": {"type":"string","enum":["zapret","zapret_exclude","proxy_bypass","proxy_skip","proxy_block","proxy_worker"]}
         }), &["domains","list"]),
         tool("get_proxy_log", "Recent bypass proxy connections: host, what was done, method, attempts, result. The connection log must be enabled in proxy settings.", json!({
             "limit": {"type":"integer","description":"Default 50"},
@@ -265,7 +265,7 @@ fn advice(r: &crate::diag::Report, in_zapret: Option<bool>) -> String {
     let mut s = match r.verdict {
         Verdict::Ok => "The site opens from this machine. If it still fails in the browser, check the browser's own DNS/proxy settings or QUIC (UDP), which only zapret2 bypasses.".to_string(),
         Verdict::Dns => "DNS spoofing by the ISP: the system DNS returns a stub or a wrong address, while DoH addresses work. Fix: switch DNS in the DNS tab (or enable the local DoH/DoT resolver), or use the bypass proxy with DoH on.".to_string(),
-        Verdict::Ip => "IP block: TCP to every address fails. zapret2 and the proxy cannot help; a VPN with a server abroad is needed.".to_string(),
+        Verdict::Ip => "IP block: TCP to every address fails. zapret2 and proxy splitting cannot help. Options: a VPN with a server abroad, or the bypass proxy's route through the user's own Cloudflare Worker (add_domains_to_list list=proxy_worker; the Worker must be set up in the proxy tab; not for sites hosted on Cloudflare).".to_string(),
         Verdict::DestNet => "Destination-network restriction, not a block by site name: either TLS to this address fails with ANY site name while this name passes on other addresses, or TLS works but the connection freezes after a few packets (~16-33 KB at home, less on mobile) without a reset. Since 2025 this hits foreign hostings by AS (Hetzner, OVH, DigitalOcean, Vultr, Scaleway, M247...). ClientHello splitting (zapret2, proxy) does not help; a UDP-based transport or a server in another network does.".to_string(),
         Verdict::NoDomain => "The domain does not resolve anywhere — check the spelling.".to_string(),
         Verdict::Unknown => "Could not determine the cause; see the per-address checks.".to_string(),
@@ -460,11 +460,12 @@ fn add_to(app: &AppHandle, list: &str, domains: &[String]) -> R<Vec<String>> {
             }
             Ok(added)
         }
-        "proxy_bypass" | "proxy_skip" | "proxy_block" => {
+        "proxy_bypass" | "proxy_skip" | "proxy_block" | "proxy_worker" => {
             let mut cfg = st.settings.lock().unwrap().proxy.clone();
             let v = match list {
                 "proxy_bypass" => &mut cfg.rules.bypass,
                 "proxy_skip" => &mut cfg.rules.skip,
+                "proxy_worker" => &mut cfg.rules.worker,
                 _ => &mut cfg.rules.block,
             };
             let added: Vec<String> = domains.iter().filter(|d| !v.contains(d)).cloned().collect();
@@ -472,7 +473,7 @@ fn add_to(app: &AppHandle, list: &str, domains: &[String]) -> R<Vec<String>> {
             crate::proxy_set_config(app.clone(), app.state(), cfg)?;
             Ok(added)
         }
-        _ => Err("list must be zapret, zapret_exclude, proxy_bypass, proxy_skip or proxy_block".into()),
+        _ => Err("list must be zapret, zapret_exclude, proxy_bypass, proxy_skip, proxy_block or proxy_worker".into()),
     }
 }
 

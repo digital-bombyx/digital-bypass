@@ -68,6 +68,8 @@ pub struct Config {
     /// не умеет его передавать.
     pub user: String,
     pub pass: String,
+    /// Свой Worker для доменов из `rules.worker`.
+    pub worker: WorkerCfg,
     /// Экспериментально: маленький буфер приёма (байт, 0 — системный) на
     /// соединениях к сайтам. Сервер тогда шлёт ответ (сертификат) мелкими
     /// кусками — против DPI, который режет по ответу. После первого ответа
@@ -97,6 +99,7 @@ impl Default for Config {
             lan: false,
             user: String::new(),
             pass: String::new(),
+            worker: WorkerCfg::default(),
             rcvbuf: 0,
         }
     }
@@ -115,12 +118,51 @@ pub struct Rules {
     pub skip: Vec<String>,
     /// Не пускать вовсе.
     pub block: Vec<String>,
+    /// Через свой Cloudflare Worker (сайты, заблокированные по IP или с геоограничениями).
+    #[serde(default)]
+    pub worker: Vec<String>,
 }
 
 impl Default for Rules {
     fn default() -> Self {
-        Rules { scope: "all".into(), zapret_lists: true, bypass: Vec::new(), skip: Vec::new(), block: Vec::new() }
+        Rules { scope: "all".into(), zapret_lists: true, bypass: Vec::new(), skip: Vec::new(), block: Vec::new(), worker: Vec::new() }
     }
+}
+
+/// Свой Cloudflare Worker: туннель WebSocket → TCP до сайта (код Worker — в приложении).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct WorkerCfg {
+    /// `имя.аккаунт.workers.dev` или свой домен.
+    pub host: String,
+    /// Ключ доступа — тот же, что в коде Worker.
+    pub key: String,
+    /// Нарезать ClientHello к Cloudflare (как в Telegram-модуле).
+    pub fragment: bool,
+}
+
+impl Default for WorkerCfg {
+    fn default() -> Self {
+        WorkerCfg { host: String::new(), key: String::new(), fragment: true }
+    }
+}
+
+impl WorkerCfg {
+    pub fn ready(&self) -> bool {
+        !self.host.trim().is_empty() && !self.key.trim().is_empty()
+    }
+}
+
+/// Процентное кодирование для параметра запроса.
+fn qenc(s: &str) -> String {
+    s.bytes()
+        .map(|b| if b.is_ascii_alphanumeric() || b"-._~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") })
+        .collect()
+}
+
+/// Путь туннеля Worker: `/tunnel?h=<хост>&p=<порт>&k=<ключ>`.
+pub fn worker_path(host: &str, port: u16, key: &str) -> String {
+    format!("/tunnel?h={}&p={port}&k={}", qenc(host), qenc(key))
 }
 
 pub const SPLITS: [&str; 6] = ["sni", "first-byte", "chunk", "random", "custom", "none"];
@@ -283,6 +325,7 @@ fn action_name(a: Option<Action>) -> &'static str {
     match a {
         Some(Action::Block) => "block",
         Some(Action::Pass) => "pass",
+        Some(Action::Worker) => "worker",
         _ => "bypass",
     }
 }
@@ -383,6 +426,8 @@ pub enum Action {
     Bypass,
     Pass,
     Block,
+    /// Через свой Worker.
+    Worker,
 }
 
 pub struct Matcher {
@@ -390,11 +435,19 @@ pub struct Matcher {
     bypass: DomainSet,
     skip: DomainSet,
     block: DomainSet,
+    worker: DomainSet,
 }
 
 impl Matcher {
+    #[cfg(test)]
     pub fn new(r: &Rules, extra_bypass: &[String]) -> Self {
+        Self::with_worker(r, extra_bypass, false)
+    }
+
+    /// `worker_on` — Worker настроен: домены `rules.worker` идут через него.
+    pub fn with_worker(r: &Rules, extra_bypass: &[String], worker_on: bool) -> Self {
         Matcher {
+            worker: DomainSet::new(if worker_on { &r.worker[..] } else { &[] }),
             scope_listed: r.scope == "listed",
             bypass: DomainSet::new(r.bypass.iter().chain(extra_bypass.iter())),
             skip: DomainSet::new(&r.skip),
@@ -404,6 +457,8 @@ impl Matcher {
     pub fn action(&self, host: &str) -> Action {
         if self.block.matches(host) {
             Action::Block
+        } else if self.worker.matches(host) {
+            Action::Worker
         } else if self.skip.matches(host) {
             Action::Pass
         } else if self.scope_listed && !self.bypass.matches(host) {
@@ -865,6 +920,8 @@ pub struct Stats {
     pub bypassed: u64,
     pub passed: u64,
     pub blocked: u64,
+    /// Через свой Worker.
+    pub via_worker: u64,
     /// Доменов в кэше DNS и в списке обхода.
     pub dns_cached: usize,
     pub bypass_domains: usize,
@@ -886,6 +943,7 @@ struct Shared {
     bypassed: AtomicU64,
     passed: AtomicU64,
     blocked: AtomicU64,
+    via_worker: AtomicU64,
     /// Сайт → способ, который сработал (если не основной), с отметкой времени.
     auto_cache: Mutex<std::collections::HashMap<String, (Variant, std::time::Instant)>>,
     auto_retries: AtomicU64,
@@ -898,6 +956,21 @@ struct Shared {
 const AUTO_CACHE_TTL: Duration = Duration::from_secs(6 * 3600);
 
 impl Shared {
+    /// Туннель до `host:port` через свой Worker (WSS, с нарезкой ClientHello к CF).
+    fn worker_connect(&self, host: &str, port: u16) -> std::io::Result<(crate::telegram::Ws, Vec<u8>)> {
+        let w = &self.cfg.worker;
+        let wh = w.host.trim();
+        let path = worker_path(host, port, w.key.trim());
+        let mut last = std::io::Error::other("worker: no address");
+        for a in self.resolve(wh, 443).into_iter().filter(|a| a.is_ipv4()).take(3) {
+            match crate::telegram::Ws::connect(a, wh, &path, w.fragment) {
+                Ok(r) => return Ok(r),
+                Err(e) => last = std::io::Error::other(format!("worker {wh}: {e}")),
+            }
+        }
+        Err(last)
+    }
+
     fn resolve(&self, host: &str, port: u16) -> Vec<SocketAddr> {
         if let Ok(ip) = host.parse::<IpAddr>() {
             return vec![SocketAddr::new(ip, port)];
@@ -1021,6 +1094,7 @@ impl Shared {
             Action::Bypass => &self.bypassed,
             Action::Pass => &self.passed,
             Action::Block => &self.blocked,
+            Action::Worker => &self.via_worker,
         }
         .fetch_add(1, Ordering::Relaxed);
     }
@@ -1099,6 +1173,18 @@ impl Shared {
                 let _ = client.write_all(&[5, 2, 0, 1, 0, 0, 0, 0, 0, 0]);
                 return Ok(());
             }
+            if action == Action::Worker {
+                let (ws, early) = match self.worker_connect(&host, port) {
+                    Ok(w) => w,
+                    Err(e) => {
+                        let _ = client.write_all(&[5, 4, 0, 1, 0, 0, 0, 0, 0, 0]);
+                        return Err(e);
+                    }
+                };
+                client.write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0])?;
+                self.log_entry(tr, t0, true, None);
+                return crate::telegram::ws_pipe(client, ws, early, Vec::new());
+            }
             let up = match self.connect(&host, port) {
                 Ok(u) => u,
                 Err(e) => {
@@ -1128,6 +1214,18 @@ impl Shared {
                     let _ = client.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                     return Ok(());
                 }
+                if action == Action::Worker {
+                    let (ws, wearly) = match self.worker_connect(&host, port) {
+                        Ok(w) => w,
+                        Err(e) => {
+                            let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
+                            return Err(e);
+                        }
+                    };
+                    client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")?;
+                    self.log_entry(tr, t0, true, None);
+                    return crate::telegram::ws_pipe(client, ws, wearly, early);
+                }
                 let up = match self.connect(&host, port) {
                     Ok(u) => u,
                     Err(e) => {
@@ -1145,6 +1243,15 @@ impl Shared {
                     self.count(Action::Block);
                     let _ = client.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                     return Ok(());
+                }
+                if self.matcher.action(&host) == Action::Worker {
+                    tr.action = Some(Action::Worker);
+                    self.count(Action::Worker);
+                    let (ws, wearly) = self.worker_connect(&host, port)?;
+                    let mut first = head.to_vec();
+                    first.extend_from_slice(&early);
+                    self.log_entry(tr, t0, true, None);
+                    return crate::telegram::ws_pipe(client, ws, wearly, first);
                 }
                 self.count(Action::Pass);
                 let mut up = self.connect(&host, port)?;
@@ -1280,13 +1387,14 @@ impl Proxy {
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
         let resolver = cfg.doh.then(|| crate::doh::CachedResolver::public(cfg.ipv6));
         let extra: &[String] = if cfg.rules.zapret_lists { extra_bypass } else { &[] };
-        let matcher = Matcher::new(&cfg.rules, extra);
+        let matcher = Matcher::with_worker(&cfg.rules, extra, cfg.worker.ready());
         let shared = Arc::new(Shared {
             matcher,
             resolver,
             bypassed: AtomicU64::new(0),
             passed: AtomicU64::new(0),
             blocked: AtomicU64::new(0),
+            via_worker: AtomicU64::new(0),
             auto_cache: Mutex::new(std::collections::HashMap::new()),
             auto_retries: AtomicU64::new(0),
             positions,
@@ -1350,6 +1458,7 @@ impl Proxy {
             bypassed: self.shared.bypassed.load(Ordering::Relaxed),
             passed: self.shared.passed.load(Ordering::Relaxed),
             blocked: self.shared.blocked.load(Ordering::Relaxed),
+            via_worker: self.shared.via_worker.load(Ordering::Relaxed),
             dns_cached: self.shared.resolver.as_ref().map(|r| r.len()).unwrap_or(0),
             bypass_domains: self.shared.matcher.bypass.len(),
             auto_retries: self.shared.auto_retries.load(Ordering::Relaxed),
@@ -1813,6 +1922,7 @@ mod tests {
             bypass: vec![],
             skip: vec!["sberbank.ru".into()],
             block: vec!["ads.example.com".into()],
+            worker: vec![],
         };
         let m = Matcher::new(&r, &[]);
         assert_eq!(m.action("www.youtube.com"), Action::Bypass);
@@ -2001,6 +2111,23 @@ mod tests {
         // Содержимое записей — тот же ClientHello.
         let body: Vec<u8> = parts.iter().flat_map(|p| p[5..].to_vec()).collect();
         assert_eq!(body, h[5..].to_vec());
+    }
+
+    #[test]
+    fn worker_route() {
+        assert_eq!(worker_path("www.instagram.com", 443, "a b&c"), "/tunnel?h=www.instagram.com&p=443&k=a%20b%26c");
+        assert_eq!(worker_path("2001:db8::1", 8443, "k"), "/tunnel?h=2001%3Adb8%3A%3A1&p=8443&k=k");
+        let rules = Rules { worker: vec!["instagram.com".into()], skip: vec!["instagram.com".into()], ..Default::default() };
+        // Worker важнее «не резать»; без настроенного Worker — обычные правила.
+        assert_eq!(Matcher::with_worker(&rules, &[], true).action("i.instagram.com"), Action::Worker);
+        assert_eq!(Matcher::with_worker(&rules, &[], false).action("i.instagram.com"), Action::Pass);
+        assert_eq!(Matcher::with_worker(&rules, &[], true).action("x.com"), Action::Bypass);
+        let blocked = Rules { worker: vec!["a.com".into()], block: vec!["a.com".into()], ..Default::default() };
+        assert_eq!(Matcher::with_worker(&blocked, &[], true).action("a.com"), Action::Block);
+        assert!(!WorkerCfg::default().ready());
+        // Старый конфиг без новых полей читается.
+        let c: Config = serde_json::from_str(r#"{"rules":{"scope":"all","zapret_lists":true,"bypass":[],"skip":[],"block":[]}}"#).unwrap();
+        assert!(c.rules.worker.is_empty() && c.worker.fragment);
     }
 
     /// Перезапуск на том же порту сразу после остановки (смена настроек).

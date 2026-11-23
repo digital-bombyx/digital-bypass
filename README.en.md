@@ -80,6 +80,10 @@ Entries from `.service\hosts` go into the system hosts file as a separate block 
 
 Tray with quick zapret2 and bypass proxy toggles, strategy switch and DoH resolver state, autostart with admin rights, Russian and English UI.
 
+### Through your own Cloudflare Worker
+
+The bypass proxy can send domains from a separate list (blocked by IP or geo-restricted — Instagram, Facebook, Spotify, AI services) through your free Cloudflare Worker over WebSocket, with ClientHello splitting towards Cloudflare. TLS with the site stays end-to-end. Sites hosted on Cloudflare itself cannot be reached this way. The Worker code with your key is in the app.
+
 ### Destination-network restrictions
 
 **Check** also recognizes the restriction applied to foreign hostings since 2025 (Hetzner, OVH, DigitalOcean, Vultr…): TLS to the address fails with any site name, or the transfer freezes after ~16–33 KB without a reset. Splitting does not help there.

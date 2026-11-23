@@ -8,6 +8,8 @@
 
 ### Что нового
 
+- **Прокси: маршрут через свой Cloudflare Worker** — домены из списка (сайты, заблокированные по IP или с геоограничениями: Instagram, Facebook, Spotify, ИИ-сервисы) идут через ваш Worker по WebSocket, а он открывает TCP к сайту. TLS браузера с сайтом сквозной. Нарезка ClientHello к Cloudflare — как в Telegram-модуле. Код Worker с ключом и инструкция — в приложении. Идея — ws-proxy из [kinlay0/zapret2-discord-youtube-strats](https://github.com/kinlay0/zapret2-discord-youtube-strats).
+
 - **Ещё 38 стратегий zapret2** из коллекции [kinlay0/zapret2-discord-youtube-strats](https://github.com/kinlay0/zapret2-discord-youtube-strats): ALT14–16, CIRCULAR, DOUBLE/SINGLE FAKE, EXP1–10, HOSTFAKESPLIT TS, LEGACY, SYNDATA и др. В списке — с префиксом «K-», имена фейков приведены к сборке Flowseal, два новых фейка добавлены. Обновление коллекции — `scripts/import-kinlay-strats.py`.
 
 - **Дополнения к zapret2** (из официальной сборки bol-van для Windows):

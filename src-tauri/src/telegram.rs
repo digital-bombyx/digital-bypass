@@ -570,6 +570,64 @@ impl Ws {
     }
 }
 
+/// Простая пересылка: байты клиента ↔ двоичные кадры WebSocket (туннель через
+/// свой Worker в прокси-обходчике). `early` — байты после заголовков ответа
+/// WebSocket, `first` — то, что клиент уже прислал.
+pub fn ws_pipe(client: TcpStream, ws: Ws, early: Vec<u8>, first: Vec<u8>) -> std::io::Result<()> {
+    client.set_read_timeout(None)?;
+    if !first.is_empty() {
+        ws.send(&first)?;
+    }
+    let tls = ws.tls.clone();
+    let mut cw = client.try_clone()?;
+    let down = std::thread::spawn(move || {
+        let mut buf = early;
+        loop {
+            while let Some((_, op, payload, used)) = ws_parse(&buf) {
+                buf.drain(..used);
+                match op {
+                    0 | 1 | 2 => {
+                        if cw.write_all(&payload).is_err() {
+                            return;
+                        }
+                    }
+                    8 => {
+                        let _ = cw.shutdown(Shutdown::Write);
+                        return;
+                    }
+                    9 => {
+                        let _ = tls.send(&ws_frame(0xA, &payload));
+                    }
+                    _ => {}
+                }
+            }
+            match tls.recv(&mut buf) {
+                Ok(0) | Err(_) => {
+                    let _ = cw.shutdown(Shutdown::Write);
+                    return;
+                }
+                Ok(_) => {}
+            }
+        }
+    });
+    let mut cr = client;
+    let mut b = [0u8; 16 * 1024];
+    loop {
+        match cr.read(&mut b) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => {
+                if ws.send(&b[..n]).is_err() {
+                    break;
+                }
+            }
+        }
+    }
+    let _ = ws.tls.send(&ws_frame(0x8, &[]));
+    ws.tls.shutdown();
+    let _ = down.join();
+    Ok(())
+}
+
 fn b64(data: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut s = String::new();

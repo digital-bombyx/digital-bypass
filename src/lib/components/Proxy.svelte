@@ -8,6 +8,7 @@
   import Switch from "./Switch.svelte";
   import ProxyTest from "./ProxyTest.svelte";
   import ProxyLog from "./ProxyLog.svelte";
+  import ProxyWorker from "./ProxyWorker.svelte";
   import { Copy, Wifi, KeyRound, ShieldAlert, ListFilter } from "@lucide/svelte";
 
   let st = $state<ProxyStatus | null>(null);
@@ -24,7 +25,8 @@
     auto_timeout: 4,
     log: false,
     ipv6: false,
-    rules: { scope: "all", zapret_lists: true, bypass: [], skip: [], block: [] },
+    rules: { scope: "all", zapret_lists: true, bypass: [], skip: [], block: [], worker: [] },
+    worker: { host: "", key: "", fragment: true },
     doh: true,
     system: true,
     lan: false,
@@ -44,7 +46,7 @@
   async function load() {
     try {
       st = await api.proxyStatus();
-      cfg = { ...st.config, rules: { ...st.config.rules } };
+      cfg = { ...st.config, rules: { ...st.config.rules, worker: st.config.rules.worker ?? [] }, worker: st.config.worker ?? { host: "", key: "", fragment: true } };
       ruleText = { bypass: toLines(cfg.rules.bypass), skip: toLines(cfg.rules.skip), block: toLines(cfg.rules.block) };
       positionsText = cfg.positions;
       lanIps = await api.lanAddresses().catch(() => []);
@@ -356,6 +358,8 @@
       <button class="btn sm" disabled={app.busy || !rulesDirty} onclick={saveRules}>{t("Сохранить", "Save")}</button>
     </div>
   </section>
+
+  <ProxyWorker {cfg} {change} via={st?.stats.via_worker ?? 0} />
 
   <section class="card block">
     <div class="row">

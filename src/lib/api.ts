@@ -147,9 +147,11 @@ export type StubStatus = {
   stats: { queries: number; cached: number; ech_stripped?: number; errors: number; last_error: string | null; ipv6: boolean; addr: string; template: string } | null;
 };
 
-export type ProxyRules = { scope: "all" | "listed"; zapret_lists: boolean; bypass: string[]; skip: string[]; block: string[] };
+export type ProxyRules = { scope: "all" | "listed"; zapret_lists: boolean; bypass: string[]; skip: string[]; block: string[]; worker: string[] };
+export type ProxyWorker = { host: string; key: string; fragment: boolean };
 export type ProxyConfig = {
   port: number;
+  worker: ProxyWorker;
   split: "sni" | "first-byte" | "chunk" | "random" | "custom" | "none";
   positions: string;
   unit: "records" | "tcp" | "mixed";
@@ -172,7 +174,7 @@ export type ProxyConfig = {
 export type ProxyStatus = {
   config: ProxyConfig;
   enabled: boolean;
-  stats: { running: boolean; port: number; active: number; total: number; failed: number; system: boolean; lan: boolean; auth: boolean; bypassed: number; passed: number; blocked: number; dns_cached: number; bypass_domains: number; auto_retries: number; auto_sites: number; last_error: string | null };
+  stats: { running: boolean; port: number; active: number; total: number; failed: number; system: boolean; lan: boolean; auth: boolean; bypassed: number; passed: number; blocked: number; via_worker?: number; dns_cached: number; bypass_domains: number; auto_retries: number; auto_sites: number; last_error: string | null };
 };
 
 export type ProxyVariant = { split: ProxyConfig["split"]; unit: ProxyConfig["unit"]; disorder: boolean; oob: boolean };
