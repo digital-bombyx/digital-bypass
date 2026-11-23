@@ -89,6 +89,7 @@ impl Runner {
     /// Запустить стратегию. Предыдущие winws/winws2 завершаются.
     pub fn start(&self, dir: &Path, strategy_file: &str, args: &[String]) -> Result<(), String> {
         crate::lists::ensure(dir);
+        crate::addons::ensure_files(dir)?;
         self.stop_processes();
         tcp_timestamps_enable();
 

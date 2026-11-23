@@ -1,5 +1,6 @@
 <script lang="ts">
   import PowerButton from "./PowerButton.svelte";
+  import Addons from "./Addons.svelte";
   import { api, strategyName, type GameFilter } from "$lib/api";
   import { app, act } from "$lib/state.svelte";
   import Segmented from "./Segmented.svelte";
@@ -163,6 +164,8 @@
         ]} />
     </div>
   </section>
+
+  <Addons />
 </div>
 
 <style>

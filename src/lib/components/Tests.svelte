@@ -173,6 +173,17 @@
           {/if}
         </div>
         <button
+          class="btn"
+          disabled={app.busy || run.results.filter((r) => r.started && !r.error && r.ok > 0).length < 2}
+          title={t(
+            "Собрать «general (AUTO ROTATE)»: основа — лучшая, а в TCP-профилях действия 2–4 следующих становятся запасными; winws2 сам переключает их для сайта при сбоях (circular из zapret-auto.lua)",
+            "Build “general (AUTO ROTATE)”: the best one is the base, and in TCP profiles the actions of the next 2–4 become fallbacks; winws2 switches them per site on failures (circular from zapret-auto.lua)",
+          )}
+          onclick={async () => {
+            const f = await act(() => api.rotateBuild(), t("Авто-стратегия собрана", "Auto strategy built"));
+            if (f) await act(() => api.selectStrategy(f));
+          }}>{t("Авто-стратегия", "Auto strategy")}</button>
+        <button
           class="btn primary"
           disabled={app.busy || ov.selected === run.best}
           onclick={() => act(() => api.selectStrategy(run!.best!), t("Стратегия выбрана", "Strategy selected"))}

@@ -1,3 +1,4 @@
+mod addons;
 mod autostart;
 mod bundled;
 mod diag;
@@ -104,7 +105,9 @@ impl AppState {
             .ok_or_else(|| tr!("В папке нет стратегий general*.bat", "No general*.bat strategies in the folder"))?;
         let gf = game_filter::load(dir);
         let (tcp, udp) = game_filter::vars(&gf);
-        let args = strategy::build_args(dir, &file, &strategy::Vars::new(dir, &tcp, &udp))?;
+        let mut args = strategy::build_args(dir, &file, &strategy::Vars::new(dir, &tcp, &udp))?;
+        let addons = self.settings.lock().unwrap().addons.clone();
+        addons::apply(&mut args, dir, &addons);
         Ok((file, args))
     }
 
@@ -274,6 +277,9 @@ impl AppState {
 #[derive(Serialize)]
 struct Overview {
     admin: bool,
+    addons: addons::Addons,
+    /// WinDivert сейчас подменён на «Monkey».
+    windivert_hidden: bool,
     dir: Option<String>,
     version: Option<String>,
     strategies: Vec<strategy::StrategyInfo>,
@@ -327,6 +333,8 @@ fn overview_of(state: &AppState) -> Overview {
         },
         bundled_version: state.bundled_dir.as_deref().and_then(bundled::version),
         bundle_error: state.bundle_error.lock().unwrap().clone(),
+        addons: s.addons.clone(),
+        windivert_hidden: dir_hidden(state),
         language: state.settings.lock().unwrap().language.clone(),
     }
 }
@@ -526,6 +534,61 @@ fn evolve_save(state: State<AppState>, name: String) -> R<String> {
     let file = evolve::save(&dir, &c)?;
     run.saved.push(file.clone());
     Ok(file)
+}
+
+fn dir_hidden(state: &AppState) -> bool {
+    state.dir().map(|d| addons::hidden(&d)).unwrap_or(false)
+}
+
+/// Дополнения к стратегиям. Скрытие WinDivert требует остановить winws2 и службу.
+#[tauri::command(async)]
+fn set_addons(app: AppHandle, state: State<AppState>, addons: addons::Addons) -> R<()> {
+    state.require_idle()?;
+    let dir = state.dir()?;
+    let old = state.settings.lock().unwrap().addons.clone();
+    if old.hide_windivert != addons.hide_windivert {
+        state.require_admin()?;
+        let st = state.runner.status();
+        let service = service::state(service::NAME).0;
+        if st.running || service {
+            if service {
+                service::remove_all()?;
+            }
+            state.runner.stop();
+        }
+        let r = if addons.hide_windivert { addons::hide_on(&dir) } else { addons::hide_off(&dir) };
+        state.update(|s| s.addons = addons);
+        if st.running || service {
+            let _ = state.apply();
+        }
+        refresh_tray(&app);
+        return r;
+    }
+    state.update(|s| s.addons = addons);
+    state.restart_if_running()?;
+    refresh_tray(&app);
+    Ok(())
+}
+
+/// Собрать «general (AUTO ROTATE).bat» из лучших стратегий последнего теста.
+#[tauri::command(async)]
+fn rotate_build(state: State<AppState>) -> R<String> {
+    let dir = state.dir()?;
+    let files: Vec<String> = {
+        let g = state.last_test.lock().unwrap();
+        let t = g.as_ref().ok_or_else(|| tr!("Сначала прогоните тест стратегий", "Run the strategy test first"))?;
+        let mut rs: Vec<&tester::StrategyResult> = t.results.iter().filter(|r| r.started && r.error.is_none() && r.ok > 0 && r.file != addons::ROTATE_FILE).collect();
+        rs.sort_by(|a, b| b.ok.cmp(&a.ok));
+        rs.iter().take(4).map(|r| r.file.clone()).collect()
+    };
+    if files.len() < 2 {
+        return Err(tr!("Нужно хотя бы две рабочие стратегии в последнем тесте", "At least two working strategies are needed in the last test"));
+    }
+    let texts: Vec<(String, String)> = files.iter().filter_map(|f| util::read_text(&dir.join(f)).ok().map(|t| (f.clone(), t))).collect();
+    let text = addons::build_rotate(&texts).ok_or_else(|| tr!("У этих стратегий нет общих TCP-профилей с разными действиями — объединять нечего", "These strategies share no TCP profiles with different actions — nothing to combine"))?;
+    std::fs::write(dir.join(addons::ROTATE_FILE), text).map_err(|e| e.to_string())?;
+    addons::ensure_files(&dir)?;
+    Ok(addons::ROTATE_FILE.to_string())
 }
 
 #[tauri::command]
@@ -1450,6 +1513,13 @@ pub fn run() {
                 let st = handle.state::<AppState>();
                 if let Ok(dir) = st.dir() {
                     ipset::test_restore(&dir);
+                    // Обновление встроенной сборки возвращает обычный WinDivert.dll.
+                    let hide = st.settings.lock().unwrap().addons.hide_windivert;
+                    if hide && winapi::is_admin() && !addons::hidden(&dir) && !st.runner.status().running {
+                        if let Err(e) = addons::hide_on(&dir) {
+                            let _ = handle.emit("error", e);
+                        }
+                    }
                     let (last, mode) = {
                         let s = st.settings.lock().unwrap();
                         (s.last_enabled, s.mode.clone())
@@ -1571,6 +1641,8 @@ pub fn run() {
             mcp_set,
             mcp_regen_token,
             evolve_start,
+            set_addons,
+            rotate_build,
             evolve_last,
             evolve_save,
             net_set,

@@ -71,6 +71,13 @@ https://github.com/SadeghHayeri/GreenTunnel; zapret by bol-van,
 https://github.com/bol-van/zapret (blockcheck methodology, --wssize and
 --ssid-filter ideas).
 
+zapret2 add-ons (src-tauri/addons): zapret-auto.lua and the WinDivert filter
+parts come from zapret-win-bundle by bol-van (MIT, Copyright (c) 2016-2026
+bol-van), https://github.com/bol-van/zapret2. Monkey64.sys is an unmodified
+copy of WinDivert64.sys and WinDivert-monkey.dll a patched WinDivert.dll from
+the same bundle; WinDivert by basil00 is licensed under LGPL-3.0 / GPL-2.0,
+https://github.com/basil00/WinDivert.
+
 ------------------------------------------------------------------------------
 THIRD-PARTY LICENSE TEXTS
 ------------------------------------------------------------------------------

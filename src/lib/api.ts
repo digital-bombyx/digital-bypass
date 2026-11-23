@@ -18,8 +18,12 @@ export type Status = {
 export type StrategyInfo = { file: string; name: string; blocks: string[]; methods: string[] };
 export type GameFilter = { mode: "disabled" | "all" | "tcp" | "udp"; tcp: string; udp: string };
 
+export type Addons = { wireguard: boolean; lean_udp: boolean; hide_windivert: boolean };
+
 export type Overview = {
   admin: boolean;
+  addons: Addons;
+  windivert_hidden: boolean;
   dir: string | null;
   version: string | null;
   strategies: StrategyInfo[];
@@ -337,6 +341,8 @@ export const api = {
   testTargets: () => invoke<[string, string][]>("test_targets"),
   testStart: (kind: string, files: string[]) => invoke<void>("test_start", { kind, files }),
   testCancel: () => invoke<void>("test_cancel"),
+  setAddons: (addons: Addons) => invoke<void>("set_addons", { addons }),
+  rotateBuild: () => invoke<string>("rotate_build"),
   evolveStart: (kind: string, seeds: string[], rounds: number) => invoke<void>("evolve_start", { kind, seeds, rounds }),
   evolveLast: () => invoke<EvolveRun | null>("evolve_last"),
   evolveSave: (name: string) => invoke<string>("evolve_save", { name }),

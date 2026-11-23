@@ -16,6 +16,8 @@ const state: any = {
   ipset: "loaded",
   ipset_has_backup: false,
   mode: "process",
+  addons: { wireguard: false, lean_udp: false, hide_windivert: false },
+  windivert_hidden: false,
   autostart: false,
   close_to_tray: true,
   test_timeout: 4,
@@ -155,6 +157,14 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
   // Как настоящий invoke: аргументы сериализуются (реактивные прокси Svelte не клонируются).
   args = JSON.parse(JSON.stringify(args ?? {}));
   switch (cmd) {
+    case "set_addons":
+      state.addons = args.addons;
+      state.windivert_hidden = args.addons.hide_windivert;
+      return;
+    case "rotate_build":
+      if (!state.strategies.some((s: any) => s.file === "general (AUTO ROTATE).bat"))
+        state.strategies.push({ file: "general (AUTO ROTATE).bat", name: "general (AUTO ROTATE)", blocks: [], methods: ["circular", "fake", "multisplit"] });
+      return "general (AUTO ROTATE).bat";
     case "overview":
       return structuredClone(state);
     case "enable":

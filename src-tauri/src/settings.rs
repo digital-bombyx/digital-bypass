@@ -33,6 +33,8 @@ pub struct Settings {
     pub net: crate::netrules::NetRules,
     /// MCP-сервер для ИИ-ассистентов.
     pub mcp: crate::mcp::Settings,
+    /// Дополнения к стратегиям zapret2.
+    pub addons: crate::addons::Addons,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -76,6 +78,7 @@ impl Default for Settings {
             tg: Default::default(),
             net: Default::default(),
             mcp: Default::default(),
+            addons: Default::default(),
         }
     }
 }
