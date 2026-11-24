@@ -1769,6 +1769,19 @@ fn tray_icon(on: bool) -> tauri::image::Image<'static> {
     tauri::image::Image::new_owned(px, S as u32, S as u32)
 }
 
+/// До стольких стратегий список в трее плоский.
+const TRAY_FLAT_MAX: usize = 20;
+
+/// Семейство стратегии для меню трея: первое слово имени без цифр на конце.
+/// `general (ALT13)` → ALT, `general (K-ALT14e)` → K-ALT,
+/// `general (FAKE TLS AUTO ALT2)` → FAKE, `general (AUTO 1)` → AUTO.
+fn tray_family(name: &str) -> String {
+    let inner = name.split_once('(').map_or(name, |(_, r)| r.trim_end_matches(')'));
+    let word = inner.split_whitespace().next().unwrap_or(inner);
+    let w = word.trim_end_matches(|c: char| c.is_ascii_digit() || c == 'e');
+    if w.is_empty() { word } else { w }.to_string()
+}
+
 fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let state = app.state::<AppState>();
     let st = state.runner.status();
@@ -1777,9 +1790,38 @@ fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let strategies = dir.as_deref().map(strategy::list).unwrap_or_default();
     let toggle = CheckMenuItem::with_id(app, "toggle", "zapret2", dir.is_some(), st.running, None::<&str>)?;
     let sub = Submenu::with_id(app, "strategies", tr!("Стратегия zapret2", "zapret2 strategy"), dir.is_some())?;
-    for s in &strategies {
+    let item = |s: &strategy::StrategyInfo| {
         let checked = selected.as_deref() == Some(s.file.as_str());
-        sub.append(&CheckMenuItem::with_id(app, format!("s:{}", s.file), &s.name, true, checked, None::<&str>)?)?;
+        CheckMenuItem::with_id(app, format!("s:{}", s.file), &s.name, true, checked, None::<&str>)
+    };
+    // Меню Windows не листается колёсиком и не бывает шире: длинный список
+    // раскладываем по семействам (ALT ▸, K-EXP ▸ …), одиночные — как есть.
+    if strategies.len() <= TRAY_FLAT_MAX {
+        for s in &strategies {
+            sub.append(&item(s)?)?;
+        }
+    } else {
+        let mut fams: Vec<(String, Vec<&strategy::StrategyInfo>)> = Vec::new();
+        for s in &strategies {
+            let f = tray_family(&s.name);
+            match fams.iter_mut().find(|(k, _)| *k == f) {
+                Some((_, v)) => v.push(s),
+                None => fams.push((f, vec![s])),
+            }
+        }
+        for (f, v) in &fams {
+            if v.len() == 1 {
+                sub.append(&item(v[0])?)?;
+                continue;
+            }
+            let has_sel = v.iter().any(|s| selected.as_deref() == Some(s.file.as_str()));
+            let title = format!("{}{f} ({})", if has_sel { "● " } else { "" }, v.len());
+            let fm = Submenu::with_id(app, format!("fam:{f}"), title, true)?;
+            for s in v {
+                fm.append(&item(s)?)?;
+            }
+            sub.append(&fm)?;
+        }
     }
     let proxy_on = state.proxy.lock().unwrap().is_some();
     let port = state.settings.lock().unwrap().proxy.port;
@@ -2403,4 +2445,21 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tray_family;
+
+    #[test]
+    fn tray_families() {
+        assert_eq!(tray_family("general (ALT13)"), "ALT");
+        assert_eq!(tray_family("general (ALT)"), "ALT");
+        assert_eq!(tray_family("general (K-ALT14e)"), "K-ALT");
+        assert_eq!(tray_family("general (K-CIRCULAR1)"), "K-CIRCULAR");
+        assert_eq!(tray_family("general (FAKE TLS AUTO ALT2)"), "FAKE");
+        assert_eq!(tray_family("general (AUTO 1)"), "AUTO");
+        assert_eq!(tray_family("general (AUTO ROTATE)"), "AUTO");
+        assert_eq!(tray_family("general"), "general");
+    }
 }
