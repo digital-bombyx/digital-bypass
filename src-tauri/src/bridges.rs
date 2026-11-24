@@ -1,7 +1,7 @@
 //! Поиск рабочих мостов Tor (идея — TorBridgeMaster, тот же автор).
 //!
-//! 1. Списки проверенных мостов scriptzteam/Tor-Bridges-Collector-v2 (обновляются
-//!    каждые 5 минут из BridgeDB): obfs4 и webtunnel.
+//! 1. Мосты из API Tor (`MOAT`) и списки сборщиков из BridgeDB (`SOURCES`):
+//!    obfs4 и webtunnel, без повторов по отпечатку.
 //! 2. obfs4 — TCP-connect параллельно, по задержке: мёртвые порты отсеиваются сразу.
 //! 3. Настоящая проверка — через один `lyrebird` в режиме managed PT: SOCKS5 к нему
 //!    с параметрами моста в логине и пароле (pt-spec), затем TLS ClientHello —
@@ -20,10 +20,85 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-pub const SOURCES: [(&str, &str); 2] = [
+/// Списки мостов: (транспорт, URL). Сборщики берут мосты из BridgeDB в разное
+/// время и с разных адресов, поэтому пересекаются лишь частично — повторы по
+/// отпечатку отсеиваются. webtunnel в BridgeDB мало, отсюда несколько источников.
+pub const SOURCES: &[(&str, &str)] = &[
     ("obfs4", "https://raw.githubusercontent.com/scriptzteam/Tor-Bridges-Collector-v2/main/bridges/obfs4_tested.txt"),
     ("webtunnel", "https://raw.githubusercontent.com/scriptzteam/Tor-Bridges-Collector-v2/main/bridges/webtunnel_tested.txt"),
+    ("webtunnel", "https://raw.githubusercontent.com/center2055/OnionHop-Bridges-Collector/main/bridge/webtunnel_tested.txt"),
+    ("webtunnel", "https://raw.githubusercontent.com/javadz501/Tor-Bridges-Collector/main/bridge/webtunnel_tested.txt"),
+    ("webtunnel", "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/TOR-BRIDGES/TOR_BRIDGES_WEBTUNNEL.txt"),
 ];
+
+/// Официальный API Tor (им пользуется «Помощник подключения» Tor Browser):
+/// рекомендуемые для страны мосты — свежие настройки Snowflake (фронты, STUN),
+/// пара webtunnel и obfs4 из отдельного пула BridgeDB.
+pub const MOAT: &str = "https://bridges.torproject.org/moat/circumvention/settings";
+/// Кэш настроек Snowflake из `MOAT` (в папке данных приложения).
+const SNOWFLAKE_FILE: &str = "snowflake.json";
+/// Настройки Snowflake старше этого обновляются при запуске Tor.
+pub const SNOWFLAKE_TTL: u64 = 24 * 3600;
+
+/// Мосты из `MOAT` по транспортам.
+#[derive(Debug, Default)]
+pub struct Moat {
+    pub snowflake: Vec<String>,
+    pub webtunnel: Vec<String>,
+    pub obfs4: Vec<String>,
+}
+
+pub fn parse_moat(text: &str) -> Moat {
+    let v: serde_json::Value = serde_json::from_str(text).unwrap_or_default();
+    let mut m = Moat::default();
+    for s in v["settings"].as_array().into_iter().flatten() {
+        let lines = s["bridges"]["bridge_strings"].as_array().into_iter().flatten().filter_map(|x| x.as_str()).filter_map(crate::tor::clean_bridge);
+        for l in lines {
+            match crate::tor::bridge_transport(&l) {
+                "snowflake" => m.snowflake.push(l),
+                "webtunnel" => m.webtunnel.push(l),
+                "obfs4" => m.obfs4.push(l),
+                _ => {}
+            }
+        }
+    }
+    m
+}
+
+/// Спросить `MOAT` о мостах для России. Страну задаём явно: по адресу API
+/// может определить не ту (VPN, прокси) и для «свободной» страны отдаёт пусто.
+pub fn moat(proxy: Option<u16>) -> Result<Moat, String> {
+    let body = r#"{"version":"0.1.0","country":"ru","transports":["snowflake","webtunnel","obfs4"]}"#;
+    let t = crate::util::fetch_post(&crate::tr!("мосты Tor Project", "Tor Project bridges"), MOAT, "application/vnd.api+json", body, 20, proxy)?;
+    Ok(parse_moat(&t))
+}
+
+/// Сохранённые настройки Snowflake и их возраст, с.
+pub fn cached_snowflake(work_dir: &Path) -> Option<(Vec<String>, u64)> {
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(work_dir.join(SNOWFLAKE_FILE)).ok()?).ok()?;
+    let at = v["at"].as_u64()?;
+    let lines: Vec<String> = v["bridges"].as_array()?.iter().filter_map(|x| x.as_str()).filter_map(crate::tor::clean_bridge).filter(|l| crate::tor::bridge_transport(l) == "snowflake").collect();
+    (!lines.is_empty()).then(|| (lines, crate::util::now_secs().saturating_sub(at)))
+}
+
+pub fn save_snowflake(work_dir: &Path, lines: &[String]) {
+    if lines.is_empty() {
+        return;
+    }
+    let v = serde_json::json!({ "at": crate::util::now_secs(), "source": MOAT, "bridges": lines });
+    let _ = std::fs::create_dir_all(work_dir);
+    let _ = std::fs::write(work_dir.join(SNOWFLAKE_FILE), serde_json::to_vec_pretty(&v).unwrap_or_default());
+}
+
+/// Обновить настройки Snowflake, если их нет или они старше `SNOWFLAKE_TTL`.
+pub fn refresh_snowflake(work_dir: &Path, proxy: Option<u16>) -> Result<usize, String> {
+    if cached_snowflake(work_dir).is_some_and(|(_, age)| age < SNOWFLAKE_TTL) {
+        return Ok(0);
+    }
+    let m = moat(proxy)?;
+    save_snowflake(work_dir, &m.snowflake);
+    Ok(m.snowflake.len())
+}
 
 const PARALLEL: usize = 8;
 /// Голый TCP-connect лимиту TLS-соединений не подпадает.
@@ -282,26 +357,55 @@ fn par_each<T: Send + Sync, R: Send>(n: usize, items: &[T], stop: &(dyn Fn() -> 
 /// Найти до `want` рабочих мостов среди `kinds` (obfs4, webtunnel).
 /// `proxy` — порт работающего прокси-обходчика (запасной путь для скачивания);
 /// `via_proxy` — и сами проверки вести через него.
-pub fn find(tor_dir: &Path, kinds: &[&str], want: usize, proxy: Option<u16>, via_proxy: bool, cancel: &AtomicBool, progress: impl Fn(Progress) + Sync) -> Result<Report, String> {
+/// `work_dir` — папка данных: туда же сохраняются свежие настройки Snowflake.
+pub fn find(tor_dir: &Path, work_dir: &Path, kinds: &[&str], want: usize, proxy: Option<u16>, via_proxy: bool, cancel: &AtomicBool, progress: impl Fn(Progress) + Sync) -> Result<Report, String> {
     let t0 = Instant::now();
     let mut rep = Report::default();
-    let mut lists: Vec<Vec<String>> = Vec::new();
-    for (kind, url) in SOURCES.iter().filter(|(k, _)| kinds.contains(k)) {
-        progress(Progress { stage: "download", done: 0, total: 0, found: 0 });
-        match download(kind, url, proxy) {
+    progress(Progress { stage: "download", done: 0, total: 0, found: 0 });
+    // Все источники — параллельно; мосты из API Tor — первыми (самые свежие).
+    let sources: Vec<&(&str, &str)> = SOURCES.iter().filter(|(k, _)| kinds.contains(k)).collect();
+    let (moat_r, got) = std::thread::scope(|s| {
+        let m = s.spawn(|| moat(proxy));
+        let hs: Vec<_> = sources.iter().map(|(kind, url)| s.spawn(move || (*kind, *url, download(kind, url, proxy)))).collect();
+        (m.join().unwrap_or_else(|_| Err("moat".into())), hs.into_iter().filter_map(|h| h.join().ok()).collect::<Vec<_>>())
+    });
+    let mut per_kind: Vec<(&str, Vec<String>)> = kinds.iter().map(|k| (*k, Vec::new())).collect();
+    match moat_r {
+        Ok(m) => {
+            save_snowflake(work_dir, &m.snowflake);
+            for (k, v) in per_kind.iter_mut() {
+                v.extend(match *k {
+                    "webtunnel" => m.webtunnel.clone(),
+                    "obfs4" => m.obfs4.clone(),
+                    _ => Vec::new(),
+                });
+            }
+        }
+        Err(e) => rep.errors.push(e),
+    }
+    for (kind, url, r) in got {
+        match r {
             Ok(t) => {
                 let v = parse_list(&t, &[kind]);
                 if v.is_empty() {
+                    let host = url.split('/').nth(2).unwrap_or(url);
                     rep.errors.push(crate::tr!(
-                        "список мостов {kind} скачан, но в нём нет мостов — формат источника изменился",
-                        "the {kind} bridge list downloaded but has no bridges — the source format changed"
+                        "список мостов {kind} ({host}) скачан, но в нём нет мостов — формат источника изменился",
+                        "the {kind} bridge list ({host}) downloaded but has no bridges — the source format changed"
                     ));
                 }
-                rep.downloaded.push((kind.to_string(), v.len()));
-                lists.push(v);
+                if let Some((_, l)) = per_kind.iter_mut().find(|(k, _)| *k == kind) {
+                    l.extend(v);
+                }
             }
             Err(e) => rep.errors.push(e),
         }
+    }
+    let mut lists: Vec<Vec<String>> = Vec::new();
+    for (kind, l) in per_kind {
+        let v = parse_list(&l.join("\n"), &[kind]); // повторы между источниками
+        rep.downloaded.push((kind.to_string(), v.len()));
+        lists.push(v);
     }
     // Чередуем транспорты, чтобы оба получили шанс до остановки по `want`.
     let mut all = Vec::new();
@@ -408,12 +512,32 @@ mod tests {
         assert_eq!(h[5], 1);
     }
 
+    #[test]
+    fn moat_and_snowflake_cache() {
+        let t = r#"{"settings":[{"bridges":{"type":"snowflake","bridge_strings":["snowflake 192.0.2.3:80 2B28 fingerprint=2B28 url=https://x.example fronts=a.example  ice=stun:s:3478"]}},
+            {"bridges":{"type":"webtunnel","bridge_strings":["webtunnel [2001:db8::1]:443 AAAA url=https://w.example/p ver=0.0.1"]}},
+            {"bridges":{"type":"obfs4","bridge_strings":["obfs4 1.2.3.4:443 BBBB cert=c iat-mode=0","junk"]}}],"country":"ru"}"#;
+        let m = parse_moat(t);
+        assert_eq!((m.snowflake.len(), m.webtunnel.len(), m.obfs4.len()), (1, 1, 1));
+        assert!(!m.snowflake[0].contains("  "));
+        assert_eq!(parse_moat("not json").snowflake.len(), 0);
+        let wd = std::env::temp_dir().join(format!("db-sf-{}", std::process::id()));
+        assert!(cached_snowflake(&wd).is_none());
+        save_snowflake(&wd, &m.snowflake);
+        let (v, age) = cached_snowflake(&wd).unwrap();
+        assert_eq!(v, m.snowflake);
+        assert!(age < 5);
+        let _ = std::fs::remove_dir_all(&wd);
+    }
+
     /// `cargo test live_bridges -- --ignored --nocapture` — сеть, ~30–90 с.
     #[test]
     #[ignore]
     fn live_bridges() {
         let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tor");
-        let r = find(&dir, &["obfs4", "webtunnel"], 8, None, false, &AtomicBool::new(false), |p| eprintln!("{p:?}")).unwrap();
+        let wd = std::env::temp_dir().join("digital-bypass-bridges-test");
+        let r = find(&dir, &wd, &["obfs4", "webtunnel"], 8, None, false, &AtomicBool::new(false), |p| eprintln!("{p:?}")).unwrap();
+        println!("snowflake from moat: {:?}", cached_snowflake(&wd).map(|(v, _)| v.len()));
         for f in &r.found {
             println!("{} ms  {}", f.ms, &f.line[..f.line.len().min(70)]);
         }

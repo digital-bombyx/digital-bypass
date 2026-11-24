@@ -74,6 +74,15 @@ pub fn fetch(name: &str, url: &str, timeout: u32, proxy: Option<u16>) -> Result<
 
 /// Как `fetch`, но ещё и заголовки ответа (последнего после редиректов) и свой User-Agent.
 pub fn fetch_full(name: &str, url: &str, timeout: u32, proxy: Option<u16>, ua: Option<&str>) -> Result<(String, String), String> {
+    fetch_req(name, url, timeout, proxy, ua, None)
+}
+
+/// POST с JSON-телом (`content_type`, тело) — как `fetch`, с тем же запасным путём.
+pub fn fetch_post(name: &str, url: &str, content_type: &str, body: &str, timeout: u32, proxy: Option<u16>) -> Result<String, String> {
+    fetch_req(name, url, timeout, proxy, None, Some((content_type, body))).map(|(b, _)| b)
+}
+
+fn fetch_req(name: &str, url: &str, timeout: u32, proxy: Option<u16>, ua: Option<&str>, post: Option<(&str, &str)>) -> Result<(String, String), String> {
     let host = url.split("://").nth(1).and_then(|r| r.split(['/', '?']).next()).unwrap_or(url).to_string();
     let mut reasons = Vec::new();
     let routes: Vec<Option<u16>> = std::iter::once(None).chain(proxy.map(Some)).collect();
@@ -86,6 +95,9 @@ pub fn fetch_full(name: &str, url: &str, timeout: u32, proxy: Option<u16>, ua: O
         }
         if let Some(p) = via {
             cmd.args(["-x", &format!("http://127.0.0.1:{p}")]);
+        }
+        if let Some((ct, body)) = post {
+            cmd.args(["-H", &format!("Content-Type: {ct}"), "--data-binary", body]);
         }
         let out = cmd.arg(url).output().map_err(|e| format!("curl.exe: {e}"))?;
         let text = String::from_utf8_lossy(&out.stdout).into_owned();

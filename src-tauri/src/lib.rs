@@ -1080,7 +1080,7 @@ fn tor_find_bridges(app: AppHandle, state: State<AppState>, kinds: Vec<String>, 
     let proxy = proxy_port_if_running(&state);
     let via = state.settings.lock().unwrap().tor.via_proxy;
     let emit = app.clone();
-    let r = bridges::find(&dir, &kinds, want.clamp(1, 30), proxy, via && proxy.is_some(), &state.tor_find_cancel, move |p| {
+    let r = bridges::find(&dir, &state.tor_work, &kinds, want.clamp(1, 30), proxy, via && proxy.is_some(), &state.tor_find_cancel, move |p| {
         let _ = emit.emit("tor-bridges-progress", p);
     });
     state.tor_finding.store(false, Ordering::SeqCst);

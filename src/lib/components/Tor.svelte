@@ -277,8 +277,8 @@
           <div class="label"><Search size={11} /> {t("поиск мостов", "bridge search")}</div>
           <div class="hint faint mono">
             {t(
-              "свежие списки obfs4 и webtunnel (scriptzteam/Tor-Bridges-Collector-v2, из BridgeDB) → проверка адресов → рукопожатие через lyrebird до ответа реле Tor. Найденные сохраняются и идут первыми.",
-              "fresh obfs4 and webtunnel lists (scriptzteam/Tor-Bridges-Collector-v2, from BridgeDB) → address check → handshake through lyrebird up to the Tor relay's reply. Found bridges are saved and go first.",
+              "мосты из API Tor Project и четырёх сборщиков BridgeDB, без повторов → проверка адресов → рукопожатие через lyrebird до ответа реле Tor. Найденные сохраняются и идут первыми. Заодно обновляются настройки Snowflake.",
+              "bridges from the Tor Project API and four BridgeDB collectors, deduplicated → address check → handshake through lyrebird up to the Tor relay's reply. Found bridges are saved and go first. Snowflake settings are refreshed too.",
             )}
           </div>
         </div>

@@ -69,7 +69,7 @@ A local MTProto proxy for Telegram Desktop — a port of [tg-ws-proxy](https://g
 For what zapret and splitting cannot fix: IP-blocked sites, geo-restrictions, .onion addresses. Ships `tor.exe` and `lyrebird` from the official [Tor Expert Bundle](https://www.torproject.org/download/tor/) (16.0.1, SHA-256 checked at build time; check it yourself against [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt)).
 
 - **Transports**: obfs4, webtunnel, snowflake, meek, your own bridges or direct. "Auto" goes in turn: own and found bridges → built-in obfs4 → snowflake → meek.
-- **Bridge search** (from [TorBridgeMaster](https://github.com/digital-bombyx/TorBridgeMaster)): fresh obfs4 and webtunnel bridges from [Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2), verified through lyrebird up to the Tor relay's reply — under a minute.
+- **Bridge search** (from [TorBridgeMaster](https://github.com/digital-bombyx/TorBridgeMaster)): fresh obfs4 and webtunnel bridges from the Tor Project API and BridgeDB collectors, verified through lyrebird up to the Tor relay's reply — under a minute.
 - **Sites through Tor**: the bypass proxy sends listed domains and every `.onion` to Tor; the "zapret lists" and "all traffic" modes add the zapret2 list domains or everything. Any program can use SOCKS5 `127.0.0.1:9055`.
 - **System proxy**: switch it on right in the Tor tab. Windows has one system proxy, so it is the bypass proxy, and Tor works through it in the chosen mode.
 - **Russian sites go direct** in the "zapret lists" and "all traffic" modes: geoip:ru, geosite:category-ru and the .ru/.su/.рф zones bypass Tor (banks and Gosuslugi block its exits).
@@ -172,7 +172,7 @@ npm run tauri build
 - **[Flowseal/tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy)** (MIT) — the Telegram module is a port of it; the Worker script and the CF domain list come from it.
 - **[XTLS/Xray-core](https://github.com/XTLS/Xray-core)** (MPL-2.0) — the Xray tab core and the geoip/geosite files from the same release. Link parsing follows [v2rayN](https://github.com/2dust/v2rayN).
 - **[The Tor Project](https://www.torproject.org/)** — tor and lyrebird (Tor Expert Bundle, BSD-3-Clause and others; license texts in `tor\docs`).
-- **[scriptzteam/Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2)** — bridge lists for the search.
+- **[scriptzteam/Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2), [OnionHop-Bridges-Collector](https://github.com/center2055/OnionHop-Bridges-Collector), [javadz501/Tor-Bridges-Collector](https://github.com/javadz501/Tor-Bridges-Collector), [igareck/vpn-configs-for-russia](https://github.com/igareck/vpn-configs-for-russia)** — bridge lists for the search; Snowflake settings and some bridges come from the Tor Project API (moat).
 
 ### Ideas
 

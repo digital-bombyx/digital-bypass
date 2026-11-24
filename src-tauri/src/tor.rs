@@ -289,7 +289,21 @@ impl Tor {
                 return Err(crate::tr!("порт {p} занят (Tor Browser или другой tor?)", "port {p} is busy (Tor Browser or another tor?)"));
             }
         }
-        let tiers = plan(cfg, &builtin(tor_dir))?;
+        // Snowflake: свежие настройки из API Tor, если есть (встроенные фронты
+        // бандла могут быть уже заблокированы). Устаревшие — обновляем в фоне;
+        // ступень snowflake перечитает их, когда до неё дойдёт очередь.
+        let mut b = builtin(tor_dir);
+        let cached = crate::bridges::cached_snowflake(work_dir);
+        if cached.as_ref().is_none_or(|(_, age)| *age >= crate::bridges::SNOWFLAKE_TTL) {
+            let wd = work_dir.to_path_buf();
+            std::thread::spawn(move || {
+                let _ = crate::bridges::refresh_snowflake(&wd, proxy);
+            });
+        }
+        if let Some((sf, _)) = cached {
+            b.snowflake = sf;
+        }
+        let tiers = plan(cfg, &b)?;
         let data_dir = work_dir.join("tor-data");
         std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
         let shared = Arc::new(Shared::default());
@@ -357,6 +371,15 @@ fn supervise(sh: &Arc<Shared>, cfg: &Config, tor_dir: &Path, work_dir: &Path, da
         if sh.stop.load(Ordering::SeqCst) {
             return;
         }
+        // Настройки Snowflake могли обновиться в фоне, пока шли прежние ступени.
+        let fresh;
+        let tier = match crate::bridges::cached_snowflake(work_dir) {
+            Some((sf, _)) if tier.name == "snowflake" && sf != tier.bridges => {
+                fresh = Tier { name: tier.name.clone(), bridges: sf };
+                &fresh
+            }
+            _ => tier,
+        };
         *sh.tier.lock().unwrap() = tier.name.clone();
         sh.percent.store(0, Ordering::SeqCst);
         *sh.phase.lock().unwrap() = String::new();
@@ -604,7 +627,7 @@ mod tests {
         let mut cfg = Config { socks_port: 19150, transport: std::env::var("TOR_TRANSPORT").unwrap_or("auto".into()), ..Default::default() };
         // Как в приложении: сначала поиск мостов, найденные идут первыми.
         if cfg.transport == "auto" {
-            let r = crate::bridges::find(&dir, &["obfs4", "webtunnel"], 6, None, false, &AtomicBool::new(false), |_| {}).unwrap();
+            let r = crate::bridges::find(&dir, &wd, &["obfs4", "webtunnel"], 6, None, false, &AtomicBool::new(false), |_| {}).unwrap();
             cfg.found = r.found.into_iter().map(|f| f.line).collect();
             println!("found {}", cfg.found.len());
         }

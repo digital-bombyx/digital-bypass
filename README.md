@@ -72,7 +72,7 @@ zapret2 (winws2 + Lua) в один клик, прокси-обходчик бе�
 Для того, что не берут zapret и нарезка: сайты, заблокированные по IP, геоограничения, адреса .onion. Внутри — `tor.exe` и `lyrebird` из официального [Tor Expert Bundle](https://www.torproject.org/download/tor/) (16.0.1, SHA-256 сверяется при сборке; сверить самому — [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt)).
 
 - **Способы подключения**: obfs4, webtunnel, snowflake, meek, свои мосты или напрямую. «Авто» идёт по очереди: свои и найденные мосты → встроенные obfs4 → snowflake → meek.
-- **Поиск мостов** (из [TorBridgeMaster](https://github.com/digital-bombyx/TorBridgeMaster)): свежие obfs4 и webtunnel из [Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2), проверка до ответа реле Tor через lyrebird — меньше минуты. Встроенные мосты Tor Browser в России почти все заблокированы, найденные работают.
+- **Поиск мостов** (из [TorBridgeMaster](https://github.com/digital-bombyx/TorBridgeMaster)): свежие obfs4 и webtunnel из API Tor Project и сборщиков BridgeDB ([Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2), [OnionHop](https://github.com/center2055/OnionHop-Bridges-Collector), [javadz501](https://github.com/javadz501/Tor-Bridges-Collector), [igareck](https://github.com/igareck/vpn-configs-for-russia)), проверка до ответа реле Tor через lyrebird — меньше минуты. Встроенные мосты Tor Browser в России почти все заблокированы, найденные работают.
 - **Сайты через Tor**: прокси-обходчик отправляет в Tor домены из списка и все `.onion`; в режимах «списки zapret» и «весь трафик» — ещё домены списков zapret2 или вообще всё. Любая программа может подключиться к SOCKS5 `127.0.0.1:9055`.
 - **Системный прокси**: включается прямо на вкладке Tor. Системным становится прокси-обходчик (системный прокси у Windows один), а Tor работает через него по выбранному режиму.
 - **Российские сайты — напрямую** в режимах «списки zapret» и «весь трафик»: geoip:ru, geosite:category-ru и зоны .ru/.su/.рф идут мимо Tor (банки и Госуслуги не пускают его выходы).
@@ -155,7 +155,7 @@ npm run tauri build
 - **[Flowseal/tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy)** (MIT) — модуль Telegram портирован с него, скрипт Worker и список CF-доменов взяты оттуда.
 - **[XTLS/Xray-core](https://github.com/XTLS/Xray-core)** (MPL-2.0) — ядро вкладки Xray, базы geoip/geosite из того же релиза. Разбор ссылок сверен с [v2rayN](https://github.com/2dust/v2rayN).
 - **[The Tor Project](https://www.torproject.org/)** — tor и lyrebird (Tor Expert Bundle, BSD-3-Clause и др., тексты лицензий — в папке `tor\docs`).
-- **[scriptzteam/Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2)** — списки мостов для поиска.
+- **[scriptzteam/Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2), [OnionHop-Bridges-Collector](https://github.com/center2055/OnionHop-Bridges-Collector), [javadz501/Tor-Bridges-Collector](https://github.com/javadz501/Tor-Bridges-Collector), [igareck/vpn-configs-for-russia](https://github.com/igareck/vpn-configs-for-russia)** — списки мостов для поиска; настройки Snowflake и часть мостов — из API Tor Project (moat).
 
 ### Идеи
 
