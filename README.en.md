@@ -14,6 +14,7 @@ One-click zapret2 (winws2 + Lua), a bypass proxy without admin rights, DNS switc
 ![Rust](https://img.shields.io/badge/Rust-Tauri%202-58a6ff?style=flat-square&labelColor=0f1216)
 ![Svelte](https://img.shields.io/badge/Svelte-5-58a6ff?style=flat-square&labelColor=0f1216)
 ![License](https://img.shields.io/badge/license-GPL--3.0-58a6ff?style=flat-square&labelColor=0f1216)
+[![Claude Code](https://img.shields.io/badge/built%20with-Claude%20Code-d97757?style=flat-square&labelColor=0f1216)](https://claude.com/claude-code)
 
 </div>
 
@@ -186,6 +187,10 @@ Our code is original; these projects contributed techniques and approaches:
 - **[Geneva](https://geneva.cs.umd.edu/)** (Bock et al., ACM CCS 2019) — the auto-tune approach: seeding with known strategies, repeated evaluation, complexity penalty, hall of fame.
 - **[B4](https://github.com/DanielLavrushin/b4)** and **[tspu-docs](https://github.com/DanielLavrushin/tspu-docs)** (DanielLavrushin) — stripping ECH keys from DNS, "direct vs through the bypass" checks, SNI search for hostings, winner confirmation; how TSPU restricts hostings.
 - **[zapret](https://github.com/bol-van/zapret)** (bol-van) — blockcheck methodology for the block type, small receive buffer (like `--wssize`), per-network switching (`--ssid-filter`).
+
+## Built together with Claude
+
+Most of the code, testing and research for this project was done together with [Claude](https://claude.com/claude-code) (Anthropic): from the Rust backend, Tor and Xray to reading DPI research papers that shaped the auto-tune and the proxy. Thank you, Claude, for helping with a project that keeps people connected to the free internet.
 
 ## License
 

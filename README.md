@@ -14,6 +14,7 @@ zapret2 (winws2 + Lua) в один клик, прокси-обходчик бе�
 ![Rust](https://img.shields.io/badge/Rust-Tauri%202-58a6ff?style=flat-square&labelColor=0f1216)
 ![Svelte](https://img.shields.io/badge/Svelte-5-58a6ff?style=flat-square&labelColor=0f1216)
 ![License](https://img.shields.io/badge/license-GPL--3.0-58a6ff?style=flat-square&labelColor=0f1216)
+[![Claude Code](https://img.shields.io/badge/built%20with-Claude%20Code-d97757?style=flat-square&labelColor=0f1216)](https://claude.com/claude-code)
 
 </div>
 
@@ -175,6 +176,10 @@ npm run tauri build
 - **[zapret](https://github.com/bol-van/zapret)** (bol-van) — методика blockcheck для определения типа блокировки, маленький буфер приёма (аналог `--wssize`), включение по сети (`--ssid-filter`).
 
 Бинарники и Lua-скрипты встроенной сборки распространяются под лицензиями их авторов (см. `LICENSE.txt` в папке сборки).
+
+## Сделано вместе с Claude
+
+Большую часть кода, проверок и исследований для этого проекта я делал в паре с [Claude](https://claude.com/claude-code) (Anthropic): от Rust-бэкенда, Tor и Xray до разбора научных статей про DPI, которые легли в автоподбор и прокси. Спасибо, Claude, за помощь в проекте, который помогает людям оставаться на связи со свободным интернетом.
 
 ## Лицензия
 
