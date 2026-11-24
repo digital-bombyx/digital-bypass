@@ -179,6 +179,8 @@ npm run tauri build
 
 ## Сделано вместе с Claude
 
+<img src="docs/claude-code.png" width="72" align="right" alt="Claude Code" />
+
 Большую часть кода, проверок и исследований для этого проекта я делал в паре с [Claude](https://claude.com/claude-code) (Anthropic): от Rust-бэкенда, Tor и Xray до разбора научных статей про DPI, которые легли в автоподбор и прокси. Спасибо, Claude, за помощь в проекте, который помогает людям оставаться на связи со свободным интернетом.
 
 ## Лицензия
