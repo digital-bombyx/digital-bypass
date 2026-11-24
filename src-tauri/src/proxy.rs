@@ -792,6 +792,35 @@ pub(crate) fn send_parts(up: &mut TcpStream, parts: &[Vec<u8>], disorder: bool, 
     Ok(())
 }
 
+/// Нарезка обычного HTTP-запроса для DPI, который ищет домен в заголовке Host:
+/// разрез внутри имени заголовка и посередине домена. Запрос не меняется
+/// (только TCP-сегменты), поэтому его принимает любой сервер. Нет Host — целиком.
+pub fn split_http(head: &[u8]) -> Vec<Vec<u8>> {
+    let lower = head.to_ascii_lowercase();
+    let Some(i) = lower.windows(7).position(|w| w == b"\r\nhost:") else {
+        return vec![head.to_vec()];
+    };
+    let name = i + 4; // "\r\nHo|st:"
+    let mut val = i + 7;
+    while head.get(val).is_some_and(|c| *c == b' ' || *c == b'\t') {
+        val += 1;
+    }
+    let end = lower[val..].iter().position(|c| *c == b'\r' || *c == b'\n').map_or(head.len(), |n| val + n);
+    let mid = val + (end - val) / 2;
+    let mut cuts = vec![name];
+    if mid > name && mid < head.len() {
+        cuts.push(mid);
+    }
+    let mut parts = Vec::new();
+    let mut from = 0;
+    for c in cuts {
+        parts.push(head[from..c].to_vec());
+        from = c;
+    }
+    parts.push(head[from..].to_vec());
+    parts
+}
+
 // ---------- HTTP-запрос клиента ----------
 
 #[derive(Debug, PartialEq)]
@@ -1467,9 +1496,17 @@ impl Shared {
                     self.log_entry(tr, t0, true, None);
                     return relay(client, up);
                 }
-                self.count(Action::Pass);
+                let v = self.primary();
+                let bypass = a == Action::Bypass && v.split != "none";
+                tr.action = Some(if bypass { Action::Bypass } else { Action::Pass });
+                self.count(if bypass { Action::Bypass } else { Action::Pass });
                 let mut up = self.connect(&host, port)?;
-                up.write_all(&head)?;
+                if bypass {
+                    // Обычный HTTP: DPI ищет домен в Host — режем запрос внутри заголовка.
+                    send_parts(&mut up, &split_http(&head), v.disorder, v.oob)?;
+                } else {
+                    up.write_all(&head)?;
+                }
                 up.write_all(&early)?;
                 self.log_entry(tr, t0, true, None);
                 relay(client, up)
@@ -2062,6 +2099,17 @@ mod tests {
         assert!(t0.elapsed() < Duration::from_secs(2));
         let closed = { let l = TcpListener::bind("127.0.0.1:0").unwrap(); l.local_addr().unwrap() };
         assert!(connect_race(&[closed], Duration::from_secs(2)).is_err());
+    }
+
+    #[test]
+    fn http_split_cuts_host() {
+        let head = b"GET / HTTP/1.1\r\nHOST:  rutracker.org\r\nAccept: */*\r\n\r\n";
+        let p = split_http(head);
+        assert_eq!(p.concat(), head.to_vec());
+        assert_eq!(p.len(), 3);
+        assert!(p[0].ends_with(b"\r\nHO"));
+        assert!(!p.iter().any(|x| x.windows(13).any(|w| w == b"rutracker.org")));
+        assert_eq!(split_http(b"GET / HTTP/1.0\r\n\r\n").len(), 1);
     }
 
     #[test]
