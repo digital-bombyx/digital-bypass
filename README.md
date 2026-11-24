@@ -196,5 +196,3 @@ npm run tauri build
 ## Supported by GOAT VLESS
 
 <a href="https://t.me/goatvless_bot?start=ref_8840005712"><img src="docs/goatvless-banner-transparent.webp" alt="GOAT VLESS" width="100%"></a>
-
-<div align="center"><sub><a href="https://github.com/digital-bombyx">digital-bombyx</a></sub></div>
