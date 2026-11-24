@@ -75,7 +75,7 @@
 </script>
 
 <div class="shell">
-  <TitleBar path={tab === "home" ? `zapret2/${zsub}` : paths[tab]} running={!!app.ov?.status.running} />
+  <TitleBar path={tab === "home" ? `zapret2/${zsub}` : paths[tab]} />
 
   {#if app.ov}
     {#if !app.ov.admin}

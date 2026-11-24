@@ -2,6 +2,8 @@
   import PowerButton from "./PowerButton.svelte";
   import Segmented from "./Segmented.svelte";
   import Switch from "./Switch.svelte";
+  import SubTabs from "./SubTabs.svelte";
+  import More from "./More.svelte";
   import { onMount } from "svelte";
   import { api, on, type TorConfig, type TorStatus, type TorTransport, type TorScope, type BridgeReport, type BridgeProgress } from "$lib/api";
   import { app, act, toast } from "$lib/state.svelte";
@@ -19,6 +21,7 @@
   let prog = $state<BridgeProgress | null>(null);
   let report = $state<BridgeReport | null>(null);
   let showLog = $state(false);
+  let sub = $state<"connect" | "bridges" | "routing">("connect");
   let log = $state<string[]>([]);
 
   const run = $derived(st?.status);
@@ -175,6 +178,15 @@
       </section>
     {/if}
 
+    <SubTabs
+      key="tor"
+      bind:value={sub}
+      tabs={[
+        { id: "connect", label: "Connect", badge: ready ? "on" : running ? `${run.percent}%` : null, title: t("Включение и способ подключения", "On/off and the connection method") },
+        { id: "bridges", label: "Bridges", badge: cfg.found.length || null, title: t("Поиск рабочих мостов", "Find working bridges") },
+        { id: "routing", label: "Routing", badge: st.tor_scope !== "list" ? st.tor_scope : null, title: t("Какие сайты идут через Tor, системный прокси", "Which sites go through Tor, system proxy") },
+      ]} />
+    {#if sub === "connect"}
     <section class="card block hero">
       <div class="prompt mono">{t("tor · обход блокировок по IP и геоограничений, .onion", "tor · bypass of IP blocks and geo-restrictions, .onion")}</div>
       <PowerButton on={running} disabled={app.busy || !st.available} onclick={toggle} />
@@ -213,32 +225,52 @@
       <div class="label">{t("способ подключения", "connection method")}</div>
       <Segmented small options={transports.map((x) => ({ value: x.value, label: x.label() }))} value={cfg.transport} disabled={app.busy} onchange={(v) => save({ transport: v })} />
       <div class="hint faint mono">{transports.find((x) => x.value === cfg!.transport)?.hint()}</div>
-      <div class="opt">
-        <div>
-          <div class="label">{t("мосты через прокси-обходчик", "bridges through the bypass proxy")}</div>
-          <div class="hint faint mono">
-            {t(
-              "tor ходит к мостам через наш прокси (Socks5Proxy), а тот режет ClientHello — для webtunnel, если провайдер глушит его TLS. Прокси должен быть включён; snowflake и meek так не ходят.",
-              "tor reaches bridges through our proxy (Socks5Proxy), which splits the ClientHello — for webtunnel if your ISP chokes its TLS. The proxy must be on; snowflake and meek do not go this way.",
-            )}
-            {#if cfg.via_proxy && !st.proxy_running}<span class="warn"> {t("Прокси сейчас выключен.", "The proxy is off now.")}</span>{/if}
-          </div>
-        </div>
-        <Switch checked={cfg.via_proxy} disabled={app.busy} onchange={(v) => save({ via_proxy: v })} />
-      </div>
-      <label class="field">
-        <span class="k mono">{t("свои мосты (по одному в строке)", "own bridges (one per line)")}</span>
-        <textarea class="textarea" rows="3" spellcheck="false" placeholder="obfs4 1.2.3.4:443 FINGERPRINT cert=… iat-mode=0" bind:value={bridgesText} disabled={app.busy}></textarea>
-      </label>
-      <div class="actions">
-        <label class="mono portl"><span class="k">{t("порт SOCKS5", "SOCKS5 port")}</span>
-          <input class="input port" type="number" min="1024" max="65534" bind:value={portText} disabled={app.busy} />
-        </label>
-        <span class="grow"></span>
-        <button class="btn sm" disabled={app.busy || (!bridgesDirty && !portDirty)} onclick={() => save({ bridges: fromLines(bridgesText), socks_port: Number(portText) }, t("Сохранено", "Saved"))}>{t("Сохранить", "Save")}</button>
-      </div>
     </section>
 
+    <More key="tor.connect" active={(cfg.via_proxy ? 1 : 0) + (cfg.bridges.length ? 1 : 0) + (cfg.socks_port !== 9055 ? 1 : 0)}>
+      <div class="morebody">
+        <div class="opt">
+          <div>
+            <div class="label">{t("мосты через прокси-обходчик", "bridges through the bypass proxy")}</div>
+            <div class="hint faint mono">
+              {t(
+                "tor ходит к мостам через наш прокси (Socks5Proxy), а тот режет ClientHello — для webtunnel, если провайдер глушит его TLS. Прокси должен быть включён; snowflake и meek так не ходят.",
+                "tor reaches bridges through our proxy (Socks5Proxy), which splits the ClientHello — for webtunnel if your ISP chokes its TLS. The proxy must be on; snowflake and meek do not go this way.",
+              )}
+              {#if cfg.via_proxy && !st.proxy_running}<span class="warn"> {t("Прокси сейчас выключен.", "The proxy is off now.")}</span>{/if}
+            </div>
+          </div>
+          <Switch checked={cfg.via_proxy} disabled={app.busy} onchange={(v) => save({ via_proxy: v })} />
+        </div>
+        <label class="field">
+          <span class="k mono">{t("свои мосты (по одному в строке)", "own bridges (one per line)")}</span>
+          <textarea class="textarea" rows="3" spellcheck="false" placeholder="obfs4 1.2.3.4:443 FINGERPRINT cert=… iat-mode=0" bind:value={bridgesText} disabled={app.busy}></textarea>
+        </label>
+        <div class="actions">
+          <label class="mono portl"><span class="k">{t("порт SOCKS5", "SOCKS5 port")}</span>
+            <input class="input port" type="number" min="1024" max="65534" bind:value={portText} disabled={app.busy} />
+          </label>
+          <span class="grow"></span>
+          <button class="btn sm" disabled={app.busy || (!bridgesDirty && !portDirty)} onclick={() => save({ bridges: fromLines(bridgesText), socks_port: Number(portText) }, t("Сохранено", "Saved"))}>{t("Сохранить", "Save")}</button>
+        </div>
+      </div>
+    </More>
+
+    <section class="card block note">
+      <div class="label"><TriangleAlert size={11} /> {t("это не анонимность", "this is not anonymity")}</div>
+      <p class="muted text">
+        {t(
+          "Через прокси-обходчик ваш браузер виден сайтам по своему отпечатку, куки и входам в аккаунты — Tor здесь только обходит блокировки. Для анонимности нужен Tor Browser. Скорость ниже, чем у VPN; часть сайтов показывает выходным узлам Tor капчу.",
+          "Through the bypass proxy your browser is still identifiable by its fingerprint, cookies and logins — Tor here only bypasses blocks. For anonymity use Tor Browser. It is slower than a VPN; some sites show Tor exit nodes a captcha.",
+        )}
+      </p>
+    </section>
+
+    <details class="card block logbox" bind:open={showLog}>
+      <summary class="mono"><ScrollText size={12} /> {t("журнал tor", "tor log")}{st.version ? ` · Tor Expert Bundle ${st.version}` : ""}</summary>
+      {#if log.length}<pre class="code mono">{log.join("\n")}</pre>{:else}<div class="hint faint mono">{t("пусто — Tor не запускался", "empty — Tor has not run")}</div>{/if}
+    </details>
+    {:else if sub === "bridges"}
     <section class="card block">
       <div class="row">
         <div>
@@ -291,7 +323,7 @@
         {/if}
       {/if}
     </section>
-
+    {:else}
     <section class="card block">
       <div class="row">
         <div>
@@ -341,21 +373,7 @@
         <Switch checked={st.proxy_system} disabled={app.busy} onchange={setSystem} />
       </div>
     </section>
-
-    <section class="card block note">
-      <div class="label"><TriangleAlert size={11} /> {t("это не анонимность", "this is not anonymity")}</div>
-      <p class="muted text">
-        {t(
-          "Через прокси-обходчик ваш браузер виден сайтам по своему отпечатку, куки и входам в аккаунты — Tor здесь только обходит блокировки. Для анонимности нужен Tor Browser. Скорость ниже, чем у VPN; часть сайтов показывает выходным узлам Tor капчу.",
-          "Through the bypass proxy your browser is still identifiable by its fingerprint, cookies and logins — Tor here only bypasses blocks. For anonymity use Tor Browser. It is slower than a VPN; some sites show Tor exit nodes a captcha.",
-        )}
-      </p>
-    </section>
-
-    <details class="card block logbox" bind:open={showLog}>
-      <summary class="mono"><ScrollText size={12} /> {t("журнал tor", "tor log")}{st.version ? ` · Tor Expert Bundle ${st.version}` : ""}</summary>
-      {#if log.length}<pre class="code mono">{log.join("\n")}</pre>{:else}<div class="hint faint mono">{t("пусто — Tor не запускался", "empty — Tor has not run")}</div>{/if}
-    </details>
+    {/if}
   {/if}
 </div>
 
@@ -418,6 +436,12 @@
     font-size: 12.5px;
     line-height: 1.55;
     align-self: stretch;
+  }
+  .morebody {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 0 8px;
   }
   .bar {
     align-self: stretch;

@@ -4,7 +4,7 @@
   import { isTauri } from "$lib/api";
   import { t } from "$lib/i18n.svelte";
 
-  let { path, running }: { path: string; running: boolean } = $props();
+  let { path }: { path: string } = $props();
   const noop = async () => {};
   const win = isTauri ? getCurrentWindow() : { close: noop, minimize: noop, toggleMaximize: noop };
 </script>
@@ -12,9 +12,6 @@
 <header class="bar" data-tauri-drag-region>
   <div class="brand mono" data-tauri-drag-region>
     <span class="mark" aria-hidden="true"></span>digital-bypass<span class="path">/{path}</span>
-  </div>
-  <div class="state mono" class:on={running} data-tauri-drag-region title={t("Состояние zapret2", "zapret2 state")}>
-    <span class="dot"></span>zapret2 {running ? "on" : "off"}
   </div>
   <div class="ctl">
     <button title={t("Свернуть", "Minimize")} onclick={() => win.minimize()}><Minus size={14} /></button>
@@ -28,7 +25,7 @@
     height: 36px;
     flex: none;
     display: grid;
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto;
     column-gap: 12px;
     align-items: center;
     padding-left: 12px;
@@ -58,25 +55,6 @@
     color: var(--faint);
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-  .state {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: var(--faint);
-    pointer-events: none;
-  }
-  .dot {
-    width: 6px;
-    height: 6px;
-    background: var(--faint);
-  }
-  .state.on {
-    color: var(--ok);
-  }
-  .state.on .dot {
-    background: var(--ok);
   }
   .ctl {
     display: flex;

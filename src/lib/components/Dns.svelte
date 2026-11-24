@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SubTabs from "./SubTabs.svelte";
   import { onMount } from "svelte";
   import { api, type DnsInfo, type DnsPreset, type DnsAdapter, type StubStatus } from "$lib/api";
   import { app, act, toast } from "$lib/state.svelte";
@@ -19,6 +20,7 @@
   let template = $state("");
   let fallback = $state(false);
   let stub = $state<StubStatus | null>(null);
+  let sub = $state<"adapter" | "resolver">("adapter");
   let stubFallback = $state(true);
   /** DoT работает у большего числа провайдеров (Quad9, Яндекс требуют HTTP/2 для DoH). */
   let stubProto = $state<"dot" | "doh">("dot");
@@ -126,7 +128,14 @@
 </script>
 
 <div class="dns fade-in">
-  {#if info}
+  <SubTabs
+    key="dns"
+    bind:value={sub}
+    tabs={[
+      { id: "adapter", label: "Adapter", title: t("DNS адаптера и шифрование DoH в Windows", "Adapter DNS and Windows DoH encryption") },
+      { id: "resolver", label: "Resolver", badge: stub?.running ? "on" : null, title: t("Локальный DoH/DoT-резолвер", "Local DoH/DoT resolver") },
+    ]} />
+  {#if info && sub === "adapter"}
     <!-- Адаптер и его текущие DNS -->
     <section class="card block">
       <div class="head">
@@ -238,7 +247,8 @@
     {#if !admin}
       <div class="faint mono small">{t("Смена DNS требует прав администратора.", "Changing DNS requires administrator rights.")}</div>
     {/if}
-
+  {/if}
+  {#if info && sub === "resolver"}
     <!-- Локальный DoH-резолвер -->
     <section class="card block">
       <div class="row">

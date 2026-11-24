@@ -4,6 +4,7 @@
   import { t } from "$lib/i18n.svelte";
   import { Search, Loader } from "@lucide/svelte";
   import Segmented from "./Segmented.svelte";
+  import SubTabs from "./SubTabs.svelte";
   import SniScan from "./SniScan.svelte";
   import DnsCheck from "./DnsCheck.svelte";
 
@@ -90,13 +91,13 @@
 </script>
 
 <div class="diag fade-in">
-  <Segmented
-    value={mode}
-    onchange={(m) => (mode = m)}
-    options={[
-      { value: "site", label: t("Почему не открывается", "Why it does not open") },
-      { value: "dns", label: t("Подмена DNS", "DNS tampering") },
-      { value: "sni", label: t("Сканер SNI", "SNI scanner") },
+  <SubTabs
+    key="check"
+    bind:value={mode}
+    tabs={[
+      { id: "site", label: "Site", title: t("Почему не открывается сайт", "Why a site does not open") },
+      { id: "dns", label: "DNS spoofing", title: t("Подменяет ли провайдер DNS", "Does the ISP tamper with DNS") },
+      { id: "sni", label: "SNI scan", title: t("Какие имена сайтов пропускает DPI", "Which site names DPI lets through") },
     ]} />
   {#if mode === "sni"}
     <SniScan />

@@ -2,6 +2,7 @@
   import PowerButton from "./PowerButton.svelte";
   import Segmented from "./Segmented.svelte";
   import Switch from "./Switch.svelte";
+  import SubTabs from "./SubTabs.svelte";
   import { onMount } from "svelte";
   import { api, on, type XrayStatus, type XrayRouting, type TorScope } from "$lib/api";
   import { app, act, toast } from "$lib/state.svelte";
@@ -17,6 +18,7 @@
   let portText = $state("");
   let domainsText = $state("");
   let showLog = $state(false);
+  let sub = $state<"servers" | "routing" | "connection">("servers");
   let log = $state<string[]>([]);
 
   const running = $derived(!!st?.status.running);
@@ -150,6 +152,15 @@
       <section class="card block"><div class="err mono">{t("В этой сборке нет Xray: соберите приложение заново (npm run sync-xray скачает его).", "This build has no Xray: rebuild the app (npm run sync-xray downloads it).")}</div></section>
     {/if}
 
+    <SubTabs
+      key="xray"
+      bind:value={sub}
+      tabs={[
+        { id: "servers", label: "Servers", badge: running ? "on" : st.servers.length || null, title: t("Включение, подписки и серверы", "On/off, subscriptions and servers") },
+        { id: "routing", label: "Routing", badge: st.scope !== "list" ? st.scope : null, title: t("Что идёт напрямую, что через сервер", "What goes direct and what through the server") },
+        { id: "connection", label: "Connection", badge: st.fragment ? "split" : null, title: t("Порт, нарезка к серверу, журнал", "Port, splitting to the server, log") },
+      ]} />
+    {#if sub === "servers"}
     <section class="card block hero">
       <div class="prompt mono">{t("xray · свои серверы VLESS, VMess, Trojan, Shadowsocks", "xray · your own VLESS, VMess, Trojan, Shadowsocks servers")}</div>
       <PowerButton on={running} disabled={app.busy || !st.available || !st.servers.length} onclick={toggle} />
@@ -233,7 +244,7 @@
         <div class="hint faint mono">{t("Задержка — настоящий запрос через сервер (generate_204), а не ping. «—» — сервер не ответил; причина — при наведении.", "Latency is a real request through the server (generate_204), not a ping. “—” means no answer; hover for the reason.")}</div>
       </section>
     {/if}
-
+    {:else if sub === "routing"}
     <section class="card block">
       <div class="label"><Route size={11} /> {t("маршрутизация", "routing")}</div>
       <div class="opt">
@@ -262,24 +273,6 @@
     </section>
 
     <section class="card block">
-      <div class="label">{t("подключение", "connection")}</div>
-      <div class="opt">
-        <div>
-          <div class="label sub2">{t("нарезка clienthello к серверу", "split clienthello to the server")}</div>
-          <div class="hint faint mono">{t("если сам сервер режут по SNI: первый пакет TLS уходит кусками (finalmask fragment). Для серверов, где нарезка уже задана в подписке, не меняется.", "if the server itself is cut by SNI: the first TLS packet goes in pieces (finalmask fragment). Servers that already set it in the subscription keep theirs.")}</div>
-        </div>
-        <Switch checked={st.fragment} disabled={app.busy} onchange={(v) => set({ fragment: v })} />
-      </div>
-      <div class="actions">
-        <label class="mono portl"><span class="k">{t("порт SOCKS5/HTTP", "SOCKS5/HTTP port")}</span>
-          <input class="input port" type="number" min="1024" max="65535" bind:value={portText} disabled={app.busy} />
-        </label>
-        <span class="hint faint mono grow">{t("10808 обычно занят v2rayN — поэтому по умолчанию 10820.", "10808 is usually taken by v2rayN — hence 10820 by default.")}</span>
-        <button class="btn sm" disabled={app.busy || portText === String(st.port)} onclick={() => set({ port: Number(portText) }, t("Порт сохранён", "Port saved"))}>{t("Сохранить", "Save")}</button>
-      </div>
-    </section>
-
-    <section class="card block">
       <div class="row">
         <div>
           <div class="label"><Globe size={11} /> {t("сайты через xray", "sites through xray")}</div>
@@ -299,11 +292,30 @@
         <Switch checked={st.proxy_system} disabled={app.busy} onchange={setSystem} />
       </div>
     </section>
+    {:else}
+    <section class="card block">
+      <div class="label">{t("подключение", "connection")}</div>
+      <div class="opt">
+        <div>
+          <div class="label sub2">{t("нарезка clienthello к серверу", "split clienthello to the server")}</div>
+          <div class="hint faint mono">{t("если сам сервер режут по SNI: первый пакет TLS уходит кусками (finalmask fragment). Для серверов, где нарезка уже задана в подписке, не меняется.", "if the server itself is cut by SNI: the first TLS packet goes in pieces (finalmask fragment). Servers that already set it in the subscription keep theirs.")}</div>
+        </div>
+        <Switch checked={st.fragment} disabled={app.busy} onchange={(v) => set({ fragment: v })} />
+      </div>
+      <div class="actions">
+        <label class="mono portl"><span class="k">{t("порт SOCKS5/HTTP", "SOCKS5/HTTP port")}</span>
+          <input class="input port" type="number" min="1024" max="65535" bind:value={portText} disabled={app.busy} />
+        </label>
+        <span class="hint faint mono grow">{t("10808 обычно занят v2rayN — поэтому по умолчанию 10820.", "10808 is usually taken by v2rayN — hence 10820 by default.")}</span>
+        <button class="btn sm" disabled={app.busy || portText === String(st.port)} onclick={() => set({ port: Number(portText) }, t("Порт сохранён", "Port saved"))}>{t("Сохранить", "Save")}</button>
+      </div>
+    </section>
 
     <details class="card block logbox" bind:open={showLog}>
       <summary class="mono"><ScrollText size={12} /> {t("журнал xray", "xray log")}{st.version ? ` · Xray ${st.version}` : ""}</summary>
       {#if log.length}<pre class="code mono">{log.join("\n")}</pre>{:else}<div class="hint faint mono">{t("пусто — Xray не запускался", "empty — Xray has not run")}</div>{/if}
     </details>
+    {/if}
   {/if}
 </div>
 
