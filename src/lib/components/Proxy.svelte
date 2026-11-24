@@ -259,13 +259,13 @@
       {#if cfg.split !== "none"}
       <div class="opt">
         <div>
-          <div class="label">parts</div>
+          <div class="label">{t("куски нарезки", "split pieces")}</div>
           <div class="hint faint mono">
             {cfg.unit === "records"
-              ? t("каждая часть — отдельная TLS-запись", "each part is a separate TLS record")
+              ? t("как уходят куски нарезки: каждый — отдельная TLS-запись", "how split pieces are sent: each is a separate TLS record")
               : cfg.unit === "mixed"
-                ? t("TLS-записи с разными версиями: первая 1.2, остальные 1.0", "TLS records with different versions: first 1.2, the rest 1.0")
-                : t("TCP-сегменты одной TLS-записи", "TCP segments of one TLS record")}
+                ? t("как уходят куски нарезки: TLS-записи с разными версиями (первая 1.2, остальные 1.0)", "how split pieces are sent: TLS records with different versions (first 1.2, the rest 1.0)")
+                : t("как уходят куски нарезки: TCP-сегменты одной TLS-записи", "how split pieces are sent: TCP segments of one TLS record")}
           </div>
         </div>
         <div class="inline">
