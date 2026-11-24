@@ -41,8 +41,9 @@ const SWAPS: &[(&str, &str)] = &[
 ];
 /// Без этих параметров действие теряет смысл — их не удаляем.
 const ESSENTIAL: &[&str] = &["blob", "host"];
-/// Пауза между кандидатами, мс.
-const PAUSE_MS: u64 = 1500;
+/// Пауза между проверками, мс: случайная в этих пределах, чтобы у подбора
+/// не было ровного «машинного» ритма (DeResistor, USENIX Security 2023).
+const PAUSE_MS: (u64, u64) = (1500, 4000);
 /// Сколько раз подтверждать победителя перед сохранением.
 const CONFIRM: usize = 3;
 
@@ -192,6 +193,12 @@ impl Vocab {
 
 /// Простой xorshift — без зависимостей.
 pub struct Rng(u64);
+
+/// Случайная пауза между проверками (см. `PAUSE_MS`).
+fn pause(rng: &mut Rng) {
+    let (lo, hi) = PAUSE_MS;
+    std::thread::sleep(std::time::Duration::from_millis(lo + rng.below((hi - lo) as usize + 1) as u64));
+}
 
 impl Rng {
     pub fn new(seed: u64) -> Rng {
@@ -405,7 +412,7 @@ fn evaluate(bench: &crate::tester::Bench, ctx: &crate::tester::Ctx, c: &mut Cand
     }
     let (mut ok, mut fail) = (a.ok, a.fail);
     if a.ok > 0 && !ctx.cancel.load(Ordering::Relaxed) {
-        std::thread::sleep(std::time::Duration::from_millis(PAUSE_MS));
+        pause(rng);
         let b = bench.eval(ctx, &c.name, args, Some(rng.next()), |_| {});
         if b.error.is_none() {
             c.unstable = b.ok != a.ok;
@@ -546,7 +553,7 @@ pub fn run(ctx: crate::tester::Ctx, params: crate::tester::Params, opts: Opts, e
                 };
                 st.current = Some(c.name.clone());
                 emit(&st);
-                std::thread::sleep(std::time::Duration::from_millis(PAUSE_MS));
+                pause(&mut rng);
                 evaluate(&bench, &ctx, &mut c, &mut rng);
                 st.done += 1;
                 st.tried.push(c.clone());
@@ -574,7 +581,7 @@ pub fn run(ctx: crate::tester::Ctx, params: crate::tester::Params, opts: Opts, e
         emit(&st);
         let mut ok = true;
         for _ in 0..CONFIRM {
-            std::thread::sleep(std::time::Duration::from_millis(PAUSE_MS));
+            pause(&mut rng);
             let args = crate::strategy::args_from_text(&c.name, &c.text, &bench.vars);
             let r = bench.eval(&ctx, &c.name, args, Some(rng.next()), |_| {});
             if r.error.is_some() || r.ok <= bar {

@@ -168,6 +168,7 @@ npm run tauri build
 - **[sni-spoofing-rust](https://github.com/therealaleph/sni-spoofing-rust)** (therealaleph) — сканер SNI, раздача в локальную сеть.
 - **[SymTCP](https://www.ndss-symposium.org/ndss-paper/symtcp-eluding-stateful-deep-packet-inspection-with-automated-discrepancy-discovery/)** (Wang et al., NDSS 2020) — виды «порчи» пакетов для автоподбора: MD5-опция TCP, плохая контрольная сумма, данные без ACK.
 - **[GET /out](https://www.usenix.org/conference/usenixsecurity22/presentation/harrity)** (Harrity et al., USENIX Security 2022) — нарезка обычного HTTP внутри заголовка Host.
+- **[DeResistor](https://www.usenix.org/conference/usenixsecurity23/presentation/amich)** (Amich et al., USENIX Security 2023) — случайные паузы в автоподборе, чтобы его труднее было отличить от обычного трафика.
 - **[Geneva](https://geneva.cs.umd.edu/)** (Bock et al., ACM CCS 2019) — подход автоподбора: засев известными стратегиями, оценка с повторами, штраф за сложность, зал славы.
 - **[B4](https://github.com/DanielLavrushin/b4)** и **[tspu-docs](https://github.com/DanielLavrushin/tspu-docs)** (DanielLavrushin) — удаление ключей ECH из DNS, проверка «напрямую и через обход», поиск SNI для хостингов, подтверждение победителя; сведения о том, как ТСПУ ограничивает хостинги.
 - **[Tallow](https://github.com/basil00/Tallow)** (basil00) — Tor для приложений, которые его не умеют (у нас — через прокси-обходчик, а не перехват всего трафика).
