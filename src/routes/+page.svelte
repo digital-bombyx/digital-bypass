@@ -4,9 +4,7 @@
   import { app, refresh, toast, act } from "$lib/state.svelte";
   import { t } from "$lib/i18n.svelte";
   import TitleBar from "$lib/components/TitleBar.svelte";
-  import Home from "$lib/components/Home.svelte";
-  import Tests from "$lib/components/Tests.svelte";
-  import Lists from "$lib/components/Lists.svelte";
+  import Zapret2 from "$lib/components/Zapret2.svelte";
   import Hosts from "$lib/components/Hosts.svelte";
   import Settings from "$lib/components/Settings.svelte";
   import Dns from "$lib/components/Dns.svelte";
@@ -15,20 +13,21 @@
   import Telegram from "$lib/components/Telegram.svelte";
   import Tor from "$lib/components/Tor.svelte";
   import Xray from "$lib/components/Xray.svelte";
-  import { Power, ListChecks, Globe, Network, Settings2, ShieldAlert, Waypoints, Stethoscope, Send, Layers, Rocket } from "@lucide/svelte";
+  import { Power, Globe, Network, Settings2, ShieldAlert, Waypoints, Stethoscope, Send, Layers, Rocket } from "@lucide/svelte";
 
-  type Tab = "home" | "lists" | "hosts" | "dns" | "proxy" | "telegram" | "tor" | "xray" | "diag" | "settings";
+  type Tab = "home" | "hosts" | "dns" | "proxy" | "telegram" | "tor" | "xray" | "diag" | "settings";
   let tab = $state<Tab>("home");
   let dirInput = $state("");
   /** Вкладки, которым нужна папка zapret; DNS и настройки работают без неё. */
-  const needsZapret: Tab[] = ["home", "lists", "hosts"];
+  const needsZapret: Tab[] = ["home", "hosts"];
+  /** Подвкладка Zapret2 — для пути в заголовке. */
+  let zsub = $state<"bypass" | "tests" | "lists" | "addons">("bypass");
 
   // Названия — на английском в обоих языках (термины). Check первой: она подсказывает,
   // какой модуль нужен. Дальше — по способу: без сервера / туннели / DNS.
   const tabs: { id: Tab; label: () => string; icon: typeof Power; group?: () => string; hint: () => string }[] = [
     { id: "diag", label: () => "Check", icon: Stethoscope, hint: () => t("Почему сайт не открывается и что поможет", "Why a site does not open and what helps") },
     { id: "home", label: () => "Zapret2", icon: Power, group: () => "bypass", hint: () => t("Обход DPI драйвером WinDivert", "DPI bypass with the WinDivert driver") },
-    { id: "lists", label: () => "Lists", icon: ListChecks, hint: () => t("Списки доменов zapret2", "zapret2 domain lists") },
     { id: "proxy", label: () => "Proxy", icon: Waypoints, hint: () => t("Прокси-обходчик: нарезка ClientHello без прав администратора", "Bypass proxy: ClientHello splitting without admin rights") },
     { id: "xray", label: () => "Xray", icon: Rocket, group: () => "tunnels", hint: () => t("Свои серверы VLESS, VMess, Trojan, Shadowsocks", "Your own VLESS, VMess, Trojan, Shadowsocks servers") },
     { id: "tor", label: () => "Tor", icon: Layers, hint: () => t("Сеть Tor с мостами", "The Tor network with bridges") },
@@ -39,7 +38,6 @@
   ];
   const paths: Record<Tab, string> = {
     home: "zapret2",
-    lists: "zapret2/lists",
     hosts: "hosts",
     dns: "dns",
     proxy: "proxy",
@@ -77,7 +75,7 @@
 </script>
 
 <div class="shell">
-  <TitleBar path={paths[tab]} running={!!app.ov?.status.running} />
+  <TitleBar path={tab === "home" ? `zapret2/${zsub}` : paths[tab]} running={!!app.ov?.status.running} />
 
   {#if app.ov}
     {#if !app.ov.admin}
@@ -105,8 +103,7 @@
           <button class="btn primary" disabled={!dirInput.trim()} onclick={() => act(() => api.setZapretDir(dirInput))}
             >{t("Сохранить", "Save")}</button>
         </section>
-      {:else if tab === "home"}<div class="stack"><Home /><Tests /></div>
-      {:else if tab === "lists"}<Lists />
+      {:else if tab === "home"}<Zapret2 bind:sub={zsub} />
       {:else if tab === "hosts"}<Hosts />
       {:else if tab === "dns"}<Dns />
       {:else if tab === "proxy"}<Proxy />

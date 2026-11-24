@@ -1,6 +1,6 @@
 <script lang="ts">
   import PowerButton from "./PowerButton.svelte";
-  import Addons from "./Addons.svelte";
+  import More from "./More.svelte";
   import { api, strategyName, type GameFilter } from "$lib/api";
   import { app, act } from "$lib/state.svelte";
   import Segmented from "./Segmented.svelte";
@@ -109,8 +109,27 @@
     {/if}
   </section>
 
-  <!-- Быстрые настройки -->
+  <!-- Основное: режим работы -->
   <section class="card opts">
+    <div class="opt">
+      <div>
+        <div class="label">{t("режим", "mode")}</div>
+        <div class="hint faint mono">{ov.mode === "service" ? t("служба, работает без GUI", "service, runs without the GUI") : t("процесс, пока открыт GUI", "process, while the GUI is open")}</div>
+      </div>
+      <Segmented
+        small
+        disabled={app.busy || ov.testing}
+        value={ov.mode}
+        onchange={(m) => act(() => api.setMode(m))}
+        options={[
+          { value: "process", label: t("Процесс", "Process") },
+          { value: "service", label: t("Служба", "Service") },
+        ]} />
+    </div>
+  </section>
+
+  <!-- Дополнительно: игровые порты и ipset (не по умолчанию — счётчик на заголовке) -->
+  <More key="zapret2.bypass" active={(ov.game_filter.mode !== "disabled" ? 1 : 0) + (ov.ipset !== "loaded" ? 1 : 0)}>
     <div class="opt">
       <div>
         <div class="label">game filter</div>
@@ -148,24 +167,7 @@
           { value: "any", label: t("Все", "All") },
         ]} />
     </div>
-    <div class="opt">
-      <div>
-        <div class="label">{t("режим", "mode")}</div>
-        <div class="hint faint mono">{ov.mode === "service" ? t("служба, работает без GUI", "service, runs without the GUI") : t("процесс, пока открыт GUI", "process, while the GUI is open")}</div>
-      </div>
-      <Segmented
-        small
-        disabled={app.busy || ov.testing}
-        value={ov.mode}
-        onchange={(m) => act(() => api.setMode(m))}
-        options={[
-          { value: "process", label: t("Процесс", "Process") },
-          { value: "service", label: t("Служба", "Service") },
-        ]} />
-    </div>
-  </section>
-
-  <Addons />
+  </More>
 </div>
 
 <style>
