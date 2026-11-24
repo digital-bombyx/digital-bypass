@@ -47,7 +47,7 @@
   let sub = $state<"main" | "autotune" | "rules" | "lan" | "log">("main");
   /** Включённое в «Дополнительно» (отличия от умолчаний). */
   const advCount = $derived(
-    (cfg.split !== "none" && cfg.unit !== "records" ? 1 : 0) + (cfg.split !== "none" && cfg.oob ? 1 : 0) + (cfg.ipv6 ? 1 : 0) + (cfg.rcvbuf > 0 ? 1 : 0) + (!cfg.doh ? 1 : 0),
+    (cfg.split !== "none" && cfg.oob ? 1 : 0) + (cfg.ipv6 ? 1 : 0) + (cfg.rcvbuf > 0 ? 1 : 0) + (!cfg.doh ? 1 : 0),
   );
   /** Записей в правилах (для значка на подвкладке). */
   const ruleCount = $derived(cfg.rules.skip.length + cfg.rules.block.length + (cfg.rules.worker?.length ?? 0) + (cfg.rules.scope === "listed" ? cfg.rules.bypass.length : 0));
@@ -208,6 +208,35 @@
         </div>
       {/if}
       {#if cfg.split !== "none"}
+      <div class="opt joined">
+        <div>
+          <div class="label">{t("куски нарезки", "split pieces")}</div>
+          <div class="hint faint mono">
+            {cfg.unit === "records"
+              ? t("как уходят куски нарезки: каждый — отдельная TLS-запись", "how split pieces are sent: each is a separate TLS record")
+              : cfg.unit === "mixed"
+                ? t("как уходят куски нарезки: TLS-записи с разными версиями (первая 1.2, остальные 1.0)", "how split pieces are sent: TLS records with different versions (first 1.2, the rest 1.0)")
+                : t("как уходят куски нарезки: TCP-сегменты одной TLS-записи", "how split pieces are sent: TCP segments of one TLS record")}
+          </div>
+        </div>
+        <div class="inline">
+          {#if cfg.split === "chunk"}
+            <input class="input chunk" type="number" min="1" max="1024" title={t("Размер чанка, байт", "Chunk size, bytes")} bind:value={cfg.chunk} onchange={() => change({ chunk: Number(cfg.chunk) })} disabled={app.busy} />
+          {/if}
+          <Segmented
+            small
+            disabled={app.busy}
+            value={cfg.unit}
+            onchange={(m) => change({ unit: m })}
+            options={[
+              { value: "records", label: "TLS records" },
+              { value: "tcp", label: "TCP segments" },
+              { value: "mixed", label: "Mixed versions" },
+            ]} />
+        </div>
+      </div>
+      {/if}
+      {#if cfg.split !== "none"}
       <div class="opt">
         <div>
           <div class="label">disorder</div>
@@ -257,33 +286,6 @@
 
     <More key="proxy.main" active={advCount}>
       {#if cfg.split !== "none"}
-      <div class="opt">
-        <div>
-          <div class="label">{t("куски нарезки", "split pieces")}</div>
-          <div class="hint faint mono">
-            {cfg.unit === "records"
-              ? t("как уходят куски нарезки: каждый — отдельная TLS-запись", "how split pieces are sent: each is a separate TLS record")
-              : cfg.unit === "mixed"
-                ? t("как уходят куски нарезки: TLS-записи с разными версиями (первая 1.2, остальные 1.0)", "how split pieces are sent: TLS records with different versions (first 1.2, the rest 1.0)")
-                : t("как уходят куски нарезки: TCP-сегменты одной TLS-записи", "how split pieces are sent: TCP segments of one TLS record")}
-          </div>
-        </div>
-        <div class="inline">
-          {#if cfg.split === "chunk"}
-            <input class="input chunk" type="number" min="1" max="1024" title={t("Размер чанка, байт", "Chunk size, bytes")} bind:value={cfg.chunk} onchange={() => change({ chunk: Number(cfg.chunk) })} disabled={app.busy} />
-          {/if}
-          <Segmented
-            small
-            disabled={app.busy}
-            value={cfg.unit}
-            onchange={(m) => change({ unit: m })}
-            options={[
-              { value: "records", label: "TLS records" },
-              { value: "tcp", label: "TCP segments" },
-              { value: "mixed", label: "Mixed versions" },
-            ]} />
-        </div>
-      </div>
       <div class="opt">
         <div>
           <div class="label">OOB</div>
@@ -508,6 +510,14 @@
   }
   .opt + .opt {
     border-top: 1px solid var(--border-soft);
+  }
+  /* Продолжение предыдущей строки (куски нарезки под нарезкой) — без черты. */
+  .opt.joined {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .positions + .opt.joined {
+    padding-top: 12px;
   }
   .port {
     width: 96px;
