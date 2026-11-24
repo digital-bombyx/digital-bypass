@@ -128,6 +128,11 @@ pub struct Rules {
     /// zapret — плюс домены списков zapret2, all — весь трафик (кроме `skip`, `worker`).
     #[serde(default = "default_tor_scope")]
     pub tor_scope: String,
+    /// Через Xray (когда он запущен) и что ещё туда отправлять: list | zapret | all.
+    #[serde(default)]
+    pub xray: Vec<String>,
+    #[serde(default = "default_tor_scope")]
+    pub xray_scope: String,
 }
 
 fn default_tor_scope() -> String {
@@ -138,7 +143,7 @@ pub const TOR_SCOPES: [&str; 3] = ["list", "zapret", "all"];
 
 impl Default for Rules {
     fn default() -> Self {
-        Rules { scope: "all".into(), zapret_lists: true, bypass: Vec::new(), skip: Vec::new(), block: Vec::new(), worker: Vec::new(), tor: Vec::new(), tor_scope: default_tor_scope() }
+        Rules { scope: "all".into(), zapret_lists: true, bypass: Vec::new(), skip: Vec::new(), block: Vec::new(), worker: Vec::new(), tor: Vec::new(), tor_scope: default_tor_scope(), xray: Vec::new(), xray_scope: default_tor_scope() }
     }
 }
 
@@ -340,6 +345,7 @@ fn action_name(a: Option<Action>) -> &'static str {
         Some(Action::Pass) => "pass",
         Some(Action::Worker) => "worker",
         Some(Action::Tor) => "tor",
+        Some(Action::Xray) => "xray",
         _ => "bypass",
     }
 }
@@ -394,7 +400,10 @@ impl Config {
         if !TOR_SCOPES.contains(&self.rules.tor_scope.as_str()) {
             self.rules.tor_scope = "list".into();
         }
-        for list in [&mut self.rules.bypass, &mut self.rules.skip, &mut self.rules.block, &mut self.rules.tor] {
+        if !TOR_SCOPES.contains(&self.rules.xray_scope.as_str()) {
+            self.rules.xray_scope = "list".into();
+        }
+        for list in [&mut self.rules.bypass, &mut self.rules.skip, &mut self.rules.block, &mut self.rules.tor, &mut self.rules.xray] {
             let mut v: Vec<String> = list.iter().filter_map(|d| normalize_domain(d)).collect();
             v.dedup();
             *list = v;
@@ -447,6 +456,8 @@ pub enum Action {
     Worker,
     /// Через Tor.
     Tor,
+    /// Через Xray.
+    Xray,
 }
 
 /// Понятная причина отказа своего Worker'а по ответу на WebSocket-запрос
@@ -490,13 +501,16 @@ pub struct Matcher {
     /// Домены списков zapret2 для режима Tor «списки zapret».
     tor_zapret: DomainSet,
     tor_all: bool,
+    xray: DomainSet,
+    xray_zapret: DomainSet,
+    xray_all: bool,
 }
 
 impl Matcher {
     /// `extra_bypass` добавляется к `bypass` как есть (для тестов правил).
     #[cfg(test)]
     pub fn new(r: &Rules, extra_bypass: &[String]) -> Self {
-        Self::build(r, extra_bypass, &[], false)
+        Self::build(r, extra_bypass, &[], &[], false)
     }
 
     /// `zapret` — домены списков zapret2: идут в `bypass` при `zapret_lists` и в Tor
@@ -504,11 +518,15 @@ impl Matcher {
     pub fn with_worker(r: &Rules, zapret: &[String], worker_on: bool) -> Self {
         let bypass_extra = if r.zapret_lists { zapret } else { &[] };
         let tor_extra = if r.tor_scope == "zapret" { zapret } else { &[] };
-        Self::build(r, bypass_extra, tor_extra, worker_on)
+        let xray_extra = if r.xray_scope == "zapret" { zapret } else { &[] };
+        Self::build(r, bypass_extra, tor_extra, xray_extra, worker_on)
     }
 
-    fn build(r: &Rules, extra_bypass: &[String], tor_zapret: &[String], worker_on: bool) -> Self {
+    fn build(r: &Rules, extra_bypass: &[String], tor_zapret: &[String], xray_zapret: &[String], worker_on: bool) -> Self {
         Matcher {
+            xray: DomainSet::new(&r.xray),
+            xray_zapret: DomainSet::new(xray_zapret),
+            xray_all: r.xray_scope == "all",
             worker: DomainSet::new(if worker_on { &r.worker[..] } else { &[] }),
             tor: DomainSet::new(&r.tor),
             tor_zapret: DomainSet::new(tor_zapret),
@@ -520,22 +538,32 @@ impl Matcher {
         }
     }
     pub fn action(&self, host: &str) -> Action {
-        self.action_with(host, crate::tor::ready_port().is_some())
+        self.action_with2(host, crate::tor::ready_port().is_some(), crate::xray::ready_port().is_some())
     }
 
-    /// Правила Tor действуют, только пока он подключён (`tor_ready`); иначе — обычные.
-    /// Порядок: блок → .onion → список Tor → Worker → «не резать» → режим Tor → нарезка.
+    #[cfg(test)]
     pub fn action_with(&self, host: &str, tor_ready: bool) -> Action {
+        self.action_with2(host, tor_ready, false)
+    }
+
+    /// Правила Tor и Xray действуют, только пока они работают; иначе — обычные.
+    /// Порядок: блок → .onion → список Tor → список Xray → Worker → «не резать» →
+    /// режим Tor → режим Xray → нарезка.
+    pub fn action_with2(&self, host: &str, tor_ready: bool, xray_ready: bool) -> Action {
         if self.block.matches(host) {
             Action::Block
         } else if is_onion(host) || (tor_ready && self.tor.matches(host)) {
             Action::Tor
+        } else if xray_ready && self.xray.matches(host) {
+            Action::Xray
         } else if self.worker.matches(host) {
             Action::Worker
         } else if self.skip.matches(host) {
             Action::Pass
         } else if tor_ready && (self.tor_all || self.tor_zapret.matches(host)) {
             Action::Tor
+        } else if xray_ready && (self.xray_all || self.xray_zapret.matches(host)) {
+            Action::Xray
         } else if self.scope_listed && !self.bypass.matches(host) {
             Action::Pass
         } else {
@@ -999,6 +1027,8 @@ pub struct Stats {
     pub via_worker: u64,
     /// Через Tor.
     pub via_tor: u64,
+    /// Через Xray.
+    pub via_xray: u64,
     /// Доменов в кэше DNS и в списке обхода.
     pub dns_cached: usize,
     pub bypass_domains: usize,
@@ -1022,6 +1052,7 @@ struct Shared {
     blocked: AtomicU64,
     via_worker: AtomicU64,
     via_tor: AtomicU64,
+    via_xray: AtomicU64,
     /// Сайт → способ, который сработал (если не основной), с отметкой времени.
     auto_cache: Mutex<std::collections::HashMap<String, (Variant, std::time::Instant)>>,
     auto_retries: AtomicU64,
@@ -1063,6 +1094,21 @@ impl Shared {
     fn tor_up(&self, host: &str, port: u16) -> std::io::Result<TcpStream> {
         let p = crate::tor::ready_port().ok_or_else(|| std::io::Error::other(crate::tr!("Tor не подключён", "Tor is not connected")))?;
         crate::tor::socks_connect(p, host, port, Duration::from_secs(60))
+    }
+
+    /// Соединение через SOCKS xray (имя разрешает xray — по его маршрутизации).
+    fn xray_up(&self, host: &str, port: u16) -> std::io::Result<TcpStream> {
+        let p = crate::xray::ready_port().ok_or_else(|| std::io::Error::other(crate::tr!("Xray не запущен", "Xray is not running")))?;
+        crate::tor::socks_connect(p, host, port, Duration::from_secs(30))
+    }
+
+    /// Tor или Xray — по действию.
+    fn upstream(&self, a: Action, host: &str, port: u16) -> std::io::Result<TcpStream> {
+        if a == Action::Xray {
+            self.xray_up(host, port)
+        } else {
+            self.tor_up(host, port)
+        }
     }
 
     fn resolve(&self, host: &str, port: u16) -> Vec<SocketAddr> {
@@ -1190,6 +1236,7 @@ impl Shared {
             Action::Block => &self.blocked,
             Action::Worker => &self.via_worker,
             Action::Tor => &self.via_tor,
+            Action::Xray => &self.via_xray,
         }
         .fetch_add(1, Ordering::Relaxed);
     }
@@ -1280,8 +1327,8 @@ impl Shared {
                 self.log_entry(tr, t0, true, None);
                 return crate::telegram::ws_pipe(client, ws, early, Vec::new());
             }
-            if action == Action::Tor {
-                let up = match self.tor_up(&host, port) {
+            if matches!(action, Action::Tor | Action::Xray) {
+                let up = match self.upstream(action, &host, port) {
                     Ok(u) => u,
                     Err(e) => {
                         let _ = client.write_all(&[5, 4, 0, 1, 0, 0, 0, 0, 0, 0]);
@@ -1333,8 +1380,8 @@ impl Shared {
                     self.log_entry(tr, t0, true, None);
                     return crate::telegram::ws_pipe(client, ws, wearly, early);
                 }
-                if action == Action::Tor {
-                    let mut up = match self.tor_up(&host, port) {
+                if matches!(action, Action::Tor | Action::Xray) {
+                    let mut up = match self.upstream(action, &host, port) {
                         Ok(u) => u,
                         Err(e) => {
                             let _ = client.write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
@@ -1373,10 +1420,11 @@ impl Shared {
                     self.log_entry(tr, t0, true, None);
                     return crate::telegram::ws_pipe(client, ws, wearly, first);
                 }
-                if self.matcher.action(&host) == Action::Tor {
-                    tr.action = Some(Action::Tor);
-                    self.count(Action::Tor);
-                    let mut up = self.tor_up(&host, port)?;
+                let a = self.matcher.action(&host);
+                if matches!(a, Action::Tor | Action::Xray) {
+                    tr.action = Some(a);
+                    self.count(a);
+                    let mut up = self.upstream(a, &host, port)?;
                     up.write_all(&head)?;
                     up.write_all(&early)?;
                     self.log_entry(tr, t0, true, None);
@@ -1524,6 +1572,7 @@ impl Proxy {
             blocked: AtomicU64::new(0),
             via_worker: AtomicU64::new(0),
             via_tor: AtomicU64::new(0),
+            via_xray: AtomicU64::new(0),
             auto_cache: Mutex::new(std::collections::HashMap::new()),
             auto_retries: AtomicU64::new(0),
             positions,
@@ -1589,6 +1638,7 @@ impl Proxy {
             blocked: self.shared.blocked.load(Ordering::Relaxed),
             via_worker: self.shared.via_worker.load(Ordering::Relaxed),
             via_tor: self.shared.via_tor.load(Ordering::Relaxed),
+            via_xray: self.shared.via_xray.load(Ordering::Relaxed),
             dns_cached: self.shared.resolver.as_ref().map(|r| r.len()).unwrap_or(0),
             bypass_domains: self.shared.matcher.bypass.len(),
             auto_retries: self.shared.auto_retries.load(Ordering::Relaxed),
@@ -2055,6 +2105,8 @@ mod tests {
             worker: vec![],
             tor: vec![],
             tor_scope: "list".into(),
+            xray: vec![],
+            xray_scope: "list".into(),
         };
         let m = Matcher::new(&r, &[]);
         assert_eq!(m.action("www.youtube.com"), Action::Bypass);
@@ -2279,6 +2331,14 @@ mod tests {
         let list = Rules { tor: vec!["a.org".into()], ..Default::default() };
         assert_eq!(Matcher::with_worker(&list, &z, false).action_with("youtube.com", true), Action::Bypass);
         assert_eq!(Matcher::with_worker(&list, &z, false).action_with("x.a.org", true), Action::Tor);
+        // Xray: список и режимы; Tor-список важнее Xray-списка.
+        let xr = Rules { xray: vec!["chatgpt.com".into()], xray_scope: "all".into(), tor: vec!["chatgpt.com".into()], skip: vec!["sberbank.ru".into()], ..Default::default() };
+        let m = Matcher::with_worker(&xr, &z, false);
+        assert_eq!(m.action_with2("chatgpt.com", false, true), Action::Xray);
+        assert_eq!(m.action_with2("chatgpt.com", true, true), Action::Tor);
+        assert_eq!(m.action_with2("example.com", false, true), Action::Xray);
+        assert_eq!(m.action_with2("sberbank.ru", false, true), Action::Pass);
+        assert_eq!(m.action_with2("example.com", false, false), Action::Bypass);
         let mut bad = Config::default();
         bad.rules.tor_scope = "everything".into();
         bad.normalize();

@@ -91,6 +91,13 @@ SHA-256 (scripts/sync-tor.mjs). Tor is distributed under the 3-clause BSD
 license; lyrebird and its dependencies under BSD-style and other licenses.
 The full license texts ship with the installer in the tor\docs folder.
 
+Xray (xray.exe, geoip.dat, geosite.dat) is an unmodified copy of the official
+Xray-core release by Project X / XTLS, https://github.com/XTLS/Xray-core,
+distributed under the Mozilla Public License 2.0 (LICENSE in the xray folder of
+the installer; source at the link above). It is downloaded with a pinned
+SHA-256 (scripts/sync-xray.mjs). Share-link parsing follows v2rayN by 2dust
+(GPL-3.0), https://github.com/2dust/v2rayN; the code is original.
+
 Bridge lists for the bridge search are downloaded at run time from
 Tor-Bridges-Collector-v2 by scriptzteam,
 https://github.com/scriptzteam/Tor-Bridges-Collector-v2. The bridge search is

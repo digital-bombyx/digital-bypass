@@ -24,7 +24,7 @@
   );
   const time = (ts: number) => new Date(ts).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   const actionText = (a: ProxyLogEntry["action"]) =>
-    ({ bypass: t("нарезка", "split"), pass: t("без нарезки", "pass"), block: t("блок", "blocked"), worker: "Worker", tor: "Tor" })[a];
+    ({ bypass: t("нарезка", "split"), pass: t("без нарезки", "pass"), block: t("блок", "blocked"), worker: "Worker", tor: "Tor", xray: "Xray" })[a];
 </script>
 
 <section class="card block">

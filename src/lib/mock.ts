@@ -28,6 +28,29 @@ const state: any = {
   bundle_error: null,
   language: "ru",
 };
+const xr: any = {
+  port: 10820,
+  selected: "auto",
+  routing: { ru_direct: true, ads_block: false, direct: [], proxy: [], block: [] },
+  fragment: false,
+  enabled: false,
+  subs: [{ id: "s1", name: "sub.example.com", url: "https://sub.example.com/sub/…", info: { upload: 23064, download: 69686, total: 0, expire: 0, update_hours: 12, title: "" }, updated: Math.floor(Date.now() / 1000) - 3600, error: null }],
+  servers: [
+    { id: "a1", sub: "s1", name: "🇱🇻 Латвия [vless+xhttp+tls]", protocol: "vless", address: "lat.example", port: 8443, transport: "xhttp+tls" },
+    { id: "a2", sub: "s1", name: "🇱🇻 Латвия [vless+grpc+reality]", protocol: "vless", address: "lat.example", port: 2052, transport: "grpc+reality" },
+    { id: "a3", sub: "s1", name: "🇱🇻 Латвия [vless+ws+tls]", protocol: "vless", address: "lat.example", port: 2086, transport: "ws+tls" },
+  ],
+  pings: {},
+  status: { running: false, ready: false, port: 10820, server: "", error: null, uptime: 0 },
+  available: true,
+  version: "26.11.9",
+  domains: ["chatgpt.com"],
+  scope: "list",
+  proxy_running: true,
+  proxy_system: false,
+  proxy_port: 8881,
+  testing: false,
+};
 const tor: any = {
   config: { socks_port: 9055, transport: "auto", bridges: [], found: [], via_proxy: false, enabled: false },
   status: { running: false, ready: false, percent: 0, phase: "", tier: "", tiers: ["bridges", "obfs4", "snowflake", "meek"], socks_port: 9055, error: null, elapsed: 0 },
@@ -354,6 +377,42 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
       net.rules = JSON.parse(JSON.stringify(args.rules));
       net.allowed = !args.rules.enabled || !args.rules.networks.length || (args.rules.mode === "only") === args.rules.networks.includes("HomeWiFi");
       return structuredClone(net);
+    case "xray_status":
+      return structuredClone(xr);
+    case "xray_start":
+      xr.enabled = true;
+      xr.status = { running: true, ready: true, port: xr.port, server: xr.selected === "auto" ? "авто: лучший из 3" : xr.servers.find((s: any) => s.id === xr.selected)?.name, error: null, uptime: 3 };
+      return structuredClone(xr);
+    case "xray_stop":
+      xr.enabled = false;
+      xr.status = { ...xr.status, running: false, ready: false };
+      return structuredClone(xr);
+    case "xray_set":
+      Object.assign(xr, { port: args.port, selected: args.selected, routing: args.routing, fragment: args.fragment });
+      return structuredClone(xr);
+    case "xray_add":
+      xr.servers.push({ id: "m" + xr.servers.length, sub: null, name: "Мой сервер", protocol: "vless", address: "my.example", port: 443, transport: "raw+reality" });
+      return { status: structuredClone(xr), added: 1, errors: [] };
+    case "xray_sub_update":
+      xr.subs[0].updated = Math.floor(Date.now() / 1000);
+      return structuredClone(xr);
+    case "xray_sub_remove":
+      xr.subs = xr.subs.filter((s: any) => s.id !== args.id);
+      xr.servers = xr.servers.filter((s: any) => s.sub !== args.id);
+      return structuredClone(xr);
+    case "xray_server_remove":
+      xr.servers = xr.servers.filter((s: any) => s.id !== args.id);
+      return structuredClone(xr);
+    case "xray_test":
+      await new Promise((r) => setTimeout(r, 1200));
+      xr.pings = Object.fromEntries(xr.servers.map((s: any, i: number) => [s.id, { id: s.id, ms: i === 2 ? null : 600 + i * 37, error: i === 2 ? "соединение оборвано — похоже на блокировку по DPI" : null }]));
+      return structuredClone(xr);
+    case "xray_log":
+      return ["2026/11/24 21:22:45 [Warning] core: Xray 26.11.9 started", "2026/11/24 21:22:46 from tcp:127.0.0.1:18627 accepted tcp:ya.ru:443 [in -> direct]", "2026/11/24 21:22:49 from tcp:127.0.0.1:18637 accepted tcp:ifconfig.me:443 [in -> p3]"];
+    case "xray_set_domains":
+      xr.domains = args.domains;
+      if (args.scope) xr.scope = args.scope;
+      return structuredClone(xr);
     case "tor_status":
       return structuredClone(tor);
     case "tor_start":

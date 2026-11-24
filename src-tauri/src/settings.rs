@@ -37,6 +37,8 @@ pub struct Settings {
     pub addons: crate::addons::Addons,
     /// Tor (мосты, транспорт).
     pub tor: crate::tor::Config,
+    /// Xray (серверы, подписки, маршрутизация).
+    pub xray: crate::xray::Config,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -82,6 +84,7 @@ impl Default for Settings {
             mcp: Default::default(),
             addons: Default::default(),
             tor: Default::default(),
+            xray: Default::default(),
         }
     }
 }

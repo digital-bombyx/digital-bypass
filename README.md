@@ -80,6 +80,16 @@ zapret2 (winws2 + Lua) в один клик, прокси-обходчик бе�
 
 Это обход блокировок, а не анонимность: браузер через прокси узнаваем по отпечатку и кукам. Для анонимности — Tor Browser.
 
+### Xray
+
+Клиент для своих серверов VLESS, VMess, Trojan и Shadowsocks — на официальном [Xray-core](https://github.com/XTLS/Xray-core) (26.11.9, SHA-256 сверяется при сборке).
+
+- **Ссылки и подписки**: base64, список ссылок, JSON-конфиги панелей (3x-ui, Marzban, Remnawave). REALITY, пост-квантовое шифрование VLESS, xhttp, gRPC, ws, httpupgrade, raw с HTTP-маскировкой. Трафик и срок подписки, автообновление.
+- **Российские сайты — напрямую**: geosite:category-ru, .ru/.su/.рф и geoip:ru идут мимо сервера, банки и Госуслуги видят российский IP. Свои списки «напрямую / через сервер / блок», блокировка рекламы.
+- **Задержка** — настоящий запрос через каждый сервер; режим «Авто: самый быстрый» сам переключается при падении сервера.
+- **Нарезка ClientHello к серверу** — если сам сервер режут по SNI.
+- SOCKS5/HTTP на `127.0.0.1:10820` (порт меняется); прокси-обходчик отправляет через Xray выбранные домены, списки zapret или весь трафик.
+
 ### Проверка
 
 Введите домен — приложение сравнит системный DNS с DoH, попробует TCP и TLS к каждому адресу и скажет, в чём дело: подмена DNS, DPI по имени сайта или блокировка по IP. И подскажет, какой модуль поможет.
@@ -117,7 +127,7 @@ zapret2 (winws2 + Lua) в один клик, прокси-обходчик бе�
 3. Запустите. Приложение попросит права администратора: они нужны WinDivert, службам, hosts и смене DNS.
 
 > [!NOTE]
-> Внутри лежат `winws2.exe`, драйвер WinDivert и `tor.exe`. Некоторые антивирусы помечают такие файлы как угрозу. Их можно сверить с первоисточниками: `winws2` и WinDivert — по контрольным суммам релиза [zapret2](https://github.com/bol-van/zapret2/releases), tor и lyrebird — по [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt) (сумма архива Tor Expert Bundle проверяется при сборке).
+> Внутри лежат `winws2.exe`, драйвер WinDivert, `tor.exe` и `xray.exe`. Некоторые антивирусы помечают такие файлы как угрозу. Их можно сверить с первоисточниками: `xray.exe` — по [.dgst релиза Xray](https://github.com/XTLS/Xray-core/releases/download/v26.11.9/Xray-windows-64.zip.dgst), `winws2` и WinDivert — по контрольным суммам релиза [zapret2](https://github.com/bol-van/zapret2/releases), tor и lyrebird — по [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt) (сумма архива Tor Expert Bundle проверяется при сборке).
 
 ## Сборка из исходников
 
@@ -129,7 +139,7 @@ $env:ZAPRET_SRC = "D:\zapret-discord-youtube"   # по умолчанию име
 npm run tauri build
 ```
 
-Перед сборкой `scripts/sync-zapret.mjs` берёт чистую копию сборки из git и кладёт её в ресурсы установщика, а `scripts/sync-tor.mjs` скачивает Tor Expert Bundle с dist.torproject.org и сверяет его SHA-256 (без сети: `$env:TOR_TARBALL = "путь\к\архиву.tar.gz"`). Установщик появится в `src-tauri\target\release\bundle\nsis\`.
+Перед сборкой `scripts/sync-zapret.mjs` берёт чистую копию сборки из git и кладёт её в ресурсы установщика, `scripts/sync-xray.mjs` — Xray-core с GitHub (без сети: `$env:XRAY_ZIP`), а `scripts/sync-tor.mjs` скачивает Tor Expert Bundle с dist.torproject.org и сверяет его SHA-256 (без сети: `$env:TOR_TARBALL = "путь\к\архиву.tar.gz"`). Установщик появится в `src-tauri\target\release\bundle\nsis\`.
 
 Релизы собирает GitHub Actions ([`release.yml`](.github/workflows/release.yml)) при пуше тега `vX.Y.Z`, описание берётся из [CHANGELOG.md](CHANGELOG.md).
 
@@ -142,6 +152,7 @@ npm run tauri build
 - **[basil00/WinDivert](https://github.com/basil00/WinDivert)** — драйвер перехвата пакетов.
 - **[hyperion-cs/dpi-checkers](https://github.com/hyperion-cs/dpi-checkers)** — цели для DPI-теста «16-20 КБ».
 - **[Flowseal/tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy)** (MIT) — модуль Telegram портирован с него, скрипт Worker и список CF-доменов взяты оттуда.
+- **[XTLS/Xray-core](https://github.com/XTLS/Xray-core)** (MPL-2.0) — ядро вкладки Xray, базы geoip/geosite из того же релиза. Разбор ссылок сверен с [v2rayN](https://github.com/2dust/v2rayN).
 - **[The Tor Project](https://www.torproject.org/)** — tor и lyrebird (Tor Expert Bundle, BSD-3-Clause и др., тексты лицензий — в папке `tor\docs`).
 - **[scriptzteam/Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2)** — списки мостов для поиска.
 

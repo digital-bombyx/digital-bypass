@@ -147,7 +147,7 @@ export type StubStatus = {
   stats: { queries: number; cached: number; ech_stripped?: number; errors: number; last_error: string | null; ipv6: boolean; addr: string; template: string } | null;
 };
 
-export type ProxyRules = { scope: "all" | "listed"; zapret_lists: boolean; bypass: string[]; skip: string[]; block: string[]; worker: string[]; tor?: string[]; tor_scope?: TorScope };
+export type ProxyRules = { scope: "all" | "listed"; zapret_lists: boolean; bypass: string[]; skip: string[]; block: string[]; worker: string[]; tor?: string[]; tor_scope?: TorScope; xray?: string[]; xray_scope?: TorScope };
 export type ProxyWorker = { host: string; key: string; fragment: boolean };
 export type ProxyConfig = {
   port: number;
@@ -174,7 +174,7 @@ export type ProxyConfig = {
 export type ProxyStatus = {
   config: ProxyConfig;
   enabled: boolean;
-  stats: { running: boolean; port: number; active: number; total: number; failed: number; system: boolean; lan: boolean; auth: boolean; bypassed: number; passed: number; blocked: number; via_worker?: number; via_tor?: number; dns_cached: number; bypass_domains: number; auto_retries: number; auto_sites: number; last_error: string | null };
+  stats: { running: boolean; port: number; active: number; total: number; failed: number; system: boolean; lan: boolean; auth: boolean; bypassed: number; passed: number; blocked: number; via_worker?: number; via_tor?: number; via_xray?: number; dns_cached: number; bypass_domains: number; auto_retries: number; auto_sites: number; last_error: string | null };
 };
 
 export type ProxyVariant = { split: ProxyConfig["split"]; unit: ProxyConfig["unit"]; disorder: boolean; oob: boolean };
@@ -190,7 +190,7 @@ export type ProxyLogEntry = {
   ts: number;
   host: string;
   port: number;
-  action: "bypass" | "pass" | "block" | "worker" | "tor";
+  action: "bypass" | "pass" | "block" | "worker" | "tor" | "xray";
   method: string | null;
   tries: number;
   ms: number | null;
@@ -230,6 +230,31 @@ export type TorStatus = {
 export type BridgeFound = { line: string; transport: string; ms: number };
 export type BridgeReport = { found: BridgeFound[]; checked: number; candidates: number; downloaded: [string, number][]; errors: string[]; cancelled: boolean; secs: number };
 export type BridgeProgress = { stage: "download" | "tcp" | "check"; done: number; total: number; found: number };
+
+export type XrayRouting = { ru_direct: boolean; ads_block: boolean; direct: string[]; proxy: string[]; block: string[] };
+export type XraySubInfo = { upload: number; download: number; total: number; expire: number; update_hours: number; title: string };
+export type XraySub = { id: string; name: string; url: string; info: XraySubInfo; updated: number; error: string | null };
+export type XrayServer = { id: string; sub: string | null; name: string; protocol: string; address: string; port: number; transport: string };
+export type XrayPing = { id: string; ms: number | null; error: string | null };
+export type XrayStatus = {
+  port: number;
+  selected: string;
+  routing: XrayRouting;
+  fragment: boolean;
+  enabled: boolean;
+  subs: XraySub[];
+  servers: XrayServer[];
+  pings: Record<string, XrayPing>;
+  status: { running: boolean; ready: boolean; port: number; server: string; error: string | null; uptime: number };
+  available: boolean;
+  version: string | null;
+  domains: string[];
+  scope: TorScope;
+  proxy_running: boolean;
+  proxy_system: boolean;
+  proxy_port: number;
+  testing: boolean;
+};
 
 export type TgConfig = {
   port: number;
@@ -417,6 +442,17 @@ export const api = {
   torLog: () => invoke<string[]>("tor_log"),
   torSetDomains: (domains: string[], scope?: TorScope) => invoke<TorStatus>("tor_set_domains", { domains, scope: scope ?? null }),
   torSystemProxy: (on: boolean) => invoke<TorStatus>("tor_system_proxy", { on }),
+  xrayStatus: () => invoke<XrayStatus>("xray_status"),
+  xrayStart: () => invoke<XrayStatus>("xray_start"),
+  xrayStop: () => invoke<XrayStatus>("xray_stop"),
+  xraySet: (port: number, selected: string, routing: XrayRouting, fragment: boolean) => invoke<XrayStatus>("xray_set", { port, selected, routing, fragment }),
+  xrayAdd: (text: string) => invoke<{ status: XrayStatus; added: number; errors: string[] }>("xray_add", { text }),
+  xraySubUpdate: (id: string | null) => invoke<XrayStatus>("xray_sub_update", { id }),
+  xraySubRemove: (id: string) => invoke<XrayStatus>("xray_sub_remove", { id }),
+  xrayServerRemove: (id: string) => invoke<XrayStatus>("xray_server_remove", { id }),
+  xrayTest: () => invoke<XrayStatus>("xray_test"),
+  xrayLog: () => invoke<string[]>("xray_log"),
+  xraySetDomains: (domains: string[], scope?: TorScope) => invoke<XrayStatus>("xray_set_domains", { domains, scope: scope ?? null }),
   torFindBridges: (kinds: string[], want: number) => invoke<BridgeReport>("tor_find_bridges", { kinds, want }),
   torFindCancel: () => invoke<void>("tor_find_cancel"),
   sniDefaults: () => invoke<{ target: string; snis: string[] }>("sni_defaults"),

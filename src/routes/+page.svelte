@@ -14,9 +14,10 @@
   import Diag from "$lib/components/Diag.svelte";
   import Telegram from "$lib/components/Telegram.svelte";
   import Tor from "$lib/components/Tor.svelte";
-  import { Power, ListChecks, Globe, Network, Settings2, ShieldAlert, Waypoints, Stethoscope, Send, Layers } from "@lucide/svelte";
+  import Xray from "$lib/components/Xray.svelte";
+  import { Power, ListChecks, Globe, Network, Settings2, ShieldAlert, Waypoints, Stethoscope, Send, Layers, Rocket } from "@lucide/svelte";
 
-  type Tab = "home" | "lists" | "hosts" | "dns" | "proxy" | "telegram" | "tor" | "diag" | "settings";
+  type Tab = "home" | "lists" | "hosts" | "dns" | "proxy" | "telegram" | "tor" | "xray" | "diag" | "settings";
   let tab = $state<Tab>("home");
   let dirInput = $state("");
   /** Вкладки, которым нужна папка zapret; DNS и настройки работают без неё. */
@@ -30,6 +31,7 @@
     { id: "proxy", label: () => t("Прокси", "Proxy"), icon: Waypoints },
     { id: "telegram", label: () => "Telegram", icon: Send },
     { id: "tor", label: () => "Tor", icon: Layers },
+    { id: "xray", label: () => "Xray", icon: Rocket },
     { id: "diag", label: () => t("Проверка", "Check"), icon: Stethoscope, group: () => t("инструменты", "tools") },
     { id: "settings", label: () => t("Настройки", "Settings"), icon: Settings2, group: () => "" },
   ];
@@ -41,6 +43,7 @@
     proxy: "proxy",
     telegram: "telegram",
     tor: "tor",
+    xray: "xray",
     diag: "check",
     settings: "settings",
   };
@@ -107,6 +110,7 @@
       {:else if tab === "proxy"}<Proxy />
       {:else if tab === "telegram"}<Telegram />
       {:else if tab === "tor"}<Tor />
+      {:else if tab === "xray"}<Xray />
       {:else if tab === "diag"}<Diag go={(id) => (tab = id as Tab)} />
       {:else}<Settings />{/if}
     </div></main>

@@ -1,7 +1,7 @@
 // Описание релиза: раздел версии из CHANGELOG.md + служебный подвал
 // (встроенная сборка zapret, SHA256 установщика, предупреждение про антивирусы).
 //
-//   node scripts/release-notes.mjs <версия> <выходной файл> [--sha <hash>] [--file <имя exe>] [--zapret <версия>] [--tor <версия>]
+//   node scripts/release-notes.mjs <версия> <выходной файл> [--sha <hash>] [--file <имя exe>] [--zapret <версия>] [--tor <версия>] [--xray <версия>]
 //
 // Если раздела нет или он пустой — ошибка: релиз без описания изменений не выпускаем.
 import { readFileSync, writeFileSync } from "node:fs";
@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const [version, out, ...rest] = process.argv.slice(2);
 if (!version || !out) {
-  console.error("usage: release-notes.mjs <version> <out> [--sha H] [--file F] [--zapret V] [--tor V]");
+  console.error("usage: release-notes.mjs <version> <out> [--sha H] [--file F] [--zapret V] [--tor V] [--xray V]");
   process.exit(2);
 }
 const opt = {};
@@ -46,11 +46,17 @@ if (opt.tor) {
     "",
   );
 }
+if (opt.xray) {
+  footer.push(
+    `Xray-core ${opt.xray} ([.dgst](https://github.com/XTLS/Xray-core/releases/download/v${opt.xray}/Xray-windows-64.zip.dgst), сумма архива сверяется при сборке / archive sum checked at build time).`,
+    "",
+  );
+}
 if (opt.sha) {
   footer.push(`**SHA256** \`${opt.file ?? "setup.exe"}\`:`, "```", opt.sha, "```", "");
 }
 footer.push(
-  "> Антивирусы иногда помечают `winws2.exe` / WinDivert / `tor.exe` внутри установщика. Суммы бинарников можно сверить с [релизом zapret2](https://github.com/bol-van/zapret2/releases) и списком Tor выше.",
+  "> Антивирусы иногда помечают `winws2.exe` / WinDivert / `tor.exe` / `xray.exe` внутри установщика. Суммы бинарников можно сверить с [релизом zapret2](https://github.com/bol-van/zapret2/releases) и списком Tor выше.",
 );
 
 writeFileSync(out, `${body}\n${footer.join("\n")}\n`);

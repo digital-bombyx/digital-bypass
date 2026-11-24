@@ -25,6 +25,8 @@ mod telegram;
 mod strategy;
 mod tester;
 mod tor;
+mod xray;
+mod xraylinks;
 mod util;
 mod winapi;
 mod zapret_dir;
@@ -69,6 +71,11 @@ pub struct AppState {
     tor: Mutex<Option<tor::Tor>>,
     tor_finding: AtomicBool,
     tor_find_cancel: AtomicBool,
+    xray_dir: Option<PathBuf>,
+    xray: Mutex<Option<xray::Xray>>,
+    xray_testing: AtomicBool,
+    /// Последняя проверка задержки: id сервера → результат.
+    xray_pings: Mutex<std::collections::HashMap<String, xray::Ping>>,
 }
 
 impl AppState {
@@ -163,7 +170,7 @@ impl AppState {
         self.proxy_stop_inner();
         cfg.normalize();
         // Домены списков zapret2 для правила «только списки» (если папка есть).
-        let need = cfg.rules.zapret_lists || cfg.rules.tor_scope == "zapret";
+        let need = cfg.rules.zapret_lists || cfg.rules.tor_scope == "zapret" || cfg.rules.xray_scope == "zapret";
         let lists = if need { self.dir().map(|d| lists::bypass_domains(&d)).unwrap_or_default() } else { Vec::new() };
         let p = proxy::Proxy::start(cfg.clone(), &lists)?;
         *self.proxy.lock().unwrap() = Some(p);
@@ -1098,6 +1105,334 @@ fn tor_find_cancel(state: State<AppState>) {
 }
 
 #[derive(Serialize)]
+struct XrayServerView {
+    id: String,
+    sub: Option<String>,
+    name: String,
+    protocol: String,
+    address: String,
+    port: u16,
+    transport: String,
+}
+
+#[derive(Serialize)]
+struct XrayStatus {
+    port: u16,
+    selected: String,
+    routing: xray::Routing,
+    fragment: bool,
+    enabled: bool,
+    subs: Vec<xray::Sub>,
+    servers: Vec<XrayServerView>,
+    pings: std::collections::HashMap<String, xray::Ping>,
+    status: xray::Status,
+    available: bool,
+    version: Option<String>,
+    domains: Vec<String>,
+    scope: String,
+    proxy_running: bool,
+    proxy_system: bool,
+    proxy_port: u16,
+    testing: bool,
+}
+
+fn xray_status_of(state: &AppState) -> XrayStatus {
+    let (c, domains, scope, proxy_port) = {
+        let s = state.settings.lock().unwrap();
+        (s.xray.clone(), s.proxy.rules.xray.clone(), s.proxy.rules.xray_scope.clone(), s.proxy.port)
+    };
+    let proxy_stats = state.proxy.lock().unwrap().as_ref().map(|p| p.stats());
+    let status = state.xray.lock().unwrap().as_ref().map(|x| x.status()).unwrap_or(xray::Status { port: c.port, ..Default::default() });
+    XrayStatus {
+        servers: c
+            .servers
+            .iter()
+            .map(|e| XrayServerView {
+                id: e.id.clone(),
+                sub: e.sub.clone(),
+                name: e.server.name.clone(),
+                protocol: e.server.protocol.clone(),
+                address: e.server.address.clone(),
+                port: e.server.port,
+                transport: e.server.transport.clone(),
+            })
+            .collect(),
+        port: c.port,
+        selected: c.selected,
+        routing: c.routing,
+        fragment: c.fragment,
+        enabled: c.enabled,
+        subs: c.subs,
+        pings: state.xray_pings.lock().unwrap().clone(),
+        status,
+        available: state.xray_dir.is_some(),
+        version: state.xray_dir.as_deref().and_then(xray::version),
+        domains,
+        scope,
+        proxy_running: proxy_stats.is_some(),
+        proxy_system: proxy_stats.is_some_and(|s| s.system),
+        proxy_port,
+        testing: state.xray_testing.load(Ordering::SeqCst),
+    }
+}
+
+fn xray_work(state: &AppState) -> PathBuf {
+    state.tor_work.join("xray")
+}
+
+impl AppState {
+    fn xray_start(&self, cfg: xray::Config) -> R<()> {
+        let dir = self.xray_dir.clone().ok_or_else(|| tr!("В этой сборке нет Xray (npm run sync-xray)", "This build has no Xray (npm run sync-xray)"))?;
+        let old = self.xray.lock().unwrap().take();
+        drop(old);
+        // Дать старому процессу отпустить порт.
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        let x = xray::Xray::start(&cfg, &dir, &xray_work(self))?;
+        *self.xray.lock().unwrap() = Some(x);
+        self.update(|s| {
+            s.xray = cfg;
+            s.xray.enabled = true;
+        });
+        Ok(())
+    }
+
+    fn xray_stop(&self) {
+        let old = self.xray.lock().unwrap().take();
+        drop(old);
+        self.update(|s| s.xray.enabled = false);
+    }
+
+    /// Сохранить конфиг Xray; работающий перезапустить с ним.
+    fn xray_save(&self, cfg: xray::Config) -> R<()> {
+        if self.xray.lock().unwrap().is_some() {
+            self.xray_start(cfg)
+        } else {
+            self.update(|s| {
+                let enabled = s.xray.enabled;
+                s.xray = cfg;
+                s.xray.enabled = enabled;
+            });
+            Ok(())
+        }
+    }
+
+    /// Обновить подписку (`None` — все). Ошибка подписки сохраняется в ней же.
+    fn xray_update_subs(&self, only: Option<&str>) -> Vec<String> {
+        let proxy = proxy_port_if_running(self);
+        let mut cfg = self.settings.lock().unwrap().xray.clone();
+        let mut notes = Vec::new();
+        let ids: Vec<String> = cfg.subs.iter().filter(|s| only.is_none_or(|o| o == s.id)).map(|s| s.id.clone()).collect();
+        for id in ids {
+            let url = cfg.subs.iter().find(|s| s.id == id).map(|s| s.url.clone()).unwrap_or_default();
+            match xray::fetch_sub(&url, proxy) {
+                Ok((servers, info, errs)) => {
+                    let n = servers.len();
+                    xray::apply_sub(&mut cfg, &id, servers);
+                    if let Some(s) = cfg.subs.iter_mut().find(|s| s.id == id) {
+                        if !info.title.is_empty() && (s.name.is_empty() || s.name == s.url) {
+                            s.name = info.title.clone();
+                        }
+                        s.info = info;
+                        s.updated = util::now_secs();
+                        let skipped = errs.len();
+                        s.error = (skipped > 0).then(|| tr!("пропущено строк: {skipped}", "lines skipped: {skipped}"));
+                        notes.push(format!("{}: {n}", s.name));
+                    }
+                }
+                Err(e) => {
+                    if let Some(s) = cfg.subs.iter_mut().find(|s| s.id == id) {
+                        s.error = Some(e.clone());
+                        notes.push(format!("{}: {e}", s.name));
+                    }
+                }
+            }
+        }
+        if let Err(e) = self.xray_save(cfg) {
+            notes.push(e);
+        }
+        notes
+    }
+}
+
+#[tauri::command(async)]
+fn xray_status(state: State<AppState>) -> XrayStatus {
+    xray_status_of(&state)
+}
+
+#[tauri::command(async)]
+fn xray_start(app: AppHandle, state: State<AppState>) -> R<XrayStatus> {
+    let cfg = state.settings.lock().unwrap().xray.clone();
+    let r = state.xray_start(cfg);
+    refresh_tray(&app);
+    r?;
+    Ok(xray_status_of(&state))
+}
+
+#[tauri::command(async)]
+fn xray_stop(app: AppHandle, state: State<AppState>) -> XrayStatus {
+    state.xray_stop();
+    refresh_tray(&app);
+    xray_status_of(&state)
+}
+
+/// Порт, выбранный сервер, маршрутизация, нарезка; работающий xray перезапускается.
+#[tauri::command(async)]
+fn xray_set(state: State<AppState>, port: u16, selected: String, routing: xray::Routing, fragment: bool) -> R<XrayStatus> {
+    if port < 1024 {
+        return Err(tr!("порт должен быть от 1024 до 65535", "port must be 1024–65535"));
+    }
+    let mut cfg = state.settings.lock().unwrap().xray.clone();
+    cfg.port = port;
+    cfg.selected = if selected == xray::AUTO || cfg.servers.iter().any(|e| e.id == selected) { selected } else { xray::AUTO.into() };
+    let clean = |v: Vec<String>| v.into_iter().map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect::<Vec<_>>();
+    cfg.routing = xray::Routing { direct: clean(routing.direct), proxy: clean(routing.proxy), block: clean(routing.block), ..routing };
+    cfg.fragment = fragment;
+    state.xray_save(cfg)?;
+    Ok(xray_status_of(&state))
+}
+
+#[derive(Serialize)]
+struct XrayAdded {
+    status: XrayStatus,
+    added: usize,
+    errors: Vec<String>,
+}
+
+/// Добавить: ссылку подписки (http/https без `@`), ссылки серверов, base64 или JSON.
+#[tauri::command(async)]
+fn xray_add(state: State<AppState>, text: String) -> R<XrayAdded> {
+    let t = text.trim();
+    if t.is_empty() {
+        return Err(tr!("вставьте ссылку или подписку", "paste a link or a subscription"));
+    }
+    let is_sub = (t.starts_with("https://") || t.starts_with("http://")) && !t.contains('\n') && !t.split("://").nth(1).unwrap_or("").split('/').next().unwrap_or("").contains('@');
+    if is_sub {
+        let mut cfg = state.settings.lock().unwrap().xray.clone();
+        if cfg.subs.iter().any(|s| s.url == t) {
+            return Err(tr!("эта подписка уже добавлена", "this subscription is already added"));
+        }
+        let id = xray::short_id(t);
+        let host = t.split("://").nth(1).and_then(|r| r.split(['/', '?', ':']).next()).unwrap_or(t).to_string();
+        cfg.subs.push(xray::Sub { id: id.clone(), name: host, url: t.to_string(), info: Default::default(), updated: 0, error: None });
+        state.update(|s| s.xray.subs = cfg.subs.clone());
+        let before = state.settings.lock().unwrap().xray.servers.len();
+        state.xray_update_subs(Some(&id));
+        let (after, err) = {
+            let s = state.settings.lock().unwrap();
+            (s.xray.servers.len(), s.xray.subs.iter().find(|x| x.id == id).and_then(|x| x.error.clone()))
+        };
+        if after == before {
+            if let Some(e) = err {
+                return Err(e);
+            }
+        }
+        return Ok(XrayAdded { status: xray_status_of(&state), added: after.saturating_sub(before), errors: err.into_iter().collect() });
+    }
+    let (servers, errors) = xraylinks::parse_subscription(t);
+    if servers.is_empty() {
+        return Err(errors.first().cloned().unwrap_or_else(|| tr!("ссылок не найдено", "no links found")));
+    }
+    let mut cfg = state.settings.lock().unwrap().xray.clone();
+    let mut added = 0;
+    for s in servers {
+        let e = xray::entry(s, None);
+        if !cfg.servers.iter().any(|x| x.id == e.id) {
+            cfg.servers.push(e);
+            added += 1;
+        }
+    }
+    state.xray_save(cfg)?;
+    Ok(XrayAdded { status: xray_status_of(&state), added, errors })
+}
+
+#[tauri::command(async)]
+fn xray_sub_update(state: State<AppState>, id: Option<String>) -> R<XrayStatus> {
+    let notes = state.xray_update_subs(id.as_deref());
+    if id.is_some() {
+        let err = state.settings.lock().unwrap().xray.subs.iter().find(|s| Some(&s.id) == id.as_ref()).and_then(|s| s.error.clone());
+        if let Some(e) = err.filter(|e| !e.starts_with(&tr!("пропущено", "lines skipped"))) {
+            return Err(e);
+        }
+    }
+    let _ = notes;
+    Ok(xray_status_of(&state))
+}
+
+#[tauri::command(async)]
+fn xray_sub_remove(state: State<AppState>, id: String) -> R<XrayStatus> {
+    let mut cfg = state.settings.lock().unwrap().xray.clone();
+    cfg.subs.retain(|s| s.id != id);
+    cfg.servers.retain(|e| e.sub.as_deref() != Some(id.as_str()));
+    if cfg.selected != xray::AUTO && !cfg.servers.iter().any(|e| e.id == cfg.selected) {
+        cfg.selected = xray::AUTO.into();
+    }
+    if cfg.servers.is_empty() && state.xray.lock().unwrap().is_some() {
+        state.xray_stop();
+        state.update(|s| s.xray = cfg);
+    } else {
+        state.xray_save(cfg)?;
+    }
+    Ok(xray_status_of(&state))
+}
+
+#[tauri::command(async)]
+fn xray_server_remove(state: State<AppState>, id: String) -> R<XrayStatus> {
+    let mut cfg = state.settings.lock().unwrap().xray.clone();
+    cfg.servers.retain(|e| e.id != id || e.sub.is_some());
+    if cfg.selected == id {
+        cfg.selected = xray::AUTO.into();
+    }
+    state.xray_save(cfg)?;
+    Ok(xray_status_of(&state))
+}
+
+/// Настоящая задержка через каждый сервер (generate_204), отдельным xray.
+#[tauri::command(async)]
+fn xray_test(state: State<AppState>) -> R<XrayStatus> {
+    let dir = state.xray_dir.clone().ok_or_else(|| tr!("В этой сборке нет Xray", "This build has no Xray"))?;
+    if state.xray_testing.swap(true, Ordering::SeqCst) {
+        return Err(tr!("проверка уже идёт", "a test is already running"));
+    }
+    let cfg = state.settings.lock().unwrap().xray.clone();
+    let entries: Vec<&xray::Entry> = cfg.servers.iter().collect();
+    let r = xray::test(&dir, &xray_work(&state).join("test"), &entries, 10);
+    state.xray_testing.store(false, Ordering::SeqCst);
+    let pings = r?;
+    let mut m = state.xray_pings.lock().unwrap();
+    m.clear();
+    for p in pings {
+        m.insert(p.id.clone(), p);
+    }
+    drop(m);
+    Ok(xray_status_of(&state))
+}
+
+#[tauri::command(async)]
+fn xray_log(state: State<AppState>) -> Vec<String> {
+    state.xray.lock().unwrap().as_ref().map(|x| x.log()).unwrap_or_default()
+}
+
+/// Что прокси-обходчик отправляет через Xray: домены и режим (list | zapret | all).
+#[tauri::command(async)]
+fn xray_set_domains(app: AppHandle, state: State<AppState>, domains: Vec<String>, scope: Option<String>) -> R<XrayStatus> {
+    let mut cfg = state.settings.lock().unwrap().proxy.clone();
+    cfg.rules.xray = domains;
+    if let Some(sc) = scope {
+        cfg.rules.xray_scope = sc;
+    }
+    cfg.normalize();
+    if state.proxy.lock().unwrap().is_some() {
+        let r = state.proxy_start(cfg);
+        refresh_tray(&app);
+        r?;
+    } else {
+        state.update(|s| s.proxy = cfg);
+    }
+    let _ = app.emit("proxy-changed", ());
+    Ok(xray_status_of(&state))
+}
+
+#[derive(Serialize)]
 struct NetStatus {
     rules: netrules::NetRules,
     current: Vec<String>,
@@ -1389,10 +1724,12 @@ fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let tg = CheckMenuItem::with_id(app, "tg", tr!("Telegram-прокси", "Telegram proxy"), true, tg_on, None::<&str>)?;
     let tor_on = state.tor.lock().unwrap().is_some();
     let torm = CheckMenuItem::with_id(app, "tor", "Tor", state.tor_dir.is_some(), tor_on, None::<&str>)?;
+    let xray_on = state.xray.lock().unwrap().is_some();
+    let xraym = CheckMenuItem::with_id(app, "xray", "Xray", state.xray_dir.is_some(), xray_on, None::<&str>)?;
     let open = MenuItem::with_id(app, "open", tr!("Открыть", "Open"), true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", tr!("Выход", "Quit"), true, None::<&str>)?;
     let sep = || PredefinedMenuItem::separator(app);
-    Menu::with_items(app, &[&toggle, &sub, &sep()?, &proxy, &tg, &torm, &stub, &sep()?, &open, &quit])
+    Menu::with_items(app, &[&toggle, &sub, &sep()?, &proxy, &tg, &torm, &xraym, &stub, &sep()?, &open, &quit])
 }
 
 fn refresh_tray(app: &AppHandle) {
@@ -1559,6 +1896,23 @@ fn on_tray_menu(app: &AppHandle, id: &str) {
                 refresh_tray(&app);
             });
         }
+        "xray" => {
+            let app = app.clone();
+            std::thread::spawn(move || {
+                let st = app.state::<AppState>();
+                if st.xray.lock().unwrap().is_some() {
+                    st.xray_stop();
+                } else {
+                    let cfg = st.settings.lock().unwrap().xray.clone();
+                    if let Err(e) = st.xray_start(cfg) {
+                        let _ = app.emit("error", e);
+                        show_main(&app);
+                    }
+                }
+                let _ = app.emit("xray-changed", ());
+                refresh_tray(&app);
+            });
+        }
         "tor" => {
             let app = app.clone();
             std::thread::spawn(move || {
@@ -1679,6 +2033,10 @@ pub fn run() {
                 tor: Mutex::new(None),
                 tor_finding: AtomicBool::new(false),
                 tor_find_cancel: AtomicBool::new(false),
+                xray_dir: xray::find_dir(app.path().resource_dir().ok().as_deref()),
+                xray: Mutex::new(None),
+                xray_testing: AtomicBool::new(false),
+                xray_pings: Mutex::new(std::collections::HashMap::new()),
             });
 
             let handle = app.handle().clone();
@@ -1724,6 +2082,12 @@ pub fn run() {
                         let _ = app.handle().emit("error", tr!("Telegram-прокси не запустился: {e}", "Telegram proxy failed to start: {e}"));
                     }
                 }
+                let xc = st.settings.lock().unwrap().xray.clone();
+                if xc.enabled {
+                    if let Err(e) = st.xray_start(xc) {
+                        let _ = app.handle().emit("error", tr!("Xray не запустился: {e}", "Xray failed to start: {e}"));
+                    }
+                }
                 let torc = st.settings.lock().unwrap().tor.clone();
                 if torc.enabled {
                     if let Err(e) = st.tor_start(torc) {
@@ -1767,6 +2131,20 @@ pub fn run() {
             });
 
             mcp_apply(app.handle());
+
+            // Автообновление подписок Xray (по Profile-Update-Interval, иначе раз в 12 ч).
+            let handle = app.handle().clone();
+            std::thread::spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_secs(60));
+                let st = handle.state::<AppState>();
+                let now = util::now_secs();
+                let due: Vec<String> = st.settings.lock().unwrap().xray.subs.iter().filter(|s| xray::sub_due(s, now)).map(|s| s.id.clone()).collect();
+                for id in due {
+                    st.xray_update_subs(Some(&id));
+                    let _ = handle.emit("xray-changed", ());
+                }
+                std::thread::sleep(std::time::Duration::from_secs(29 * 60));
+            });
 
             // Включение по сети: следить за сменой подключений.
             let handle = app.handle().clone();
@@ -1894,6 +2272,17 @@ pub fn run() {
             tor_find_bridges,
             tor_find_cancel,
             tor_system_proxy,
+            xray_status,
+            xray_start,
+            xray_stop,
+            xray_set,
+            xray_add,
+            xray_sub_update,
+            xray_sub_remove,
+            xray_server_remove,
+            xray_test,
+            xray_log,
+            xray_set_domains,
             sni_defaults,
             sni_scan,
             list_presets,
@@ -1922,6 +2311,8 @@ pub fn run() {
                 st.runner.stop_own();
                 let t = st.tor.lock().unwrap().take();
                 drop(t);
+                let x = st.xray.lock().unwrap().take();
+                drop(x);
                 // Системный прокси и DNS адаптера возвращаем: без приложения они не работают.
                 st.proxy_stop_inner();
                 if st.settings.lock().unwrap().dns_stub.is_some() && winapi::is_admin() {

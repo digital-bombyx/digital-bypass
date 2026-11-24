@@ -101,6 +101,8 @@ jobs:
           "zapret=$($bundle.version)" >> $env:GITHUB_OUTPUT
           $tor = Get-Content src-tauri/tor/bundle.json -Raw | ConvertFrom-Json
           "tor=$($tor.version)" >> $env:GITHUB_OUTPUT
+          $xray = Get-Content src-tauri/xray/bundle.json -Raw | ConvertFrom-Json
+          "xray=$($xray.version)" >> $env:GITHUB_OUTPUT
 
       - uses: actions/upload-artifact@v4
         with:
@@ -117,6 +119,7 @@ jobs:
           --file "${{ steps.sum.outputs.name }}"
           --zapret "${{ steps.sum.outputs.zapret }}"
           --tor "${{ steps.sum.outputs.tor }}"
+          --xray "${{ steps.sum.outputs.xray }}"
 
       - name: GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')

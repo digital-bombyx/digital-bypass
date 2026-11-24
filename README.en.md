@@ -77,6 +77,16 @@ For what zapret and splitting cannot fix: IP-blocked sites, geo-restrictions, .o
 
 This bypasses blocks; it is not anonymity: a browser behind the proxy is identifiable by its fingerprint and cookies. For anonymity use Tor Browser.
 
+### Xray
+
+A client for your own VLESS, VMess, Trojan and Shadowsocks servers on the official [Xray-core](https://github.com/XTLS/Xray-core) (26.11.9, SHA-256 checked at build time).
+
+- **Links and subscriptions**: base64, plain link lists, panel JSON configs (3x-ui, Marzban, Remnawave). REALITY, VLESS post-quantum encryption, xhttp, gRPC, ws, httpupgrade, raw with HTTP obfuscation. Subscription traffic and expiry, auto-update.
+- **Russian sites go direct**: geosite:category-ru, .ru/.su/.рф and geoip:ru bypass the server. Your own direct / proxy / block lists, ad blocking.
+- **Latency** is a real request through each server; "Auto: the fastest" switches by itself when a server fails.
+- **ClientHello splitting to the server** — when the server itself is cut by SNI.
+- SOCKS5/HTTP on `127.0.0.1:10820` (configurable); the bypass proxy sends chosen domains, the zapret lists or all traffic through Xray.
+
 ### Check
 
 Enter a domain: the app compares the system DNS with DoH, tries TCP and TLS to each address and tells what is wrong — DNS spoofing, DPI by site name or IP blocking — and which module helps.
@@ -137,7 +147,7 @@ If something works or fails for you in another country, an issue with the **Chec
 3. Run it. The app asks for administrator rights: WinDivert, services, hosts and DNS changes need them.
 
 > [!NOTE]
-> The app ships `winws2.exe`, the WinDivert driver and `tor.exe`. Some antivirus products flag files like these. You can check them against their origins: `winws2` and WinDivert against the [zapret2 release](https://github.com/bol-van/zapret2/releases) checksums, tor and lyrebird against [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt) (the Tor Expert Bundle archive sum is checked at build time).
+> The app ships `winws2.exe`, the WinDivert driver, `tor.exe` and `xray.exe`. Some antivirus products flag files like these. You can check them against their origins: `xray.exe` against the [Xray release .dgst](https://github.com/XTLS/Xray-core/releases/download/v26.11.9/Xray-windows-64.zip.dgst), `winws2` and WinDivert against the [zapret2 release](https://github.com/bol-van/zapret2/releases) checksums, tor and lyrebird against [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt) (the Tor Expert Bundle archive sum is checked at build time).
 
 ## Build from source
 
@@ -149,7 +159,7 @@ $env:ZAPRET_SRC = "D:\zapret-discord-youtube"   # this is the default
 npm run tauri build
 ```
 
-`scripts/sync-tor.mjs` downloads the Tor Expert Bundle from dist.torproject.org and checks its SHA-256 (offline: `$env:TOR_TARBALL = "path\to\archive.tar.gz"`).
+`scripts/sync-xray.mjs` downloads Xray-core from GitHub (offline: `$env:XRAY_ZIP`), `scripts/sync-tor.mjs` downloads the Tor Expert Bundle from dist.torproject.org and checks its SHA-256 (offline: `$env:TOR_TARBALL = "path\to\archive.tar.gz"`).
 
 ## Credits
 
@@ -159,6 +169,7 @@ npm run tauri build
 - Authors of [PR #18202](https://github.com/Flowseal/zapret-discord-youtube/pull/18202) — the zapret2 port.
 - **[basil00/WinDivert](https://github.com/basil00/WinDivert)**, **[hyperion-cs/dpi-checkers](https://github.com/hyperion-cs/dpi-checkers)**.
 - **[Flowseal/tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy)** (MIT) — the Telegram module is a port of it; the Worker script and the CF domain list come from it.
+- **[XTLS/Xray-core](https://github.com/XTLS/Xray-core)** (MPL-2.0) — the Xray tab core and the geoip/geosite files from the same release. Link parsing follows [v2rayN](https://github.com/2dust/v2rayN).
 - **[The Tor Project](https://www.torproject.org/)** — tor and lyrebird (Tor Expert Bundle, BSD-3-Clause and others; license texts in `tor\docs`).
 - **[scriptzteam/Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2)** — bridge lists for the search.
 

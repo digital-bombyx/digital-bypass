@@ -9,6 +9,7 @@
     "build": "vite build",
     "sync-zapret": "node scripts/sync-zapret.mjs",
     "sync-tor": "node scripts/sync-tor.mjs",
+    "sync-xray": "node scripts/sync-xray.mjs",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "tauri": "tauri"
   },

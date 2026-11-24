@@ -195,7 +195,7 @@ pub fn handle(app: &AppHandle, req: &Value) -> Option<Value> {
 
 const INSTRUCTIONS: &str = "digital-bypass is a Windows censorship-circumvention tool (zapret2/winws2 DPI bypass, a local bypass proxy, DNS/DoH, Telegram proxy). \
 Typical flow for 'site X does not open': call diagnose_site(X) first; it tells whether the block is DNS spoofing, DPI on the site name (and at which stage), or an IP block. \
-For DPI blocks call find_zapret_strategy(X) (it needs admin rights and takes up to a few minutes) or suggest the proxy. IP blocks cannot be fixed by zapret or the proxy splitting: suggest Tor (tor_control start, then add_domains_to_list list=proxy_tor; if Tor cannot connect, find_tor_bridges first), the user's Cloudflare Worker route, or a VPN. \
+For DPI blocks call find_zapret_strategy(X) (it needs admin rights and takes up to a few minutes) or suggest the proxy. IP blocks cannot be fixed by zapret or the proxy splitting: suggest Xray if the user has a server or subscription (xray_control start, then add_domains_to_list list=proxy_xray), Tor (tor_control start, then add_domains_to_list list=proxy_tor; if Tor cannot connect, find_tor_bridges first), the user's Cloudflare Worker route, or a VPN. \
 Tools that change settings fail unless the user enabled 'allow changes' in the app's MCP settings; then explain how to enable it instead of retrying.";
 
 fn tool(name: &str, desc: &str, props: Value, required: &[&str]) -> Value {
@@ -222,9 +222,9 @@ fn tools() -> Vec<Value> {
         }), &["action"]),
         tool("proxy_control", "Start or stop the bypass proxy (no admin rights needed). Needs 'allow changes'.", json!({"action":{"type":"string","enum":["start","stop"]}}), &["action"]),
         tool("proxy_set_options", "Change bypass proxy settings (restarts it if running). Keys: split (sni|first-byte|chunk|random|custom|none), unit (records|tcp|mixed), disorder, oob, auto, doh, system, ipv6, log, rcvbuf (bytes, 0 = off), port. Needs 'allow changes'.", json!({"options":{"type":"object"}}), &["options"]),
-        tool("add_domains_to_list", "Add domains to a list: zapret (zapret2 hostlist), zapret_exclude (never touch), proxy_bypass (proxy splits only these when scope=listed), proxy_skip (proxy passes as is), proxy_block, proxy_tor (through Tor while it is connected; .onion always goes there), proxy_worker (through the user's Cloudflare Worker — for IP-blocked or geo-restricted sites; works only if the Worker is set up in the proxy tab). Needs 'allow changes'.", json!({
+        tool("add_domains_to_list", "Add domains to a list: zapret (zapret2 hostlist), zapret_exclude (never touch), proxy_bypass (proxy splits only these when scope=listed), proxy_skip (proxy passes as is), proxy_block, proxy_tor (through Tor while it is connected; .onion always goes there), proxy_xray (through the user's Xray server while Xray runs), proxy_worker (through the user's Cloudflare Worker — for IP-blocked or geo-restricted sites; works only if the Worker is set up in the proxy tab). Needs 'allow changes'.", json!({
             "domains": {"type":"array","items":{"type":"string"}},
-            "list": {"type":"string","enum":["zapret","zapret_exclude","proxy_bypass","proxy_skip","proxy_block","proxy_worker","proxy_tor"]}
+            "list": {"type":"string","enum":["zapret","zapret_exclude","proxy_bypass","proxy_skip","proxy_block","proxy_worker","proxy_tor","proxy_xray"]}
         }), &["domains","list"]),
         tool("get_proxy_log", "Recent bypass proxy connections: host, what was done, method, attempts, result. The connection log must be enabled in proxy settings.", json!({
             "limit": {"type":"integer","description":"Default 50"},
@@ -235,6 +235,11 @@ fn tools() -> Vec<Value> {
             "action": {"type":"string","enum":["start","stop","status","new_identity","set_scope"]},
             "scope": {"type":"string","enum":["list","zapret","all"],"description":"For set_scope: what the bypass proxy sends through Tor besides .onion — only the Tor domain list, plus zapret2 list domains, or all traffic (except the proxy's skip and Worker lists)"},
             "transport": {"type":"string","enum":["auto","obfs4","webtunnel","snowflake","meek","custom","direct"],"description":"Optional for start: save and use this transport"}
+        }), &["action"]),
+        tool("xray_control", "Xray (VLESS/VMess/Trojan/Shadowsocks client with the user's own servers): status, start, stop, test (real latency through every server), select (a server id or 'auto' — the balancer picks the fastest), update_subscriptions, set_scope. Russian sites and addresses go direct (geosite:category-ru, geoip:ru) unless the user turned it off. Gives SOCKS5/HTTP on 127.0.0.1:port and serves the bypass proxy's 'through Xray' domains. All actions except status need 'allow changes'. Never print subscription URLs or server UUIDs back to the user.", json!({
+            "action": {"type":"string","enum":["status","start","stop","test","select","update_subscriptions","set_scope"]},
+            "server": {"type":"string","description":"For select: a server id from status, or 'auto'"},
+            "scope": {"type":"string","enum":["list","zapret","all"],"description":"For set_scope: what the bypass proxy sends through Xray — its domain list only, plus zapret2 list domains, or all traffic"}
         }), &["action"]),
         tool("find_tor_bridges", "Find working Tor bridges: downloads fresh obfs4/webtunnel lists, TCP-checks them and verifies each through lyrebird up to the Tor relay's TLS reply. Found bridges are saved and used first. ~30-90 s. Needs 'allow changes'.", json!({
             "want": {"type":"integer","description":"How many bridges to find (default 8)"},
@@ -330,7 +335,9 @@ pub fn call(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
             let stub = crate::stub_status_of(&st);
             let mcp = st.settings.lock().unwrap().mcp.clone();
             let tor = crate::tor_status_of(&st);
+            let xr = crate::xray_status_of(&st);
             Ok(json!({
+                "xray": {"running": xr.status.running, "socks_http": format!("127.0.0.1:{}", xr.port), "server": xr.status.server, "servers": xr.servers.len(), "subscriptions": xr.subs.len(), "ru_direct": xr.routing.ru_direct, "domains_through_xray": xr.domains, "xray_scope": xr.scope, "error": xr.status.error},
                 "tor": {"running": tor.status.running, "connected": tor.status.ready, "bootstrap_percent": tor.status.percent, "socks": format!("127.0.0.1:{}", tor.config.socks_port), "transport": tor.config.transport, "domains_through_tor": tor.domains, "tor_scope": tor.tor_scope},
                 "admin": ov.admin,
                 "zapret2": {"status": to_value(&ov.status), "selected_strategy": ov.selected, "mode": ov.mode, "build_found": ov.dir.is_some(), "testing": ov.testing},
@@ -475,6 +482,47 @@ pub fn call(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
             let log: Vec<String> = crate::tor_log(app.state()).into_iter().rev().take(25).collect();
             Ok(json!({"status": to_value(&t.status), "transport": t.config.transport, "tor_scope": t.tor_scope, "found_bridges": t.config.found.len(), "own_bridges": t.config.bridges.len(), "domains_through_tor": t.domains, "log_tail": log}))
         }
+        "xray_control" => {
+            let action = arg_str(a, "action").unwrap_or("");
+            if action != "status" {
+                need_changes(&st)?;
+            }
+            match action {
+                "start" => {
+                    crate::xray_start(app.clone(), app.state())?;
+                }
+                "stop" => {
+                    crate::xray_stop(app.clone(), app.state());
+                }
+                "test" => {
+                    crate::xray_test(app.state())?;
+                }
+                "update_subscriptions" => {
+                    crate::xray_sub_update(app.state(), None)?;
+                }
+                "select" => {
+                    let id = arg_str(a, "server").ok_or("server is required")?.to_string();
+                    let c = st.settings.lock().unwrap().xray.clone();
+                    crate::xray_set(app.state(), c.port, id, c.routing, c.fragment)?;
+                }
+                "set_scope" => {
+                    let sc = arg_str(a, "scope").filter(|s| crate::proxy::TOR_SCOPES.contains(s)).ok_or("scope must be list, zapret or all")?;
+                    let d = st.settings.lock().unwrap().proxy.rules.xray.clone();
+                    crate::xray_set_domains(app.clone(), app.state(), d, Some(sc.into()))?;
+                }
+                "status" => {}
+                _ => return Err("action must be status, start, stop, test, select, update_subscriptions or set_scope".into()),
+            }
+            let _ = app.emit("xray-changed", ());
+            let x = crate::xray_status_of(&st);
+            let servers: Vec<Value> = x
+                .servers
+                .iter()
+                .map(|e| json!({"id": e.id, "name": e.name, "transport": e.transport, "ms": x.pings.get(&e.id).and_then(|p| p.ms), "error": x.pings.get(&e.id).and_then(|p| p.error.clone())}))
+                .collect();
+            let subs: Vec<Value> = x.subs.iter().map(|s| json!({"name": s.name, "updated": s.updated, "error": s.error, "expire": s.info.expire, "used_bytes": s.info.upload + s.info.download, "total_bytes": s.info.total})).collect();
+            Ok(json!({"status": to_value(&x.status), "selected": x.selected, "servers": servers, "subscriptions": subs, "routing": to_value(&x.routing), "domains_through_xray": x.domains, "xray_scope": x.scope}))
+        }
         "find_tor_bridges" => {
             need_changes(&st)?;
             let want = a.get("want").and_then(|v| v.as_u64()).unwrap_or(8) as usize;
@@ -510,6 +558,13 @@ fn add_to(app: &AppHandle, list: &str, domains: &[String]) -> R<Vec<String>> {
             }
             Ok(added)
         }
+        "proxy_xray" => {
+            let mut have = st.settings.lock().unwrap().proxy.rules.xray.clone();
+            let added: Vec<String> = domains.iter().filter(|d| !have.contains(d)).cloned().collect();
+            have.extend(added.iter().cloned());
+            crate::xray_set_domains(app.clone(), app.state(), have, None)?;
+            Ok(added)
+        }
         "proxy_tor" => {
             let mut have = st.settings.lock().unwrap().proxy.rules.tor.clone();
             let added: Vec<String> = domains.iter().filter(|d| !have.contains(d)).cloned().collect();
@@ -530,7 +585,7 @@ fn add_to(app: &AppHandle, list: &str, domains: &[String]) -> R<Vec<String>> {
             crate::proxy_set_config(app.clone(), app.state(), cfg)?;
             Ok(added)
         }
-        _ => Err("list must be zapret, zapret_exclude, proxy_bypass, proxy_skip, proxy_block, proxy_worker or proxy_tor".into()),
+        _ => Err("list must be zapret, zapret_exclude, proxy_bypass, proxy_skip, proxy_block, proxy_worker, proxy_tor or proxy_xray".into()),
     }
 }
 

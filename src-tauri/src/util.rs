@@ -69,12 +69,21 @@ pub fn fetch_reason(curl_code: i32, http: u16, timeout: u32) -> String {
 /// Скачать внешний источник (curl.exe). Не вышло напрямую и задан `proxy` —
 /// повтор через прокси-обходчик. Ошибка называет источник, адрес и причину.
 pub fn fetch(name: &str, url: &str, timeout: u32, proxy: Option<u16>) -> Result<String, String> {
+    fetch_full(name, url, timeout, proxy, None).map(|(b, _)| b)
+}
+
+/// Как `fetch`, но ещё и заголовки ответа (последнего после редиректов) и свой User-Agent.
+pub fn fetch_full(name: &str, url: &str, timeout: u32, proxy: Option<u16>, ua: Option<&str>) -> Result<(String, String), String> {
     let host = url.split("://").nth(1).and_then(|r| r.split(['/', '?']).next()).unwrap_or(url).to_string();
     let mut reasons = Vec::new();
     let routes: Vec<Option<u16>> = std::iter::once(None).chain(proxy.map(Some)).collect();
+    let hdr = std::env::temp_dir().join(format!("digital-bypass-hdr-{}-{}.txt", std::process::id(), now_secs() ^ url.len() as u64));
     for via in routes {
         let mut cmd = hidden(system32("curl.exe"));
-        cmd.args(["-sSL", "-m", &timeout.to_string(), "-w", "\n%{http_code}"]);
+        cmd.args(["-sSL", "-m", &timeout.to_string(), "-w", "\n%{http_code}", "-D"]).arg(&hdr);
+        if let Some(u) = ua {
+            cmd.args(["-A", u]);
+        }
         if let Some(p) = via {
             cmd.args(["-x", &format!("http://127.0.0.1:{p}")]);
         }
@@ -82,8 +91,12 @@ pub fn fetch(name: &str, url: &str, timeout: u32, proxy: Option<u16>) -> Result<
         let text = String::from_utf8_lossy(&out.stdout).into_owned();
         let (body, code) = text.rsplit_once('\n').unwrap_or(("", text.as_str()));
         let http: u16 = code.trim().parse().unwrap_or(0);
+        let headers = std::fs::read_to_string(&hdr).unwrap_or_default();
+        let _ = std::fs::remove_file(&hdr);
         if out.status.success() && (200..300).contains(&http) {
-            return Ok(body.to_string());
+            // После редиректов в файле несколько блоков — нужен последний.
+            let last = headers.rsplit("\r\n\r\n").find(|b| b.trim_start().starts_with("HTTP/")).unwrap_or(&headers).to_string();
+            return Ok((body.to_string(), last));
         }
         let reason = fetch_reason(out.status.code().unwrap_or(-1), http, timeout);
         reasons.push(if via.is_some() { crate::tr!("через прокси-обходчик: {reason}", "through the bypass proxy: {reason}") } else { reason });

@@ -9,6 +9,7 @@ src-tauri/target/
 src-tauri/gen/schemas
 src-tauri/zapret/
 src-tauri/tor/
+src-tauri/xray/
 
 # Локальные файлы разработки
 .claude/
