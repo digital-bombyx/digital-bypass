@@ -77,7 +77,7 @@
     if (r) st = r;
   }
   function variantName(v: ProxyConfig["auto_chain"][number]) {
-    const split = ({ sni: "SNI", "first-byte": t("первый байт", "first byte"), chunk: t("куски", "chunks"), random: t("случайно", "random"), custom: t("свои позиции", "custom positions"), none: t("без нарезки", "no split") } as Record<string, string>)[v.split];
+    const split = ({ sni: "SNI", "first-byte": "First byte", chunk: "Chunks", random: "Random", custom: "Custom", none: "None" } as Record<string, string>)[v.split];
     return `${split} · ${v.unit === "tcp" ? "TCP" : v.unit === "mixed" ? "TLS±ver" : "TLS"}${v.disorder ? " · disorder" : ""}${v.oob ? " · OOB" : ""}`;
   }
 
@@ -91,7 +91,7 @@
     ({
       sni: t("разрез внутри имени сайта", "cut inside the site name"),
       "first-byte": t("отделить первый байт", "split off the first byte"),
-      chunk: t("куски фиксированного размера", "fixed-size chunks"),
+      chunk: t("чанки фиксированного размера", "fixed-size chunks"),
       random: t("одна случайная точка", "one random point"),
       custom: t("свои позиции разреза — для знающих", "custom cut positions — for experts"),
       none: t("без нарезки", "no splitting"),
@@ -166,11 +166,11 @@
         }}
         options={[
           { value: "sni", label: "SNI" },
-          { value: "first-byte", label: t("Первый байт", "First byte") },
-          { value: "chunk", label: t("Куски", "Chunks") },
-          { value: "random", label: t("Случайно", "Random") },
-          { value: "custom", label: t("Свои", "Custom") },
-          { value: "none", label: t("Нет", "None") },
+          { value: "first-byte", label: "First byte" },
+          { value: "chunk", label: "Chunks" },
+          { value: "random", label: "Random" },
+          { value: "custom", label: "Custom" },
+          { value: "none", label: "None" },
         ]} />
     </div>
     {#if cfg.split === "custom"}
@@ -201,7 +201,7 @@
         </div>
         <div class="inline">
           {#if cfg.split === "chunk"}
-            <input class="input chunk" type="number" min="1" max="1024" title={t("Размер куска, байт", "Chunk size, bytes")} bind:value={cfg.chunk} onchange={() => change({ chunk: Number(cfg.chunk) })} disabled={app.busy} />
+            <input class="input chunk" type="number" min="1" max="1024" title={t("Размер чанка, байт", "Chunk size, bytes")} bind:value={cfg.chunk} onchange={() => change({ chunk: Number(cfg.chunk) })} disabled={app.busy} />
           {/if}
           <Segmented
             small
@@ -270,7 +270,7 @@
     <div class="opt">
       <div>
         <div class="label">{t("маленький буфер приёма", "small receive buffer")} <span class="chip">{t("эксперимент", "experimental")}</span></div>
-        <div class="hint faint mono">{t("сервер шлёт ответ мелкими кусками — против DPI, который режет по сертификату (см. «Проверку»); первый ответ медленнее", "the server sends its reply in small pieces — against DPI that cuts on the certificate (see Check); the first reply is slower")}</div>
+        <div class="hint faint mono">{t("сервер шлёт ответ мелкими кусками — против DPI, который режет по сертификату (см. Check); первый ответ медленнее", "the server sends its reply in small pieces — against DPI that cuts on the certificate (see Check); the first reply is slower")}</div>
       </div>
       <Switch checked={cfg.rcvbuf > 0} disabled={app.busy} onchange={(v) => change({ rcvbuf: v ? 2048 : 0 })} />
     </div>

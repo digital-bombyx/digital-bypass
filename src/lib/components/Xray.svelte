@@ -294,7 +294,7 @@
       <div class="opt sep">
         <div>
           <div class="label sub2"><MonitorCog size={11} /> {t("системный прокси windows", "windows system proxy")}</div>
-          <div class="hint faint mono">{t("Системным прокси становится прокси-обходчик, а Xray работает через него по режиму выше. Тот же переключатель, что на вкладках «Прокси» и Tor.", "The bypass proxy becomes the system proxy, and Xray works through it in the mode above. The same switch as on the Proxy and Tor tabs.")}</div>
+          <div class="hint faint mono">{t("Системным прокси становится прокси-обходчик, а Xray работает через него по режиму выше. Тот же переключатель, что на вкладках Proxy и Tor.", "The bypass proxy becomes the system proxy, and Xray works through it in the mode above. The same switch as on the Proxy and Tor tabs.")}</div>
         </div>
         <Switch checked={st.proxy_system} disabled={app.busy} onchange={setSystem} />
       </div>

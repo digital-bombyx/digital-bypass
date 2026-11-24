@@ -46,7 +46,7 @@
   const same = (a: ProxyVariant | null, b: ProxyVariant) =>
     !!a && a.split === b.split && a.unit === b.unit && a.disorder === b.disorder && a.oob === b.oob;
   const name = (v: ProxyVariant) => {
-    const split = ({ sni: "SNI", "first-byte": t("первый байт", "first byte"), chunk: t("куски", "chunks"), random: t("случайно", "random"), custom: t("свои позиции", "custom positions"), none: t("без нарезки", "no split") } as Record<string, string>)[v.split];
+    const split = ({ sni: "SNI", "first-byte": "First byte", chunk: "Chunks", random: "Random", custom: "Custom", none: "None" } as Record<string, string>)[v.split];
     if (v.split === "none") return split;
     return `${split} · ${v.unit === "tcp" ? "TCP" : v.unit === "mixed" ? "TLS±ver" : "TLS"}${v.disorder ? " · disorder" : ""}${v.oob ? " · OOB" : ""}`;
   };

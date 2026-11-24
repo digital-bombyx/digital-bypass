@@ -332,7 +332,7 @@
           <div class="label"><MonitorCog size={11} /> {t("системный прокси windows", "windows system proxy")}</div>
           <div class="hint faint mono">
             {t(
-              "Системный прокси у Windows один, поэтому им всегда становится прокси-обходчик, а Tor работает через него по режиму выше. Так браузеры и программы, которые слушают системный прокси, пойдут через Tor без настройки. Переключатель тот же, что «системный прокси» на вкладке «Прокси».",
+              "Системный прокси у Windows один, поэтому им всегда становится прокси-обходчик, а Tor работает через него по режиму выше. Так браузеры и программы, которые слушают системный прокси, пойдут через Tor без настройки. Переключатель тот же, что «системный прокси» на вкладке Proxy.",
               "Windows has a single system proxy, so it is always the bypass proxy, and Tor works through it according to the mode above. Browsers and programs that follow the system proxy then use Tor with no setup. This is the same switch as “system proxy” on the Proxy tab.",
             )}
             {#if st.proxy_system && !ready}<span class="warn"> {t("Пока Tor не подключён, сайты идут как обычно.", "Until Tor is connected, sites go as usual.")}</span>{/if}

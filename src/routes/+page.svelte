@@ -23,17 +23,19 @@
   /** Вкладки, которым нужна папка zapret; DNS и настройки работают без неё. */
   const needsZapret: Tab[] = ["home", "lists", "hosts"];
 
-  const tabs: { id: Tab; label: () => string; icon: typeof Power; group?: () => string }[] = [
-    { id: "home", label: () => "Zapret2", icon: Power, group: () => "zapret2" },
-    { id: "lists", label: () => t("Списки", "Lists"), icon: ListChecks },
-    { id: "dns", label: () => "DNS", icon: Network, group: () => t("сеть", "network") },
-    { id: "hosts", label: () => "Hosts", icon: Globe },
-    { id: "proxy", label: () => t("Прокси", "Proxy"), icon: Waypoints },
-    { id: "telegram", label: () => "Telegram", icon: Send },
-    { id: "tor", label: () => "Tor", icon: Layers },
-    { id: "xray", label: () => "Xray", icon: Rocket },
-    { id: "diag", label: () => t("Проверка", "Check"), icon: Stethoscope, group: () => t("инструменты", "tools") },
-    { id: "settings", label: () => t("Настройки", "Settings"), icon: Settings2, group: () => "" },
+  // Названия — на английском в обоих языках (термины). Check первой: она подсказывает,
+  // какой модуль нужен. Дальше — по способу: без сервера / туннели / DNS.
+  const tabs: { id: Tab; label: () => string; icon: typeof Power; group?: () => string; hint: () => string }[] = [
+    { id: "diag", label: () => "Check", icon: Stethoscope, hint: () => t("Почему сайт не открывается и что поможет", "Why a site does not open and what helps") },
+    { id: "home", label: () => "Zapret2", icon: Power, group: () => "bypass", hint: () => t("Обход DPI драйвером WinDivert", "DPI bypass with the WinDivert driver") },
+    { id: "lists", label: () => "Lists", icon: ListChecks, hint: () => t("Списки доменов zapret2", "zapret2 domain lists") },
+    { id: "proxy", label: () => "Proxy", icon: Waypoints, hint: () => t("Прокси-обходчик: нарезка ClientHello без прав администратора", "Bypass proxy: ClientHello splitting without admin rights") },
+    { id: "xray", label: () => "Xray", icon: Rocket, group: () => "tunnels", hint: () => t("Свои серверы VLESS, VMess, Trojan, Shadowsocks", "Your own VLESS, VMess, Trojan, Shadowsocks servers") },
+    { id: "tor", label: () => "Tor", icon: Layers, hint: () => t("Сеть Tor с мостами", "The Tor network with bridges") },
+    { id: "telegram", label: () => "Telegram", icon: Send, hint: () => t("Прокси для Telegram Desktop", "A proxy for Telegram Desktop") },
+    { id: "dns", label: () => "DNS", icon: Network, group: () => "dns", hint: () => t("DNS адаптера, DoH и проверка подмены", "Adapter DNS, DoH and spoofing check") },
+    { id: "hosts", label: () => "Hosts", icon: Globe, hint: () => t("Файл hosts", "The hosts file") },
+    { id: "settings", label: () => "Settings", icon: Settings2, group: () => "", hint: () => t("Настройки", "Settings") },
   ];
   const paths: Record<Tab, string> = {
     home: "zapret2",
@@ -88,7 +90,7 @@
         {#if tb.group}
           <div class="group mono" class:spacer={!tb.group()}>{tb.group()}</div>
         {/if}
-        <button class:active={tab === tb.id} onclick={() => (tab = tb.id)} title={tb.label()}>
+        <button class:active={tab === tb.id} onclick={() => (tab = tb.id)} title={tb.hint()}>
           <tb.icon size={14} />
           <span class="mono">{tb.label()}</span>
         </button>
