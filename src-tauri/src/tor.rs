@@ -633,5 +633,27 @@ mod tests {
         println!("{out}");
         assert!(out.contains("\"IsTor\":true"));
         t.new_identity().unwrap();
+        if std::env::var("TOR_RU").is_err() {
+            return;
+        }
+        // Прокси-обходчик в режиме Tor «весь трафик»: российские сайты — напрямую.
+        crate::geo::set_dir(Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("xray")));
+        assert!(crate::geo::get().is_some());
+        let mut pc = crate::proxy::Config { port: 18898, log: true, ..Default::default() };
+        pc.rules.tor_scope = "all".into();
+        let p = crate::proxy::Proxy::start(pc, &[]).unwrap();
+        for u in ["https://ya.ru", "https://www.gosuslugi.ru", "https://check.torproject.org/api/ip"] {
+            let o = crate::util::hidden(crate::util::system32("curl.exe"))
+                .args(["-s", "-m", "40", "-o", "NUL", "-w", "%{http_code}", "-x", "http://127.0.0.1:18898", u])
+                .output()
+                .unwrap();
+            println!("{u}: {}", String::from_utf8_lossy(&o.stdout));
+        }
+        for e in p.log() {
+            println!("{} → {}", e.host, e.action);
+        }
+        let log = p.log();
+        assert!(log.iter().any(|e| e.host == "ya.ru" && e.action != "tor"));
+        assert!(log.iter().any(|e| e.host == "check.torproject.org" && e.action == "tor"));
     }
 }

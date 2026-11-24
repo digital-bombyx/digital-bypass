@@ -72,6 +72,7 @@ For what zapret and splitting cannot fix: IP-blocked sites, geo-restrictions, .o
 - **Bridge search** (from [TorBridgeMaster](https://github.com/digital-bombyx/TorBridgeMaster)): fresh obfs4 and webtunnel bridges from [Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2), verified through lyrebird up to the Tor relay's reply — under a minute.
 - **Sites through Tor**: the bypass proxy sends listed domains and every `.onion` to Tor; the "zapret lists" and "all traffic" modes add the zapret2 list domains or everything. Any program can use SOCKS5 `127.0.0.1:9055`.
 - **System proxy**: switch it on right in the Tor tab. Windows has one system proxy, so it is the bypass proxy, and Tor works through it in the chosen mode.
+- **Russian sites go direct** in the "zapret lists" and "all traffic" modes: geoip:ru, geosite:category-ru and the .ru/.su/.рф zones bypass Tor (banks and Gosuslugi block its exits).
 - **Bridges through the bypass proxy**: if your ISP chokes webtunnel's TLS, tor reaches bridges through our proxy with a split ClientHello.
 - New identity, a log, a directory cache (connects in seconds from the second start).
 

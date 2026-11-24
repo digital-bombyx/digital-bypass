@@ -133,6 +133,14 @@ pub struct Rules {
     pub xray: Vec<String>,
     #[serde(default = "default_tor_scope")]
     pub xray_scope: String,
+    /// В режимах Tor «списки zapret» и «весь трафик» российские сайты — напрямую
+    /// (geoip:ru, geosite:category-ru, .ru/.su/.рф по базам Xray).
+    #[serde(default = "yes")]
+    pub tor_ru_direct: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 fn default_tor_scope() -> String {
@@ -143,7 +151,7 @@ pub const TOR_SCOPES: [&str; 3] = ["list", "zapret", "all"];
 
 impl Default for Rules {
     fn default() -> Self {
-        Rules { scope: "all".into(), zapret_lists: true, bypass: Vec::new(), skip: Vec::new(), block: Vec::new(), worker: Vec::new(), tor: Vec::new(), tor_scope: default_tor_scope(), xray: Vec::new(), xray_scope: default_tor_scope() }
+        Rules { scope: "all".into(), zapret_lists: true, bypass: Vec::new(), skip: Vec::new(), block: Vec::new(), worker: Vec::new(), tor: Vec::new(), tor_scope: default_tor_scope(), xray: Vec::new(), xray_scope: default_tor_scope(), tor_ru_direct: true }
     }
 }
 
@@ -504,6 +512,7 @@ pub struct Matcher {
     xray: DomainSet,
     xray_zapret: DomainSet,
     xray_all: bool,
+    tor_ru_direct: bool,
 }
 
 impl Matcher {
@@ -524,6 +533,7 @@ impl Matcher {
 
     fn build(r: &Rules, extra_bypass: &[String], tor_zapret: &[String], xray_zapret: &[String], worker_on: bool) -> Self {
         Matcher {
+            tor_ru_direct: r.tor_ru_direct,
             xray: DomainSet::new(&r.xray),
             xray_zapret: DomainSet::new(xray_zapret),
             xray_all: r.xray_scope == "all",
@@ -539,6 +549,12 @@ impl Matcher {
     }
     pub fn action(&self, host: &str) -> Action {
         self.action_with2(host, crate::tor::ready_port().is_some(), crate::xray::ready_port().is_some())
+    }
+
+    /// В Tor попали по режиму (не по своему списку и не .onion) — тогда
+    /// российский сайт можно пустить мимо Tor.
+    pub fn tor_by_scope(&self, host: &str) -> bool {
+        self.tor_ru_direct && !is_onion(host) && !self.tor.matches(host)
     }
 
     #[cfg(test)]
@@ -1096,6 +1112,27 @@ impl Shared {
         crate::tor::socks_connect(p, host, port, Duration::from_secs(60))
     }
 
+    /// Действие для хоста с учётом «российские сайты — напрямую» в режимах Tor:
+    /// домен по geosite/зоне, иначе адреса (тем же DoH-резолвером, что и для
+    /// прямого соединения) по geoip:ru. Тогда — как если бы Tor не было.
+    fn decide(&self, host: &str) -> Action {
+        let a = self.matcher.action(host);
+        if a != Action::Tor || !self.matcher.tor_by_scope(host) {
+            return a;
+        }
+        // Без баз (нет Xray в сборке) — хотя бы зоны .ru/.su/.рф.
+        let ru = match (crate::geo::get(), host.trim_matches(|c| c == '[' || c == ']').parse::<IpAddr>()) {
+            (Some(g), Ok(ip)) => g.ru_ip(ip),
+            (Some(g), Err(_)) => g.ru_host(host) || self.resolve(host, 443).iter().any(|s| g.ru_ip(s.ip())),
+            (None, _) => crate::geo::ru_zone(host),
+        };
+        if ru {
+            self.matcher.action_with2(host, false, crate::xray::ready_port().is_some())
+        } else {
+            a
+        }
+    }
+
     /// Соединение через SOCKS xray (имя разрешает xray — по его маршрутизации).
     fn xray_up(&self, host: &str, port: u16) -> std::io::Result<TcpStream> {
         let p = crate::xray::ready_port().ok_or_else(|| std::io::Error::other(crate::tr!("Xray не запущен", "Xray is not running")))?;
@@ -1307,7 +1344,7 @@ impl Shared {
         let mut b = [0u8; 1];
         if client.peek(&mut b)? == 1 && b[0] == 5 {
             let (host, port) = socks5_handshake(&mut client, creds)?;
-            let action = self.matcher.action(&host);
+            let action = self.decide(&host);
             self.count(action);
             (tr.host, tr.port, tr.action) = (host.clone(), port, Some(action));
             if action == Action::Block {
@@ -1361,7 +1398,7 @@ impl Shared {
         let req = parse_request(&head).ok_or_else(|| std::io::Error::other("bad request"))?;
         match req {
             Request::Connect { host, port } => {
-                let action = self.matcher.action(&host);
+                let action = self.decide(&host);
                 self.count(action);
                 (tr.host, tr.port, tr.action) = (host.clone(), port, Some(action));
                 if action == Action::Block {
@@ -1405,13 +1442,14 @@ impl Shared {
             }
             Request::Http { host, port, head } => {
                 (tr.host, tr.port, tr.action) = (host.clone(), port, Some(Action::Pass));
-                if self.matcher.action(&host) == Action::Block {
+                let a = self.decide(&host);
+                if a == Action::Block {
                     tr.action = Some(Action::Block);
                     self.count(Action::Block);
                     let _ = client.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                     return Ok(());
                 }
-                if self.matcher.action(&host) == Action::Worker {
+                if a == Action::Worker {
                     tr.action = Some(Action::Worker);
                     self.count(Action::Worker);
                     let (ws, wearly) = self.worker_connect(&host, port)?;
@@ -1420,7 +1458,6 @@ impl Shared {
                     self.log_entry(tr, t0, true, None);
                     return crate::telegram::ws_pipe(client, ws, wearly, first);
                 }
-                let a = self.matcher.action(&host);
                 if matches!(a, Action::Tor | Action::Xray) {
                     tr.action = Some(a);
                     self.count(a);
@@ -2107,6 +2144,7 @@ mod tests {
             tor_scope: "list".into(),
             xray: vec![],
             xray_scope: "list".into(),
+            tor_ru_direct: true,
         };
         let m = Matcher::new(&r, &[]);
         assert_eq!(m.action("www.youtube.com"), Action::Bypass);
@@ -2339,6 +2377,12 @@ mod tests {
         assert_eq!(m.action_with2("example.com", false, true), Action::Xray);
         assert_eq!(m.action_with2("sberbank.ru", false, true), Action::Pass);
         assert_eq!(m.action_with2("example.com", false, false), Action::Bypass);
+        // RU напрямую: только для режима, не для своего списка и .onion.
+        let ru = Rules { tor: vec!["vk.com".into()], tor_scope: "all".into(), ..Default::default() };
+        let m = Matcher::with_worker(&ru, &z, false);
+        assert!(m.tor_by_scope("ya.ru") && !m.tor_by_scope("vk.com") && !m.tor_by_scope("x.onion"));
+        let off = Rules { tor_ru_direct: false, ..ru.clone() };
+        assert!(!Matcher::with_worker(&off, &z, false).tor_by_scope("ya.ru"));
         let mut bad = Config::default();
         bad.rules.tor_scope = "everything".into();
         bad.normalize();

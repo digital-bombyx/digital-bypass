@@ -7,6 +7,7 @@ mod diag;
 mod dns;
 mod dnscheck;
 mod evolve;
+mod geo;
 mod doh;
 mod game_filter;
 mod hosts;
@@ -931,6 +932,10 @@ struct TorStatus {
     domains: Vec<String>,
     /// list | zapret | all
     tor_scope: String,
+    /// Российские сайты мимо Tor в режимах «списки zapret» и «весь трафик».
+    tor_ru_direct: bool,
+    /// Базы geoip/geosite загружены (нужны для правила выше).
+    geo_ready: bool,
     proxy_running: bool,
     /// Прокси-обходчик прописан системным прокси Windows.
     proxy_system: bool,
@@ -939,9 +944,9 @@ struct TorStatus {
 }
 
 fn tor_status_of(state: &AppState) -> TorStatus {
-    let (config, domains, tor_scope, proxy_port) = {
+    let (config, domains, tor_scope, tor_ru_direct, proxy_port) = {
         let s = state.settings.lock().unwrap();
-        (s.tor.clone(), s.proxy.rules.tor.clone(), s.proxy.rules.tor_scope.clone(), s.proxy.port)
+        (s.tor.clone(), s.proxy.rules.tor.clone(), s.proxy.rules.tor_scope.clone(), s.proxy.rules.tor_ru_direct, s.proxy.port)
     };
     let proxy_stats = state.proxy.lock().unwrap().as_ref().map(|p| p.stats());
     let status = state.tor.lock().unwrap().as_ref().map(|t| t.status()).unwrap_or_else(|| tor::Status { socks_port: config.socks_port, ..Default::default() });
@@ -951,6 +956,8 @@ fn tor_status_of(state: &AppState) -> TorStatus {
         proxy_running: proxy_stats.is_some(),
         proxy_system: proxy_stats.is_some_and(|s| s.system),
         tor_scope,
+        tor_ru_direct,
+        geo_ready: geo::get().is_some(),
         finding: state.tor_finding.load(Ordering::SeqCst),
         config,
         status,
@@ -1030,7 +1037,7 @@ fn tor_log(state: State<AppState>) -> Vec<String> {
 /// Что прокси-обходчик отправляет через Tor: домены списка и режим (`scope`:
 /// list | zapret | all, None — не менять). Работающий прокси перезапускается.
 #[tauri::command(async)]
-fn tor_set_domains(app: AppHandle, state: State<AppState>, domains: Vec<String>, scope: Option<String>) -> R<TorStatus> {
+fn tor_set_domains(app: AppHandle, state: State<AppState>, domains: Vec<String>, scope: Option<String>, ru_direct: Option<bool>) -> R<TorStatus> {
     let mut d: Vec<String> = domains
         .iter()
         .map(|x| x.trim().trim_start_matches("*.").trim_start_matches("https://").trim_start_matches("http://").split('/').next().unwrap_or("").to_ascii_lowercase())
@@ -1041,6 +1048,9 @@ fn tor_set_domains(app: AppHandle, state: State<AppState>, domains: Vec<String>,
     cfg.rules.tor = d;
     if let Some(sc) = scope {
         cfg.rules.tor_scope = sc;
+    }
+    if let Some(r) = ru_direct {
+        cfg.rules.tor_ru_direct = r;
     }
     cfg.normalize();
     if state.proxy.lock().unwrap().is_some() {
@@ -2033,7 +2043,15 @@ pub fn run() {
                 tor: Mutex::new(None),
                 tor_finding: AtomicBool::new(false),
                 tor_find_cancel: AtomicBool::new(false),
-                xray_dir: xray::find_dir(app.path().resource_dir().ok().as_deref()),
+                xray_dir: {
+                    let d = xray::find_dir(app.path().resource_dir().ok().as_deref());
+                    // Базы RU для прокси-обходчика: загрузить заранее, не на первом соединении.
+                    geo::set_dir(d.clone());
+                    std::thread::spawn(|| {
+                        let _ = geo::get();
+                    });
+                    d
+                },
                 xray: Mutex::new(None),
                 xray_testing: AtomicBool::new(false),
                 xray_pings: Mutex::new(std::collections::HashMap::new()),

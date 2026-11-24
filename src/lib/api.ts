@@ -222,6 +222,8 @@ export type TorStatus = {
   version: string | null;
   domains: string[];
   tor_scope: TorScope;
+  tor_ru_direct: boolean;
+  geo_ready: boolean;
   proxy_running: boolean;
   proxy_system: boolean;
   proxy_port: number;
@@ -440,7 +442,7 @@ export const api = {
   torSetConfig: (config: TorConfig) => invoke<TorStatus>("tor_set_config", { config }),
   torNewIdentity: () => invoke<void>("tor_new_identity"),
   torLog: () => invoke<string[]>("tor_log"),
-  torSetDomains: (domains: string[], scope?: TorScope) => invoke<TorStatus>("tor_set_domains", { domains, scope: scope ?? null }),
+  torSetDomains: (domains: string[], scope?: TorScope, ruDirect?: boolean) => invoke<TorStatus>("tor_set_domains", { domains, scope: scope ?? null, ruDirect: ruDirect ?? null }),
   torSystemProxy: (on: boolean) => invoke<TorStatus>("tor_system_proxy", { on }),
   xrayStatus: () => invoke<XrayStatus>("xray_status"),
   xrayStart: () => invoke<XrayStatus>("xray_start"),

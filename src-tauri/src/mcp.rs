@@ -234,6 +234,7 @@ fn tools() -> Vec<Value> {
         tool("tor_control", "Tor: start, stop, status (bootstrap %, current transport tier, last error, recent log) or new_identity (fresh circuits). Starting uses the saved transport (auto tries found/own bridges, then built-in obfs4, snowflake, meek); bootstrap takes 10 s to a few minutes. Tor gives a SOCKS5 proxy and serves the bypass proxy's 'through Tor' domains. It bypasses blocks, it is not anonymity for the browser. start/stop/new_identity need 'allow changes'.", json!({
             "action": {"type":"string","enum":["start","stop","status","new_identity","set_scope"]},
             "scope": {"type":"string","enum":["list","zapret","all"],"description":"For set_scope: what the bypass proxy sends through Tor besides .onion — only the Tor domain list, plus zapret2 list domains, or all traffic (except the proxy's skip and Worker lists)"},
+            "ru_direct": {"type":"boolean","description":"For set_scope: in the zapret/all modes send Russian sites (geoip:ru, geosite:category-ru, .ru/.su/.рф) direct instead of through Tor (default on)"},
             "transport": {"type":"string","enum":["auto","obfs4","webtunnel","snowflake","meek","custom","direct"],"description":"Optional for start: save and use this transport"}
         }), &["action"]),
         tool("xray_control", "Xray (VLESS/VMess/Trojan/Shadowsocks client with the user's own servers): status, start, stop, test (real latency through every server), select (a server id or 'auto' — the balancer picks the fastest), update_subscriptions, set_scope. Russian sites and addresses go direct (geosite:category-ru, geoip:ru) unless the user turned it off. Gives SOCKS5/HTTP on 127.0.0.1:port and serves the bypass proxy's 'through Xray' domains. All actions except status need 'allow changes'. Never print subscription URLs or server UUIDs back to the user.", json!({
@@ -338,7 +339,7 @@ pub fn call(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
             let xr = crate::xray_status_of(&st);
             Ok(json!({
                 "xray": {"running": xr.status.running, "socks_http": format!("127.0.0.1:{}", xr.port), "server": xr.status.server, "servers": xr.servers.len(), "subscriptions": xr.subs.len(), "ru_direct": xr.routing.ru_direct, "domains_through_xray": xr.domains, "xray_scope": xr.scope, "error": xr.status.error},
-                "tor": {"running": tor.status.running, "connected": tor.status.ready, "bootstrap_percent": tor.status.percent, "socks": format!("127.0.0.1:{}", tor.config.socks_port), "transport": tor.config.transport, "domains_through_tor": tor.domains, "tor_scope": tor.tor_scope},
+                "tor": {"running": tor.status.running, "connected": tor.status.ready, "bootstrap_percent": tor.status.percent, "socks": format!("127.0.0.1:{}", tor.config.socks_port), "transport": tor.config.transport, "domains_through_tor": tor.domains, "tor_scope": tor.tor_scope, "tor_ru_direct": tor.tor_ru_direct},
                 "admin": ov.admin,
                 "zapret2": {"status": to_value(&ov.status), "selected_strategy": ov.selected, "mode": ov.mode, "build_found": ov.dir.is_some(), "testing": ov.testing},
                 "proxy": {"running": px.stats.running, "address": format!("127.0.0.1:{}", px.config.port), "config": to_value(&px.config), "stats": to_value(&px.stats)},
@@ -472,7 +473,8 @@ pub fn call(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
                 "set_scope" => {
                     let sc = arg_str(a, "scope").filter(|s| crate::proxy::TOR_SCOPES.contains(s)).ok_or("scope must be list, zapret or all")?;
                     let d = st.settings.lock().unwrap().proxy.rules.tor.clone();
-                    crate::tor_set_domains(app.clone(), app.state(), d, Some(sc.into()))?;
+                    let ru = a.get("ru_direct").and_then(|v| v.as_bool());
+                    crate::tor_set_domains(app.clone(), app.state(), d, Some(sc.into()), ru)?;
                 }
                 "status" => {}
                 _ => return Err("action must be start, stop, status, new_identity or set_scope".into()),
@@ -569,7 +571,7 @@ fn add_to(app: &AppHandle, list: &str, domains: &[String]) -> R<Vec<String>> {
             let mut have = st.settings.lock().unwrap().proxy.rules.tor.clone();
             let added: Vec<String> = domains.iter().filter(|d| !have.contains(d)).cloned().collect();
             have.extend(added.iter().cloned());
-            crate::tor_set_domains(app.clone(), app.state(), have, None)?;
+            crate::tor_set_domains(app.clone(), app.state(), have, None, None)?;
             Ok(added)
         }
         "proxy_bypass" | "proxy_skip" | "proxy_block" | "proxy_worker" => {

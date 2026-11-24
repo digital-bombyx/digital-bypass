@@ -115,6 +115,10 @@
     const r = await act(() => api.torSetDomains(fromWords(domainsText)), t("Список сохранён", "List saved"));
     if (r) sync(r);
   }
+  async function setRuDirect(on: boolean) {
+    const r = await act(() => api.torSetDomains(fromWords(domainsText), undefined, on));
+    if (r) sync(r);
+  }
   async function setScope(scope: TorScope) {
     const r = await act(() => api.torSetDomains(fromWords(domainsText), scope));
     if (r) sync(r);
@@ -303,6 +307,21 @@
       </div>
       <Segmented small options={scopes.map((x) => ({ value: x.value, label: x.label() }))} value={st.tor_scope} disabled={app.busy} onchange={setScope} />
       <div class="hint faint mono">{scopes.find((x) => x.value === st!.tor_scope)?.hint()}</div>
+      {#if st.tor_scope !== "list"}
+        <div class="opt">
+          <div>
+            <div class="label">{t("российские сайты — напрямую", "russian sites — direct")}</div>
+            <div class="hint faint mono">
+              {t(
+                "geoip:ru, geosite:category-ru и зоны .ru/.su/.рф идут мимо Tor: банки, Госуслуги и маркетплейсы не пускают выходы Tor, а Tor им и не нужен. Сайты из своего списка выше всё равно идут через Tor.",
+                "geoip:ru, geosite:category-ru and the .ru/.su/.рф zones bypass Tor: banks, Gosuslugi and marketplaces block Tor exits, and they do not need Tor anyway. Sites from your own list above still go through Tor.",
+              )}
+              {#if !st.geo_ready}<span class="warn"> {t("Базы geoip/geosite не найдены — действуют только зоны .ru/.su/.рф.", "geoip/geosite bases not found — only the .ru/.su/.рф zones apply.")}</span>{/if}
+            </div>
+          </div>
+          <Switch checked={st.tor_ru_direct} disabled={app.busy} onchange={setRuDirect} />
+        </div>
+      {/if}
       <textarea class="textarea" rows="4" spellcheck="false" placeholder="rutracker.org&#10;linkedin.com" bind:value={domainsText} disabled={app.busy}></textarea>
       <div class="actions"><span class="grow"></span><button class="btn sm" disabled={app.busy || !domainsDirty} onclick={saveDomains}>{t("Сохранить", "Save")}</button></div>
     </section>

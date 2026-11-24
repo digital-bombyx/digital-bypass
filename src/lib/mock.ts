@@ -58,6 +58,8 @@ const tor: any = {
   version: "16.0.1",
   domains: ["rutracker.org"],
   tor_scope: "list",
+  tor_ru_direct: true,
+  geo_ready: true,
   proxy_running: true,
   proxy_system: false,
   proxy_port: 8881,
@@ -434,6 +436,7 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
     case "tor_set_domains":
       tor.domains = args.domains;
       if (args.scope) tor.tor_scope = args.scope;
+      if (args.ruDirect !== null && args.ruDirect !== undefined) tor.tor_ru_direct = args.ruDirect;
       return structuredClone(tor);
     case "tor_system_proxy":
       tor.proxy_system = args.on;
