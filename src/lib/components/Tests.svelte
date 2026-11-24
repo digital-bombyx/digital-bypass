@@ -292,11 +292,21 @@
         <span class="faint mono">{history.length}</span>
       </button>
       {#if showHistory}
+        <div class="hint faint mono">
+          {t(
+            "прошлые тесты: когда, вид теста, сколько стратегий проверено и лучшая из них. Нажмите на строку, чтобы открыть все результаты.",
+            "past tests: when, test kind, how many strategies were checked and the best of them. Click a row to open all results.",
+          )}
+        </div>
         {#each history as h (h.id)}
-          <button class="hrow mono" disabled={testing} onclick={() => ((run = h), (expanded = null))}>
+          <button
+            class="hrow mono"
+            disabled={testing}
+            onclick={() => ((run = h), (expanded = null))}
+            title={t("Открыть результаты этого теста", "Open this test's results")}>
             <span class="faint">{when(h.id)}</span>
-            <span>{h.kind === "dpi" ? "dpi" : "std"} · {h.results.length}</span>
-            <span class="hb">{h.best ? strategyName(h.best) : "—"}</span>
+            <span>{h.kind === "dpi" ? "dpi" : "std"} · {t(`проверено ${h.results.length}`, `${h.results.length} checked`)}</span>
+            <span class="hb"><Trophy size={11} /> {t("лучшая", "best")}: {h.best ? strategyName(h.best) : "—"}</span>
           </button>
         {/each}
       {/if}
@@ -613,8 +623,8 @@
   .hrow {
     width: 100%;
     display: grid;
-    grid-template-columns: 90px 60px 1fr;
-    gap: 8px;
+    grid-template-columns: 90px max-content 1fr;
+    gap: 14px;
     padding: 6px 4px;
     border: 0;
     border-top: 1px solid var(--border-soft);
@@ -628,6 +638,10 @@
     color: var(--amber-2);
   }
   .hb {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
