@@ -192,7 +192,7 @@ Our code is original; these projects contributed techniques and approaches:
 
 <img src="docs/claude-code.png" width="72" align="right" alt="Claude Code" />
 
-Most of the code, testing and research for this project was done together with [Claude](https://claude.com/claude-code) (Anthropic): from the Rust backend, Tor and Xray to reading DPI research papers that shaped the auto-tune and the proxy. Thank you, Claude, for helping with a project that keeps people connected to the free internet.
+Most of the code, testing and research for this project was done together with [Claude](https://claude.com/claude-code) (Anthropic): from the Rust backend, Tor and Xray to reading DPI research papers that shaped the auto-tune and the proxy. Thank you, Claude, for helping with the project.
 
 ## License
 
