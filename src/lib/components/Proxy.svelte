@@ -190,7 +190,7 @@
     {#if cfg.split !== "none"}
       <div class="opt">
         <div>
-          <div class="label">{t("части", "parts")}</div>
+          <div class="label">parts</div>
           <div class="hint faint mono">
             {cfg.unit === "records"
               ? t("каждая часть — отдельная TLS-запись", "each part is a separate TLS record")
@@ -209,9 +209,9 @@
             value={cfg.unit}
             onchange={(m) => change({ unit: m })}
             options={[
-              { value: "records", label: t("TLS-записи", "TLS records") },
-              { value: "tcp", label: t("TCP-сегменты", "TCP segments") },
-              { value: "mixed", label: t("Разные версии", "Mixed versions") },
+              { value: "records", label: "TLS records" },
+              { value: "tcp", label: "TCP segments" },
+              { value: "mixed", label: "Mixed versions" },
             ]} />
         </div>
       </div>
