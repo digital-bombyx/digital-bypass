@@ -60,20 +60,42 @@ fn tech(v: &str) -> &str {
     v.split(':').next().unwrap_or(v)
 }
 
+/// Параметры действия. Флаги без значения (`badsum`, `tcp_md5`, `tcp_ts_up`) —
+/// с пустым значением: раньше они терялись при любой мутации действия.
 fn params(v: &str) -> Vec<(String, String)> {
-    v.split(':').skip(1).filter_map(|p| p.split_once('=').map(|(k, v)| (k.to_string(), v.to_string()))).collect()
+    v.split(':')
+        .skip(1)
+        .filter(|p| !p.is_empty())
+        .map(|p| match p.split_once('=') {
+            Some((k, v)) => (k.to_string(), v.to_string()),
+            None => (p.to_string(), String::new()),
+        })
+        .collect()
+}
+
+/// `k=v` или голый флаг `k`.
+fn kv(k: &str, v: &str) -> String {
+    if v.is_empty() {
+        k.to_string()
+    } else {
+        format!("{k}={v}")
+    }
 }
 
 fn join(t: &str, ps: &[(String, String)]) -> String {
     let mut s = t.to_string();
     for (k, v) in ps {
         s.push(':');
-        s.push_str(k);
-        s.push('=');
-        s.push_str(v);
+        s.push_str(&kv(k, v));
     }
     s
 }
+
+/// «Порча» пакетов из SymTCP (NDSS 2020), которой нет во встроенных стратегиях:
+/// сервер такой пакет отбросит, а DPI примет — MD5-опция TCP, плохая контрольная
+/// сумма, данные без флага ACK. Добавляются к техникам, у которых уже есть порча.
+const EXTRA_FOOLING: &[(&str, &str)] = &[("tcp_md5", ""), ("badsum", ""), ("tcp_flags_unset", "ack")];
+const FOOLING_KEYS: &[&str] = &["tcp_ts", "tcp_seq", "tcp_ack", "tcp_md5", "badsum", "ip_ttl", "ip_autottl"];
 
 /// Действие можно мутировать: TCP-техника, фейк — с TLS/HTTP-блобом,
 /// не профиль игр (`payload=all`).
@@ -154,6 +176,16 @@ impl Vocab {
                 }
             }
         }
+        // Приёмы SymTCP — техникам с порчей (фейки), без повторов.
+        for ps in v.by_tech.values_mut() {
+            if ps.iter().any(|(k, _)| FOOLING_KEYS.contains(&k.as_str())) {
+                for (k, val) in EXTRA_FOOLING {
+                    if !ps.iter().any(|(a, b)| a == k && b == val) {
+                        ps.push((k.to_string(), val.to_string()));
+                    }
+                }
+            }
+        }
         v
     }
 }
@@ -209,7 +241,7 @@ pub fn mutate(text: &str, vocab: &Vocab, rng: &mut Rng) -> Option<(String, Strin
                 let i = rng.below(ps.len());
                 let opts: Vec<&String> = vocab.values.get(&ps[i].0).map(|v| v.iter().filter(|x| **x != ps[i].1).collect()).unwrap_or_default();
                 let Some(nv) = rng.pick(&opts) else { continue };
-                let desc = format!("{t}: {}={} → {}", ps[i].0, ps[i].1, nv);
+                let desc = format!("{t}: {} → {}", kv(&ps[i].0, &ps[i].1), kv(&ps[i].0, nv));
                 ps[i].1 = (*nv).clone();
                 return Some((replace(text, a, &join(&t, &ps)), desc));
             }
@@ -229,14 +261,14 @@ pub fn mutate(text: &str, vocab: &Vocab, rng: &mut Rng) -> Option<(String, Strin
                     vocab.by_tech.get(&t).map(|v| v.iter().filter(|(k, _)| !ps.iter().any(|(pk, _)| pk == k)).collect()).unwrap_or_default();
                 let Some((k, v)) = rng.pick(&cand).copied() else { continue };
                 ps.push((k.clone(), v.clone()));
-                return Some((replace(text, a, &join(&t, &ps)), format!("{t}: +{k}={v}")));
+                return Some((replace(text, a, &join(&t, &ps)), format!("{t}: +{}", kv(&k, &v))));
             }
             // Убрать параметр.
             4 => {
                 let idx: Vec<usize> = (0..ps.len()).filter(|&i| !ESSENTIAL.contains(&ps[i].0.as_str())).collect();
                 let Some(&i) = rng.pick(&idx) else { continue };
                 let (k, v) = ps.remove(i);
-                return Some((replace(text, a, &join(&t, &ps)), format!("{t}: −{k}={v}")));
+                return Some((replace(text, a, &join(&t, &ps)), format!("{t}: −{}", kv(&k, &v))));
             }
             // Убрать действие (если в профиле есть ещё) или вставить действие из другой стратегии.
             _ => {
@@ -583,6 +615,19 @@ mod tests {
         assert_eq!(a[0].value, "fake:blob=tls_google:tcp_ts=-600000:repeats=8");
         assert_eq!((a[1].profile, a[2].profile, a[3].profile), (0, 1, 2));
         assert!(mutable(&a[0].value) && mutable(&a[1].value) && !mutable(&a[2].value) && mutable(&a[3].value));
+    }
+
+    #[test]
+    fn bare_flags_survive() {
+        let a = "fake:blob=tls_x:tcp_ts=-600000:tcp_ts_up:repeats=6";
+        let ps = params(a);
+        assert_eq!(ps.len(), 4);
+        assert_eq!(join("fake", &ps), a, "голый флаг не теряется");
+        let vocab = Vocab::from_texts([BAT]);
+        let fake = &vocab.by_tech["fake"];
+        assert!(fake.iter().any(|(k, v)| k == "tcp_md5" && v.is_empty()));
+        assert!(fake.iter().any(|(k, v)| k == "tcp_flags_unset" && v == "ack"));
+        assert!(!vocab.by_tech["multisplit"].iter().any(|(k, _)| k == "tcp_md5"), "без порчи — не добавляем");
     }
 
     #[test]

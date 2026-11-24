@@ -166,6 +166,7 @@ npm run tauri build
 - **[NoDPI](https://github.com/GVCoder09/NoDPI)** (GVCoder09) — проверка домена, прокси без прав администратора, DoH на Windows 10, наборы доменов.
 - **[GreenTunnel](https://github.com/SadeghHayeri/GreenTunnel)** (Sadegh Hayeri) — DNS-over-TLS, журнал соединений.
 - **[sni-spoofing-rust](https://github.com/therealaleph/sni-spoofing-rust)** (therealaleph) — сканер SNI, раздача в локальную сеть.
+- **[SymTCP](https://www.ndss-symposium.org/ndss-paper/symtcp-eluding-stateful-deep-packet-inspection-with-automated-discrepancy-discovery/)** (Wang et al., NDSS 2020) — виды «порчи» пакетов для автоподбора: MD5-опция TCP, плохая контрольная сумма, данные без ACK.
 - **[Geneva](https://geneva.cs.umd.edu/)** (Bock et al., ACM CCS 2019) — подход автоподбора: засев известными стратегиями, оценка с повторами, штраф за сложность, зал славы.
 - **[B4](https://github.com/DanielLavrushin/b4)** и **[tspu-docs](https://github.com/DanielLavrushin/tspu-docs)** (DanielLavrushin) — удаление ключей ECH из DNS, проверка «напрямую и через обход», поиск SNI для хостингов, подтверждение победителя; сведения о том, как ТСПУ ограничивает хостинги.
 - **[Tallow](https://github.com/basil00/Tallow)** (basil00) — Tor для приложений, которые его не умеют (у нас — через прокси-обходчик, а не перехват всего трафика).
