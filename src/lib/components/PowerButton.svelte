@@ -8,7 +8,6 @@
 
 <button class="power" class:on {disabled} {onclick} aria-label={on ? t("Выключить", "Turn off") : t("Включить", "Turn on")}>
   <svg viewBox="0 0 120 120" class="dial">
-    <circle cx="60" cy="60" r="56" class="dash" />
     <circle cx="60" cy="60" r="46" class="track" />
   </svg>
   <span class="core"><Power size={30} strokeWidth={2.2} /></span>
@@ -36,24 +35,11 @@
     width: 100%;
     height: 100%;
   }
-  .dial .dash {
-    fill: none;
-    stroke: var(--faint);
-    stroke-width: 1;
-    stroke-dasharray: 1 5.4;
-    opacity: 0.6;
-    transform-origin: 60px 60px;
-    transition: stroke 0.3s, opacity 0.3s;
-  }
   .dial .track {
     fill: none;
     stroke: var(--border);
     stroke-width: 3;
     transition: stroke 0.2s;
-  }
-  .power.on .dash {
-    stroke: var(--accent);
-    opacity: 0.8;
   }
   .power.on .track {
     stroke: var(--amber);
