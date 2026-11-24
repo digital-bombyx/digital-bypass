@@ -185,9 +185,9 @@
             } else change({ split: m });
           }}
           options={[
+            { value: "chunk", label: "Chunks" },
             { value: "sni", label: "SNI" },
             { value: "first-byte", label: "First byte" },
-            { value: "chunk", label: "Chunks" },
             { value: "random", label: "Random" },
             { value: "custom", label: "Custom" },
             { value: "none", label: "None" },

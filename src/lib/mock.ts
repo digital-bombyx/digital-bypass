@@ -119,7 +119,7 @@ const dns: any = {
 const stub: any = { running: false, config: null, stats: null };
 const proxy: any = {
   config: {
-    port: 8881, split: "sni", unit: "records", chunk: 4, positions: "", disorder: true, oob: false, ipv6: false,
+    port: 8881, split: "chunk", unit: "records", chunk: 4, positions: "", disorder: true, oob: false, ipv6: false,
     auto: true, auto_timeout: 4, log: true,
     auto_chain: [
       { split: "chunk", unit: "records", disorder: true, oob: false },

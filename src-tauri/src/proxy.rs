@@ -82,7 +82,7 @@ impl Default for Config {
         Config {
             port: 8881,
             method: None,
-            split: "sni".into(),
+            split: "chunk".into(),
             unit: "records".into(),
             chunk: 4,
             positions: String::new(),
@@ -295,7 +295,7 @@ pub struct Variant {
 
 impl Default for Variant {
     fn default() -> Self {
-        Variant { split: "sni".into(), unit: "records".into(), disorder: true, oob: false }
+        Variant { split: "chunk".into(), unit: "records".into(), disorder: true, oob: false }
     }
 }
 
@@ -393,7 +393,7 @@ impl Config {
             _ => {}
         }
         if !SPLITS.contains(&self.split.as_str()) {
-            self.split = "sni".into();
+            self.split = "chunk".into();
         }
         if !UNITS.contains(&self.unit.as_str()) {
             self.unit = "records".into();
@@ -2207,7 +2207,7 @@ mod tests {
         // Старые настройки: method → disorder.
         let mut c: Config = serde_json::from_str(r#"{"method":"split","port":9000}"#).unwrap();
         c.normalize();
-        assert!(!c.disorder && c.method.is_none() && c.split == "sni" && c.port == 9000);
+        assert!(!c.disorder && c.method.is_none() && c.split == "chunk" && c.port == 9000);
         assert!(!serde_json::to_string(&c).unwrap().contains("method"));
     }
 
@@ -2478,7 +2478,7 @@ mod tests {
         let probe = TcpListener::bind("127.0.0.1:0").unwrap();
         let pport = probe.local_addr().unwrap().port();
         drop(probe);
-        let cfg = Config { port: pport, disorder: false, doh: false, system: false, ..Default::default() };
+        let cfg = Config { port: pport, split: "sni".into(), disorder: false, doh: false, system: false, ..Default::default() };
         let _proxy = Proxy::start(cfg, &[]).unwrap();
         let mut c = TcpStream::connect(("127.0.0.1", pport)).unwrap();
         write!(c, "CONNECT 127.0.0.1:{sport} HTTP/1.1\r\n\r\n").unwrap();
