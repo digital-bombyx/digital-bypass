@@ -165,7 +165,7 @@
       <div class="prompt mono">{t("xray · свои серверы VLESS, VMess, Trojan, Shadowsocks", "xray · your own VLESS, VMess, Trojan, Shadowsocks servers")}</div>
       <PowerButton on={running} disabled={app.busy || !st.available || !st.servers.length} onclick={toggle} />
       <div class="state-line mono">
-        {#if app.busy}<span class="muted">…</span>
+        {#if app.busy}<span class="muted">{t("подождите…", "please wait…")}</span>
         {:else if running}<span class="on">● SOCKS5/HTTP 127.0.0.1:{st.status.port}</span>
         {:else if !st.servers.length}<span class="faint">○ {t("добавьте сервер или подписку", "add a server or a subscription")}</span>
         {:else}<span class="faint">○ {t("выключен", "off")}</span>{/if}

@@ -373,8 +373,21 @@ export type SniReport = {
 
 export type ListPreset = { id: string; name: string; domains: string[]; builtin: number };
 
+/** Состояние модуля для бокового меню. */
+export type ModuleState = "off" | "starting" | "on" | "error";
+export type Modules = {
+  zapret: ModuleState;
+  proxy: ModuleState;
+  xray: ModuleState;
+  tor: ModuleState;
+  telegram: ModuleState;
+  /** Системный прокси Windows (всегда прокси-обходчик) и куда по умолчанию идёт трафик. */
+  system_proxy: { port: number; via: "bypass" | "tor" | "xray" } | null;
+};
+
 export const api = {
   overview: () => invoke<Overview>("overview"),
+  modules: () => invoke<Modules>("modules"),
   status: () => invoke<Status>("status"),
   logTail: () => invoke<string[]>("log_tail"),
   setZapretDir: (path: string) => invoke<Overview>("set_zapret_dir", { path }),

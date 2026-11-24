@@ -448,6 +448,17 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
       return { found: tor.config.found.map((line: string, i: number) => ({ line, transport: "obfs4", ms: 242 + i * 3 })), checked: 30, candidates: 305, downloaded: [["obfs4", 223], ["webtunnel", 94]], errors: [], cancelled: false, secs: 41 };
     case "tor_find_cancel":
       return;
+    case "modules": {
+      const tun = (st: any) => (st.running ? (st.ready ? "on" : "starting") : st.error ? "error" : "off");
+      return {
+        zapret: state.status.running ? "on" : state.status.last_error ? "error" : "off",
+        proxy: proxy.stats?.running ? "on" : "off",
+        xray: tun(xr.status),
+        tor: tun(tor.status),
+        telegram: tg.stats?.running ? "on" : "off",
+        system_proxy: proxy.stats?.running && proxy.stats?.system ? { port: proxy.config.port, via: tor.proxy_tor_scope === "all" && tor.status.ready ? "tor" : "bypass" } : null,
+      };
+    }
     case "tg_status":
       return structuredClone(tg);
     case "tg_start":

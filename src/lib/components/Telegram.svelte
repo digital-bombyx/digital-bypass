@@ -83,7 +83,7 @@
       <div class="prompt mono">{t("telegram-прокси · MTProto → WebSocket, для Telegram Desktop", "telegram proxy · MTProto → WebSocket, for Telegram Desktop")}</div>
       <PowerButton on={running} disabled={app.busy} onclick={toggle} />
       <div class="state-line mono">
-        {#if app.busy}<span class="muted">…</span>{:else if running}<span class="on">● 127.0.0.1:{st.config.port}</span>{:else}<span class="faint">○ {t("выключен", "off")}</span>{/if}
+        {#if app.busy}<span class="muted">{t("подождите…", "please wait…")}</span>{:else if running}<span class="on">● 127.0.0.1:{st.config.port}</span>{:else}<span class="faint">○ {t("выключен", "off")}</span>{/if}
       </div>
       {#if running}
         <div class="stats mono">

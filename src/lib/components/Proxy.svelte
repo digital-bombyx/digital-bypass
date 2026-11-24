@@ -16,7 +16,7 @@
   let st = $state<ProxyStatus | null>(null);
   let cfg = $state<ProxyConfig>({
     port: 8881,
-    split: "sni",
+    split: "chunk",
     unit: "records",
     chunk: 4,
     positions: "",
@@ -141,7 +141,7 @@
       <div class="prompt mono">{t("прокси-обходчик · без прав администратора и драйвера", "bypass proxy · no admin rights, no driver")}</div>
       <PowerButton on={running} disabled={app.busy} onclick={running ? stop : start} />
       <div class="state-line mono">
-        {#if app.busy}<span class="muted">…</span>{:else if running}<span class="on">● {addr}</span>{:else}<span class="faint">○ {t("выключен", "off")}</span>{/if}
+        {#if app.busy}<span class="muted">{t("подождите…", "please wait…")}</span>{:else if running}<span class="on">● {addr}</span>{:else}<span class="faint">○ {t("выключен", "off")}</span>{/if}
       </div>
       {#if st && running}
         <div class="stats mono">

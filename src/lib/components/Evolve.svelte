@@ -66,10 +66,30 @@
   // Оценка числа кандидатов: засев + раунды × зал славы (4) × 3 мутанта.
   const planned = $derived(seeds.length + rounds * 4 * 3);
 
+  /** Первая точка отсчёта текущего прогона — для оценки оставшегося времени. */
+  let mark: { at: number; done: number } | null = null;
+  let eta = $state<number | null>(null);
+  function progress(r: EvolveRun) {
+    ev = r;
+    if (r.finished) {
+      mark = null;
+      eta = null;
+      return;
+    }
+    if (!mark || r.done < mark.done) mark = { at: Date.now(), done: r.done };
+    const n = r.done - mark.done;
+    // Нужно хотя бы 2 кандидата: первый идёт дольше (два прогона засева и т. п.).
+    eta = n >= 2 ? ((Date.now() - mark.at) / n) * Math.max(r.planned - r.done, 0) : null;
+  }
+  function etaText(ms: number) {
+    const m = Math.round(ms / 60000);
+    return m < 1 ? t("меньше минуты", "under a minute") : t(`≈ ${m} мин`, `≈ ${m} min`);
+  }
+
   onMount(() => {
     api.evolveLast().then((r) => r && (ev = r));
     const un = [
-      on<EvolveRun>("evolve-progress", (r) => (ev = r)),
+      on<EvolveRun>("evolve-progress", progress),
       on("evolve-finished", () => refresh()),
     ];
     return () => un.forEach((p) => p.then((f) => f()));
@@ -163,7 +183,7 @@
     {#if live}
       <div class="mono progline">
         <span>{t("раунд", "round")} {ev.round}/{ev.rounds} · {ev.current ?? ""}</span>
-        <span class="faint">{ev.done}/{ev.planned}</span>
+        <span class="faint">{ev.done}/{ev.planned}{#if eta !== null} · {t("осталось", "left")} {etaText(eta)}{/if}</span>
       </div>
       <div class="bar"><span style="width:{(ev.done / Math.max(ev.planned, 1)) * 100}%"></span></div>
     {/if}

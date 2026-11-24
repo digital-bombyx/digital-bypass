@@ -191,7 +191,7 @@
       <div class="prompt mono">{t("tor · обход блокировок по IP и геоограничений, .onion", "tor · bypass of IP blocks and geo-restrictions, .onion")}</div>
       <PowerButton on={running} disabled={app.busy || !st.available} onclick={toggle} />
       <div class="state-line mono">
-        {#if app.busy}<span class="muted">…</span>
+        {#if app.busy}<span class="muted">{t("подождите…", "please wait…")}</span>
         {:else if ready}<span class="on">● SOCKS5 127.0.0.1:{run.socks_port}</span>
         {:else if running}<span class="warn">◐ {t("подключение", "connecting")} {run.percent}%</span>
         {:else}<span class="faint">○ {t("выключен", "off")}</span>{/if}

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, on, isTauri, type Status } from "$lib/api";
+  import { api, on, isTauri, type Status, type Modules } from "$lib/api";
   import { app, refresh, toast, act } from "$lib/state.svelte";
   import { t } from "$lib/i18n.svelte";
   import TitleBar from "$lib/components/TitleBar.svelte";
@@ -36,6 +36,18 @@
     { id: "hosts", label: () => "Hosts", icon: Globe, hint: () => t("Файл hosts", "The hosts file") },
     { id: "settings", label: () => "Settings", icon: Settings2, group: () => "", hint: () => t("Настройки", "Settings") },
   ];
+  /** Состояние модулей для точек в меню и строки системного прокси. */
+  let mods = $state<Modules | null>(null);
+  const modKey: Partial<Record<Tab, keyof Omit<Modules, "system_proxy">>> = { home: "zapret", proxy: "proxy", xray: "xray", tor: "tor", telegram: "telegram" };
+  const stateText = (s: string) =>
+    ({ on: t("работает", "running"), starting: t("подключается", "connecting"), error: t("ошибка", "error"), off: "" })[s] ?? "";
+  async function pollModules() {
+    if (document.visibilityState !== "visible") return;
+    try {
+      mods = await api.modules();
+    } catch {}
+  }
+
   const paths: Record<Tab, string> = {
     home: "zapret2",
     hosts: "hosts",
@@ -57,6 +69,8 @@
       if (l === "en" || l === "ru") api.setLanguage(l);
     }
     refresh();
+    pollModules();
+    const timer = setInterval(pollModules, 2000);
     const un = [
       on<Status>("status", (s) => {
         if (app.ov) app.ov.status = s;
@@ -70,6 +84,7 @@
     return () => {
       un.forEach((p) => p.then((f) => f()));
       document.removeEventListener("visibilitychange", vis);
+      clearInterval(timer);
     };
   });
 </script>
@@ -88,9 +103,21 @@
         {#if tb.group}
           <div class="group mono" class:spacer={!tb.group()}>{tb.group()}</div>
         {/if}
-        <button class:active={tab === tb.id} onclick={() => (tab = tb.id)} title={tb.hint()}>
+        {#if tb.id === "settings" && mods?.system_proxy}
+          {@const sp = mods.system_proxy}
+          <div class="sysproxy mono" title={t("Системный прокси Windows — прокси-обходчик; куда по умолчанию уходит трафик", "Windows system proxy is the bypass proxy; where traffic goes by default")}>
+            <span class="dot on"></span>
+            <span>
+              {t("системный прокси", "system proxy")}<br />
+              <span class="via">:{sp.port} → {sp.via === "tor" ? "Tor" : sp.via === "xray" ? "Xray" : "Proxy"}</span>
+            </span>
+          </div>
+        {/if}
+        {@const st = modKey[tb.id] && mods ? mods[modKey[tb.id]!] : "off"}
+        <button class:active={tab === tb.id} onclick={() => (tab = tb.id)} title={tb.hint() + (stateText(st) ? ` — ${stateText(st)}` : "")}>
           <tb.icon size={14} />
           <span class="mono">{tb.label()}</span>
+          {#if st !== "off"}<i class="dot {st}" aria-label={stateText(st)}></i>{/if}
         </button>
       {/each}
     </nav>
@@ -197,6 +224,48 @@
     background: var(--panel-2);
     color: var(--text);
   }
+  /* Точка состояния модуля справа от названия. */
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex: none;
+    margin-left: auto;
+  }
+  .dot.on {
+    background: var(--sage);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--sage) 60%, transparent);
+  }
+  .dot.starting {
+    background: var(--yellow);
+    animation: blink 1.2s ease-in-out infinite;
+  }
+  .dot.error {
+    background: var(--danger);
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0.35;
+    }
+  }
+  .sysproxy {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 10px 8px 12px;
+    font-size: 10.5px;
+    line-height: 1.45;
+    color: var(--faint);
+    white-space: nowrap;
+  }
+  .sysproxy .dot {
+    margin: 4px 0 0;
+    width: 6px;
+    height: 6px;
+  }
+  .sysproxy .via {
+    color: var(--muted);
+  }
   .content {
     flex: 1;
     overflow-y: auto;
@@ -227,8 +296,17 @@
       border-bottom: 1px solid var(--border-soft);
       overflow: visible;
     }
-    .group {
+    .group,
+    .sysproxy {
       display: none;
+    }
+    .tabs button {
+      position: relative;
+    }
+    .tabs .dot {
+      position: absolute;
+      top: 7px;
+      right: calc(50% - 16px);
     }
     .tabs button {
       flex: 1;

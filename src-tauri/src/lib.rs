@@ -891,6 +891,70 @@ fn tg_status_of(state: &AppState) -> TgStatus {
     TgStatus { config, stats, link, default_cf: telegram::default_cf_domains() }
 }
 
+/// Сводка по модулям для бокового меню: off | starting | on | error.
+#[derive(Serialize)]
+struct Modules {
+    zapret: &'static str,
+    proxy: &'static str,
+    xray: &'static str,
+    tor: &'static str,
+    telegram: &'static str,
+    /// Системный прокси Windows прописан (это всегда прокси-обходчик).
+    system_proxy: Option<SystemProxy>,
+}
+
+#[derive(Serialize)]
+struct SystemProxy {
+    port: u16,
+    /// Куда по умолчанию уходит трафик: bypass | tor | xray.
+    via: &'static str,
+}
+
+fn modules_of(state: &AppState) -> Modules {
+    let s = state.settings.lock().unwrap().clone();
+    let z = state.runner.status();
+    // Ошибка сбрасывается при запуске и остановке — красная точка не «залипает».
+    let zapret = if z.running { "on" } else if z.last_error.is_some() { "error" } else { "off" };
+    let pstats = state.proxy.lock().unwrap().as_ref().map(|p| p.stats());
+    let proxy_on = pstats.is_some();
+    let tunnel = |running: bool, ready: bool, err: bool, present: bool| -> &'static str {
+        match (present, running, ready, err) {
+            (false, ..) => "off",
+            (_, true, true, _) => "on",
+            (_, true, false, _) => "starting",
+            (_, false, _, true) => "error",
+            _ => "off",
+        }
+    };
+    let tor = state.tor.lock().unwrap().as_ref().map(|t| t.status());
+    let tor_s = tor.as_ref().map_or("off", |t| tunnel(t.running, t.ready, t.error.is_some(), true));
+    let xr = state.xray.lock().unwrap().as_ref().map(|x| x.status());
+    let xray_s = xr.as_ref().map_or("off", |x| tunnel(x.running, x.ready, x.error.is_some(), true));
+    let system_proxy = pstats.as_ref().is_some_and(|p| p.system).then(|| SystemProxy {
+        port: s.proxy.port,
+        via: if s.proxy.rules.tor_scope == "all" && tor_s == "on" {
+            "tor"
+        } else if s.proxy.rules.xray_scope == "all" && xray_s == "on" {
+            "xray"
+        } else {
+            "bypass"
+        },
+    });
+    Modules {
+        zapret,
+        proxy: if proxy_on { "on" } else { "off" },
+        xray: xray_s,
+        tor: tor_s,
+        telegram: if state.tg.lock().unwrap().is_some() { "on" } else { "off" },
+        system_proxy,
+    }
+}
+
+#[tauri::command(async)]
+fn modules(state: State<AppState>) -> Modules {
+    modules_of(&state)
+}
+
 fn tg_validate(c: &telegram::Config) -> R<()> {
     if c.port < 1024 {
         return Err(tr!("порт должен быть от 1024 до 65535", "port must be 1024–65535"));
@@ -2265,6 +2329,7 @@ pub fn run() {
             dns_check_defaults,
             lan_addresses,
             tg_status,
+            modules,
             net_status,
             mcp_status,
             mcp_set,
