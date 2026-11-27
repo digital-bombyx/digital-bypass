@@ -79,7 +79,11 @@ jobs:
 
       - name: Проверки
         run: |
+          # Ресурсы tauri.conf.json (zapret/, tor/, xray/) должны быть на месте
+          # уже для cargo test: build.rs Tauri проверяет их существование.
           npm run sync-zapret
+          npm run sync-tor
+          npm run sync-xray
           npm run check
           cd src-tauri
           cargo test --locked
