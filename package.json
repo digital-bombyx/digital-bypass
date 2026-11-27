@@ -1,6 +1,6 @@
 {
   "name": "digital-bypass",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Multitool for bypassing network blocks: zapret2 (winws2), DNS and more",
   "type": "module",
   "private": true,
