@@ -302,6 +302,12 @@
         </div>
         <Switch checked={st.fragment} disabled={app.busy} onchange={(v) => set({ fragment: v })} />
       </div>
+      <div class="tip hint faint mono">
+        {t(
+          "Сервер за Cloudflare или на хостинге, который режут по адресу (соединение «замирает» после 16–20 КБ)? Нарезка тут не поможет — включите заодно Zapret2: он обрабатывает и соединение Xray к серверу. Нужно, чтобы сервер попал под его фильтры: ipset в режиме «Список» (в нём есть подсети Cloudflare) или домен сервера в своём списке (Zapret2 → Lists).",
+          "Server behind Cloudflare or on a hosting cut by address (the connection freezes after 16–20 KB)? Splitting won't help — turn on Zapret2 as well: it also handles Xray's connection to the server. The server has to match its filters: ipset set to \"List\" (it includes Cloudflare subnets) or the server's domain in your own list (Zapret2 → Lists).",
+        )}
+      </div>
       <div class="actions">
         <label class="mono portl"><span class="k">{t("порт SOCKS5/HTTP", "SOCKS5/HTTP port")}</span>
           <input class="input port" type="number" min="1024" max="65535" bind:value={portText} disabled={app.busy} />
@@ -372,6 +378,13 @@
   .hint {
     font-size: 11px;
     margin-top: 3px;
+  }
+  /* Совет под настройкой: отдельный абзац с полосой слева. */
+  .tip {
+    margin: 2px 0 10px;
+    padding: 6px 10px;
+    border-left: 2px solid var(--border);
+    line-height: 1.45;
   }
   .stats {
     display: flex;
