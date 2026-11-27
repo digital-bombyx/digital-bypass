@@ -9,17 +9,12 @@
   import { FolderOpen, Power } from "@lucide/svelte";
 
   const ov = $derived(app.ov!);
-  // Поле — только для своей папки; встроенная выбирается кнопкой.
-  let dir = $state(app.ov?.dir_source === "bundled" ? "" : (app.ov?.dir ?? ""));
   const sourceLabel = $derived(
     ov.dir_source === "bundled" ? t("встроенная", "bundled") : ov.dir_source === "custom" ? t("своя папка", "custom folder") : t("найдена на диске", "found on disk"),
   );
   let timeout = $state(app.ov?.test_timeout ?? 4);
   let parallel = $state(app.ov?.test_parallel ?? 16);
 
-  async function saveDir() {
-    await act(() => api.setZapretDir(dir), t("Папка сохранена", "Folder saved"));
-  }
   async function saveTest() {
     await act(() => api.setTestParams(Number(timeout), Number(parallel)), t("Сохранено", "Saved"));
   }
@@ -35,15 +30,15 @@
       {ov.dir ? `${t("сборка", "build")} ${ov.version ?? "?"} · ${ov.strategies.length} ${t("стратегий", "strategies")}` : t("сборка не найдена", "build not found")}
       {#if ov.bundled_version}· {t("встроена", "bundled")} {ov.bundled_version}{/if}
     </div>
+    <!-- Своя папка больше не выбирается: сборка встроена. У кого она была задана раньше — кнопка возврата. -->
     <div class="dirrow">
-      <input class="input" bind:value={dir} placeholder={t("своя папка, напр. D:\\zapret-discord-youtube", "custom folder, e.g. D:\\zapret-discord-youtube")} />
-      <button class="btn sm" disabled={!dir.trim() || dir === ov.dir} onclick={saveDir}>ok</button>
+      <span class="path mono faint" title={ov.dir ?? ""}>{ov.dir ?? ""}</span>
       <button class="btn sm ghost" disabled={!ov.dir} title={t("Открыть папку", "Open folder")}
-        onclick={() => ov.dir && api.openPath(ov.dir).catch((e) => toast(String(e)))}><FolderOpen size={13} /></button>
+        onclick={() => ov.dir && api.openPath(ov.dir).catch((e) => toast(String(e)))}><FolderOpen size={13} /> {t("Открыть", "Open")}</button>
     </div>
     {#if ov.dir_source !== "bundled" && ov.bundled_version}
       <button class="btn sm ghost back" disabled={app.busy}
-        onclick={() => act(() => api.setZapretDir("").then(() => (dir = "")), t("Используется встроенная сборка", "Using the bundled build"))}
+        onclick={() => act(() => api.setZapretDir(""), t("Используется встроенная сборка", "Using the bundled build"))}
         >← {t("Вернуться к встроенной", "Back to bundled")}</button>
     {/if}
     {#if ov.bundle_error}
@@ -143,8 +138,17 @@
   }
   .dirrow {
     display: flex;
+    align-items: center;
     gap: 6px;
     margin-top: 8px;
+  }
+  .path {
+    flex: 1;
+    min-width: 0;
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .hint {
     font-size: 11px;

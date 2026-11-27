@@ -238,6 +238,7 @@ export type XraySubInfo = { upload: number; download: number; total: number; exp
 export type XraySub = { id: string; name: string; url: string; info: XraySubInfo; updated: number; error: string | null };
 export type XrayServer = { id: string; sub: string | null; name: string; protocol: string; address: string; port: number; transport: string };
 export type XrayPing = { id: string; ms: number | null; error: string | null };
+export type XraySpeed = { id: string; mbps: number | null; error: string | null };
 export type XrayStatus = {
   port: number;
   selected: string;
@@ -247,6 +248,8 @@ export type XrayStatus = {
   subs: XraySub[];
   servers: XrayServer[];
   pings: Record<string, XrayPing>;
+  speeds: Record<string, XraySpeed>;
+  speed_testing: boolean;
   status: { running: boolean; ready: boolean; port: number; server: string; error: string | null; uptime: number };
   available: boolean;
   version: string | null;
@@ -471,6 +474,8 @@ export const api = {
   xraySubRemove: (id: string) => invoke<XrayStatus>("xray_sub_remove", { id }),
   xrayServerRemove: (id: string) => invoke<XrayStatus>("xray_server_remove", { id }),
   xrayTest: () => invoke<XrayStatus>("xray_test"),
+  xraySpeed: (ids: string[] | null) => invoke<XrayStatus>("xray_speed", { ids }),
+  xraySpeedStop: () => invoke<void>("xray_speed_stop"),
   xrayLog: () => invoke<string[]>("xray_log"),
   xraySetDomains: (domains: string[], scope?: TorScope) => invoke<XrayStatus>("xray_set_domains", { domains, scope: scope ?? null }),
   torFindBridges: (kinds: string[], want: number) => invoke<BridgeReport>("tor_find_bridges", { kinds, want }),

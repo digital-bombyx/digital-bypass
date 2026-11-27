@@ -3,16 +3,20 @@
   import Segmented from "./Segmented.svelte";
   import Switch from "./Switch.svelte";
   import SubTabs from "./SubTabs.svelte";
+  import More from "./More.svelte";
+  import { XRAY_CATALOG, type CatalogSub } from "$lib/xrayCatalog";
   import { onMount } from "svelte";
   import { api, on, type XrayStatus, type XrayRouting, type TorScope } from "$lib/api";
   import { app, act, toast } from "$lib/state.svelte";
   import { t, locale } from "$lib/i18n.svelte";
-  import { Copy, Plus, RefreshCw, Trash2, Gauge, Route, Globe, MonitorCog, ScrollText, Link } from "@lucide/svelte";
+  import { Copy, Plus, RefreshCw, Trash2, Gauge, Route, Globe, MonitorCog, ScrollText, Link, Download, Square } from "@lucide/svelte";
 
   let st = $state<XrayStatus | null>(null);
   let addText = $state("");
   let adding = $state(false);
   let testing = $state(false);
+  let speedRun = $state(false);
+  let catalogAdding = $state<string | null>(null);
   let updating = $state<string | null>(null);
   let routes = $state({ direct: "", proxy: "", block: "" });
   let portText = $state("");
@@ -58,6 +62,17 @@
   $effect(() => {
     if (showLog) api.xrayLog().then((l) => (log = l)).catch(() => {});
   });
+  // Результаты скорости приходят по одному — подтягиваем их, пока идёт проверка.
+  $effect(() => {
+    if (!speedRun) return;
+    const id = setInterval(async () => {
+      try {
+        const r = await api.xrayStatus();
+        if (st) st = { ...st, speeds: r.speeds, speed_testing: r.speed_testing };
+      } catch {}
+    }, 1000);
+    return () => clearInterval(id);
+  });
 
   async function toggle() {
     const r = running ? await act(() => api.xrayStop(), t("Xray выключен", "Xray is off")) : await act(() => api.xrayStart(), t("Xray включён", "Xray is on"));
@@ -91,6 +106,33 @@
     }
     testing = false;
   }
+  async function speed() {
+    if (speedRun) {
+      api.xraySpeedStop().catch(() => {});
+      return;
+    }
+    speedRun = true;
+    try {
+      sync(await api.xraySpeed(null));
+    } catch (e) {
+      toast(String(e));
+    }
+    speedRun = false;
+  }
+  async function addCatalog(c: CatalogSub) {
+    catalogAdding = c.id;
+    try {
+      const r = await api.xrayAdd(c.url);
+      sync(r.status);
+      toast(t(`Подписка добавлена · серверов: ${r.added}`, `Subscription added · servers: ${r.added}`), "ok");
+    } catch (e) {
+      toast(String(e));
+      await load();
+    }
+    catalogAdding = null;
+  }
+  const catalogAdded = (c: CatalogSub) => !!st?.subs.some((s) => s.url === c.url);
+  const speedClass = (m: number | null | undefined) => (m == null ? "bad" : m >= 20 ? "good" : m >= 5 ? "mid" : "slow");
   async function updateSub(id: string | null) {
     updating = id ?? "*";
     try {
@@ -189,6 +231,27 @@
       </div>
     </section>
 
+    <More key="xray.catalog" title={t("бесплатные подписки", "free subscriptions")}>
+      <div class="hint faint mono">
+        {t(
+          "Публичные серверы из коллекции igareck/vpn-configs-for-russia: их проверяют из России раз в несколько часов и убирают нерабочие. Чьи это серверы — неизвестно: не вводите через них пароли и банковские данные. Для личного надёжнее свой сервер.",
+          "Public servers from the igareck/vpn-configs-for-russia collection: they are tested from Russia every few hours and dead ones are dropped. Nobody knows who runs them: don't enter passwords or bank details through them. Your own server is safer for anything personal.",
+        )}
+      </div>
+      {#each XRAY_CATALOG as c (c.id)}
+        <div class="sub mono">
+          <span class="chip kind" title={c.kind === "black" ? t("чёрные списки — обычный интернет с блокировками", "blacklists — regular internet with blocks") : t("белые списки — мобильный оператор пускает только на разрешённые сайты", "whitelists — the mobile carrier only allows approved sites")}>{c.kind === "black" ? t("ЧС", "BL") : t("БС", "WL")}</span>
+          <div class="grow">
+            <div class="sname">{t(c.name[0], c.name[1])}</div>
+            <div class="hint faint">{t(c.hint[0], c.hint[1])}</div>
+          </div>
+          {#if catalogAdded(c)}<span class="chip sage">{t("добавлена", "added")}</span>
+          {:else}<button class="btn sm" disabled={!!catalogAdding || app.busy} onclick={() => addCatalog(c)}>{#if catalogAdding === c.id}<span class="spin"></span>{:else}<Plus size={12} />{/if} {t("Добавить", "Add")}</button>{/if}
+        </div>
+      {/each}
+      <div class="hint faint mono">{t("ЧС — для обычного интернета с блокировками, БС — когда мобильный оператор пускает только на разрешённые сайты.", "BL (blacklists) — for regular internet with blocks; WL (whitelists) — for when a mobile carrier only allows approved sites.")}</div>
+    </More>
+
     {#if st.subs.length}
       <section class="card block">
         <div class="row">
@@ -219,7 +282,10 @@
       <section class="card block">
         <div class="row">
           <div class="label">{t("серверы", "servers")} · {st.servers.length}</div>
-          <button class="btn sm" disabled={testing || app.busy} onclick={test}>{#if testing}<span class="spin"></span>{:else}<Gauge size={12} />{/if} {t("Проверить задержку", "Test latency")}</button>
+          <div class="actions">
+            <button class="btn sm" disabled={testing || speedRun || app.busy} onclick={test}>{#if testing}<span class="spin"></span>{:else}<Gauge size={12} />{/if} {t("Проверить задержку", "Test latency")}</button>
+            <button class="btn sm" disabled={testing || app.busy} onclick={speed} title={t("Скачать файл через каждый сервер и замерить скорость", "Download a file through each server and measure the speed")}>{#if speedRun}<Square size={11} /> {t("Стоп", "Stop")}{:else}<Download size={12} /> {t("Скорость", "Speed")}{/if}</button>
+          </div>
         </div>
         <button class="srv mono" class:on={st.selected === "auto"} disabled={app.busy} onclick={() => set({ selected: "auto" })}>
           <span class="dot"></span>
@@ -230,11 +296,14 @@
           <div class="grp mono faint">{subName(g.key)}</div>
           {#each g.items as s (s.id)}
             {@const p = st.pings[s.id]}
+            {@const sp = st.speeds[s.id]}
             <div class="srvrow">
               <button class="srv mono" class:on={st.selected === s.id} disabled={app.busy} onclick={() => set({ selected: s.id })} title={p?.error ?? `${s.address}:${s.port}`}>
                 <span class="dot"></span>
                 <span class="nm">{s.name}</span>
                 <span class="chip">{s.transport}</span>
+                {#if sp}<span class="ms {speedClass(sp.mbps)}" title={sp.error ?? ""}>{sp.mbps != null ? `${sp.mbps} Mbps` : "—"}</span>
+                {:else if speedRun && p?.ms != null}<span class="ms faint">…</span>{/if}
                 {#if p}<span class="ms {pingClass(p.ms)}">{p.ms != null ? `${p.ms} ms` : "—"}</span>{/if}
               </button>
               {#if !s.sub}<button class="btn sm ghost" title={t("Удалить", "Remove")} disabled={app.busy} onclick={() => removeServer(s.id)}><Trash2 size={12} /></button>{/if}
@@ -242,6 +311,7 @@
           {/each}
         {/each}
         <div class="hint faint mono">{t("Задержка — настоящий запрос через сервер (generate_204), а не ping. «—» — сервер не ответил; причина — при наведении.", "Latency is a real request through the server (generate_204), not a ping. “—” means no answer; hover for the reason.")}</div>
+        <div class="hint faint mono">{t("Скорость — 8 секунд загрузки файла Cloudflare через сервер, по очереди: до 15 серверов, ответивших на проверку задержки, быстрые первыми. Пока идёт замер, канал занят.", "Speed — 8 seconds of downloading a Cloudflare file through each server, one at a time: up to 15 servers that passed the latency test, fastest first. The connection is busy while it runs.")}</div>
       </section>
     {/if}
     {:else if sub === "routing"}
@@ -496,6 +566,10 @@
   }
   .ms.bad {
     color: var(--danger-text);
+  }
+  .kind {
+    min-width: 28px;
+    text-align: center;
   }
   .lists {
     display: grid;

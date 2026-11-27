@@ -455,7 +455,8 @@ fn is_uuid(s: &str) -> bool {
 /// Скачать подписку: серверы, сведения из заголовков, ошибки строк.
 pub fn fetch_sub(url: &str, proxy: Option<u16>) -> Result<(Vec<Server>, SubInfo, Vec<String>), String> {
     let (body, headers) = crate::util::fetch_full(&crate::tr!("подписка", "subscription"), url, 25, proxy, Some(SUB_UA))?;
-    let info = crate::xraylinks::parse_headers(&headers);
+    let mut info = crate::xraylinks::parse_headers(&headers);
+    crate::xraylinks::fill_from_body(&mut info, &body);
     let (servers, errors) = crate::xraylinks::parse_subscription(&body);
     if servers.is_empty() {
         let why = errors.first().cloned().unwrap_or_default();
@@ -498,27 +499,50 @@ fn free_port() -> Option<u16> {
     std::net::TcpListener::bind(("127.0.0.1", 0)).ok()?.local_addr().ok().map(|a| a.port())
 }
 
+/// Временный xray для проверок: SOCKS-вход на каждый сервер. Убивается при `drop`.
+struct TestXray {
+    child: Child,
+    ports: Vec<u16>,
+    path: PathBuf,
+}
+
+impl TestXray {
+    fn start(dir: &Path, work: &Path, entries: &[&Entry]) -> Result<TestXray, String> {
+        let ports: Vec<u16> = entries.iter().map(|_| free_port()).collect::<Option<_>>().ok_or("no free port")?;
+        let conf = build_test(entries, &ports);
+        std::fs::create_dir_all(work).map_err(|e| e.to_string())?;
+        let path = work.join("xray-test.json");
+        std::fs::write(&path, serde_json::to_vec(&conf).unwrap_or_default()).map_err(|e| e.to_string())?;
+        check_config(dir, &path)?;
+        let child = xray_cmd(dir).args(["run", "-c"]).arg(&path).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| format!("xray.exe: {e}"))?;
+        let t = TestXray { child, ports, path };
+        // Ждём, пока поднимется последний вход.
+        let t0 = Instant::now();
+        while TcpStream::connect_timeout(&([127, 0, 0, 1], *t.ports.last().unwrap()).into(), Duration::from_millis(200)).is_err() {
+            if t0.elapsed() > Duration::from_secs(8) {
+                return Err(crate::tr!("xray для проверки не запустился", "xray for the test did not start"));
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        Ok(t)
+    }
+}
+
+impl Drop for TestXray {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
 /// Настоящая задержка: один xray с входом на каждый сервер, запрос через каждый.
 pub fn test(dir: &Path, work: &Path, entries: &[&Entry], timeout: u32) -> Result<Vec<Ping>, String> {
     if entries.is_empty() {
         return Ok(vec![]);
     }
-    let ports: Vec<u16> = entries.iter().map(|_| free_port()).collect::<Option<_>>().ok_or("no free port")?;
-    let conf = build_test(entries, &ports);
-    std::fs::create_dir_all(work).map_err(|e| e.to_string())?;
-    let path = work.join("xray-test.json");
-    std::fs::write(&path, serde_json::to_vec(&conf).unwrap_or_default()).map_err(|e| e.to_string())?;
-    check_config(dir, &path)?;
-    let mut child = xray_cmd(dir).args(["run", "-c"]).arg(&path).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| format!("xray.exe: {e}"))?;
-    // Ждём, пока поднимется последний вход.
-    let t0 = Instant::now();
-    while TcpStream::connect_timeout(&([127, 0, 0, 1], *ports.last().unwrap()).into(), Duration::from_millis(200)).is_err() {
-        if t0.elapsed() > Duration::from_secs(8) {
-            let _ = child.kill();
-            return Err(crate::tr!("xray для проверки не запустился", "xray for the test did not start"));
-        }
-        std::thread::sleep(Duration::from_millis(100));
-    }
+    let tx = TestXray::start(dir, work, entries)?;
+    let ports = &tx.ports;
     let results: Mutex<HashMap<usize, Ping>> = Mutex::new(HashMap::new());
     let next = std::sync::atomic::AtomicUsize::new(0);
     std::thread::scope(|sc| {
@@ -531,11 +555,66 @@ pub fn test(dir: &Path, work: &Path, entries: &[&Entry], timeout: u32) -> Result
             });
         }
     });
-    let _ = child.kill();
-    let _ = child.wait();
-    let _ = std::fs::remove_file(&path);
+    drop(tx);
     let mut r = results.into_inner().unwrap();
     Ok((0..entries.len()).filter_map(|i| r.remove(&i)).collect())
+}
+
+// ---------- проверка скорости ----------
+
+/// Файл для замера: Cloudflare отдаёт столько байт, сколько попросили.
+pub const SPEED_URL: &str = "https://speed.cloudflare.com/__down?bytes=50000000";
+/// Меньше этого за отведённое время — замер не считается.
+const SPEED_MIN_BYTES: f64 = 256.0 * 1024.0;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Speed {
+    pub id: String,
+    /// Мбит/с, средняя за время загрузки; None — не скачалось.
+    pub mbps: Option<f64>,
+    pub error: Option<String>,
+}
+
+/// Скорость загрузки через каждый сервер — по очереди, чтобы замеры не делили канал.
+/// `on` получает результат сразу, `stop` прерывает между серверами.
+pub fn speed_test(dir: &Path, work: &Path, entries: &[&Entry], secs: u32, stop: &dyn Fn() -> bool, on: &dyn Fn(Speed)) -> Result<(), String> {
+    if entries.is_empty() {
+        return Ok(());
+    }
+    let tx = TestXray::start(dir, work, entries)?;
+    for (e, port) in entries.iter().zip(&tx.ports) {
+        if stop() {
+            break;
+        }
+        let r = speed_probe(*port, secs);
+        on(Speed { id: e.id.clone(), mbps: r.as_ref().ok().copied(), error: r.err() });
+    }
+    Ok(())
+}
+
+/// Качать `secs` секунд через SOCKS; средняя скорость в Мбит/с.
+fn speed_probe(port: u16, secs: u32) -> Result<f64, String> {
+    let out = crate::util::hidden(crate::util::system32("curl.exe"))
+        .args(["-s", "-o", "NUL", "-m", &secs.to_string(), "-w", "%{http_code} %{speed_download} %{size_download}", "-x", &format!("socks5h://127.0.0.1:{port}"), SPEED_URL])
+        .output()
+        .map_err(|e| e.to_string())?;
+    parse_speed(&String::from_utf8_lossy(&out.stdout), out.status.code().unwrap_or(-1), secs)
+}
+
+/// Вывод curl `код скорость_байт/с размер` → Мбит/с. Код 28 (время вышло) — нормально:
+/// качаем ровно `secs` секунд, файл больше.
+fn parse_speed(text: &str, exit: i32, secs: u32) -> Result<f64, String> {
+    let num = |s: Option<&str>| s.unwrap_or("0").replace(',', ".").parse::<f64>().unwrap_or(0.0);
+    let mut it = text.split_whitespace();
+    let code = it.next().unwrap_or("000");
+    let (bps, size) = (num(it.next()), num(it.next()));
+    if code == "200" && size >= SPEED_MIN_BYTES {
+        return Ok((bps * 8.0 / 1_000_000.0 * 10.0).round() / 10.0);
+    }
+    if code == "200" || exit == 28 {
+        return Err(crate::tr!("почти ничего не скачалось за {secs} с", "almost nothing downloaded in {secs} s"));
+    }
+    Err(crate::util::fetch_reason(exit, code.parse().unwrap_or(0), secs))
 }
 
 /// Запрос generate_204 через SOCKS (имя разрешает сервер); время в мс.
@@ -637,6 +716,15 @@ mod tests {
         assert!(sub_due(&s, 13 * 3600));
         assert!(!sub_due(&Sub { updated: 3600, ..s }, 4 * 3600));
         assert_eq!(redact(&format!("x {U} y")), "x <uuid> y");
+    }
+
+    #[test]
+    fn speed_parse() {
+        // 2,5 МБ/с за 8 с (время вышло, код 28) → 20 Мбит/с.
+        assert_eq!(parse_speed("200 2500000 20000000", 28, 8), Ok(20.0));
+        assert_eq!(parse_speed("200 1250000.5 50000000", 0, 8), Ok(10.0));
+        assert!(parse_speed("200 1000 8000", 28, 8).is_err(), "слишком мало данных");
+        assert!(parse_speed("000 0 0", 28, 8).is_err());
     }
 
     /// Живая проверка подписки: `XRAY_SUB=<url> cargo test live_xray -- --ignored --nocapture`.

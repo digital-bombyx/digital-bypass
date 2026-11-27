@@ -171,6 +171,7 @@ npm run tauri build
 - **[hyperion-cs/dpi-checkers](https://github.com/hyperion-cs/dpi-checkers)** — цели для DPI-теста «16-20 КБ».
 - **[Flowseal/tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy)** (MIT) — модуль Telegram портирован с него, скрипт Worker и список CF-доменов взяты оттуда.
 - **[XTLS/Xray-core](https://github.com/XTLS/Xray-core)** (MPL-2.0) — ядро вкладки Xray, базы geoip/geosite из того же релиза. Разбор ссылок сверен с [v2rayN](https://github.com/2dust/v2rayN).
+- **[Twemoji](https://github.com/twitter/twemoji)** (CC-BY 4.0) через [country-flag-emoji-polyfill](https://github.com/talkjs/country-flag-emoji-polyfill) (MIT) — флаги стран в названиях серверов: в Windows своих нет.
 - **[The Tor Project](https://www.torproject.org/)** — tor и lyrebird (Tor Expert Bundle, BSD-3-Clause и др., тексты лицензий — в папке `tor\docs`).
 - **[scriptzteam/Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2), [OnionHop-Bridges-Collector](https://github.com/center2055/OnionHop-Bridges-Collector), [javadz501/Tor-Bridges-Collector](https://github.com/javadz501/Tor-Bridges-Collector), [igareck/vpn-configs-for-russia](https://github.com/igareck/vpn-configs-for-russia)** — списки мостов для поиска; настройки Snowflake и часть мостов — из API Tor Project (moat).
 

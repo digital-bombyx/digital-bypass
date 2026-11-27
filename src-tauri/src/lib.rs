@@ -79,6 +79,11 @@ pub struct AppState {
     xray_testing: AtomicBool,
     /// Последняя проверка задержки: id сервера → результат.
     xray_pings: Mutex<std::collections::HashMap<String, xray::Ping>>,
+    /// Идёт проверка скорости; `xray_speed_stop` — прервать.
+    xray_speed_testing: AtomicBool,
+    xray_speed_stop: AtomicBool,
+    /// Последняя проверка скорости: id сервера → результат.
+    xray_speeds: Mutex<std::collections::HashMap<String, xray::Speed>>,
     /// Изменения от ИИ (MCP), ждущие подтверждения; иначе — откат.
     mcp_trial: Mutex<Option<trial::Trial>>,
 }
@@ -1206,6 +1211,8 @@ struct XrayStatus {
     subs: Vec<xray::Sub>,
     servers: Vec<XrayServerView>,
     pings: std::collections::HashMap<String, xray::Ping>,
+    speeds: std::collections::HashMap<String, xray::Speed>,
+    speed_testing: bool,
     status: xray::Status,
     available: bool,
     version: Option<String>,
@@ -1245,6 +1252,8 @@ fn xray_status_of(state: &AppState) -> XrayStatus {
         enabled: c.enabled,
         subs: c.subs,
         pings: state.xray_pings.lock().unwrap().clone(),
+        speeds: state.xray_speeds.lock().unwrap().clone(),
+        speed_testing: state.xray_speed_testing.load(Ordering::SeqCst),
         status,
         available: state.xray_dir.is_some(),
         version: state.xray_dir.as_deref().and_then(xray::version),
@@ -1310,7 +1319,9 @@ impl AppState {
                     let n = servers.len();
                     xray::apply_sub(&mut cfg, &id, servers);
                     if let Some(s) = cfg.subs.iter_mut().find(|s| s.id == id) {
-                        if !info.title.is_empty() && (s.name.is_empty() || s.name == s.url) {
+                        // Имя по умолчанию — хост ссылки; его заменяет название из подписки.
+                        let host = s.url.split("://").nth(1).and_then(|r| r.split(['/', '?', ':']).next()).unwrap_or("").to_string();
+                        if !info.title.is_empty() && (s.name.is_empty() || s.name == s.url || s.name == host) {
                             s.name = info.title.clone();
                         }
                         s.info = info;
@@ -1471,7 +1482,7 @@ fn xray_server_remove(state: State<AppState>, id: String) -> R<XrayStatus> {
 #[tauri::command(async)]
 fn xray_test(state: State<AppState>) -> R<XrayStatus> {
     let dir = state.xray_dir.clone().ok_or_else(|| tr!("В этой сборке нет Xray", "This build has no Xray"))?;
-    if state.xray_testing.swap(true, Ordering::SeqCst) {
+    if state.xray_speed_testing.load(Ordering::SeqCst) || state.xray_testing.swap(true, Ordering::SeqCst) {
         return Err(tr!("проверка уже идёт", "a test is already running"));
     }
     let cfg = state.settings.lock().unwrap().xray.clone();
@@ -1486,6 +1497,51 @@ fn xray_test(state: State<AppState>) -> R<XrayStatus> {
     }
     drop(m);
     Ok(xray_status_of(&state))
+}
+
+/// Сколько серверов проверять на скорость за раз и сколько секунд качать через каждый.
+const SPEED_MAX: usize = 15;
+const SPEED_SECS: u32 = 8;
+
+/// Скорость загрузки через серверы — по очереди. `ids` — какие; иначе ответившие
+/// на проверку задержки (быстрейшие первыми), а если её не было — первые по списку.
+/// Результаты появляются в `xray_status` по ходу проверки.
+#[tauri::command(async)]
+fn xray_speed(state: State<AppState>, ids: Option<Vec<String>>) -> R<XrayStatus> {
+    let dir = state.xray_dir.clone().ok_or_else(|| tr!("В этой сборке нет Xray", "This build has no Xray"))?;
+    if state.xray_testing.load(Ordering::SeqCst) || state.xray_speed_testing.swap(true, Ordering::SeqCst) {
+        return Err(tr!("проверка уже идёт", "a test is already running"));
+    }
+    state.xray_speed_stop.store(false, Ordering::SeqCst);
+    let cfg = state.settings.lock().unwrap().xray.clone();
+    let pings = state.xray_pings.lock().unwrap().clone();
+    let mut entries: Vec<&xray::Entry> = match &ids {
+        Some(ids) => cfg.servers.iter().filter(|e| ids.contains(&e.id)).collect(),
+        None if pings.values().any(|p| p.ms.is_some()) => {
+            let mut v: Vec<&xray::Entry> = cfg.servers.iter().filter(|e| pings.get(&e.id).is_some_and(|p| p.ms.is_some())).collect();
+            v.sort_by_key(|e| pings[&e.id].ms);
+            v
+        }
+        None => cfg.servers.iter().collect(),
+    };
+    entries.truncate(SPEED_MAX);
+    {
+        let mut m = state.xray_speeds.lock().unwrap();
+        for e in &entries {
+            m.remove(&e.id);
+        }
+    }
+    let r = xray::speed_test(&dir, &xray_work(&state).join("speed"), &entries, SPEED_SECS, &|| state.xray_speed_stop.load(Ordering::SeqCst), &|s| {
+        state.xray_speeds.lock().unwrap().insert(s.id.clone(), s);
+    });
+    state.xray_speed_testing.store(false, Ordering::SeqCst);
+    r?;
+    Ok(xray_status_of(&state))
+}
+
+#[tauri::command(async)]
+fn xray_speed_stop(state: State<AppState>) {
+    state.xray_speed_stop.store(true, Ordering::SeqCst);
 }
 
 #[tauri::command(async)]
@@ -1882,23 +1938,31 @@ fn refresh_tray(app: &AppHandle) {
     let stub_on = state.stub.lock().unwrap().is_some();
     // Значок «включён», если работает хоть один обход.
     let _ = tray.set_icon(Some(tray_icon(st.running || proxy_on)));
+    // В подсказке — только то, что включено (у Windows лимит ~127 символов).
     let mut tip = vec!["digital-bypass".to_string()];
-    tip.push(match (&st.running, &st.strategy) {
-        (true, Some(s)) => {
-            let s = s.trim_end_matches(".bat");
-            tr!("zapret2: {s}", "zapret2: {s}")
-        }
-        (true, None) => tr!("zapret2: включён", "zapret2: on"),
-        _ => tr!("zapret2: выключен", "zapret2: off"),
-    });
-    if proxy_on {
-        tip.push(tr!("прокси: включён", "proxy: on"));
+    if st.running {
+        tip.push(match &st.strategy {
+            Some(s) => format!("zapret2: {}", s.trim_end_matches(".bat")),
+            None => "zapret2".into(),
+        });
     }
-    if stub_on {
-        tip.push(tr!("DoH-резолвер: включён", "DoH resolver: on"));
+    if proxy_on {
+        tip.push(tr!("прокси", "proxy"));
+    }
+    if state.xray.lock().unwrap().is_some() {
+        tip.push("Xray".into());
+    }
+    if state.tor.lock().unwrap().is_some() {
+        tip.push("Tor".into());
     }
     if state.tg.lock().unwrap().is_some() {
-        tip.push(tr!("Telegram-прокси: включён", "Telegram proxy: on"));
+        tip.push(tr!("Telegram-прокси", "Telegram proxy"));
+    }
+    if stub_on {
+        tip.push(tr!("DoH-резолвер", "DoH resolver"));
+    }
+    if tip.len() == 1 {
+        tip.push(tr!("всё выключено", "everything is off"));
     }
     let _ = tray.set_tooltip(Some(tip.join("\n")));
     if let Ok(menu) = build_tray_menu(app) {
@@ -2187,6 +2251,9 @@ pub fn run() {
                 xray: Mutex::new(None),
                 xray_testing: AtomicBool::new(false),
                 xray_pings: Mutex::new(std::collections::HashMap::new()),
+                xray_speed_testing: AtomicBool::new(false),
+                xray_speed_stop: AtomicBool::new(false),
+                xray_speeds: Mutex::new(std::collections::HashMap::new()),
                 mcp_trial: Mutex::new(None),
             });
             trial::watch(app.handle().clone());
@@ -2437,6 +2504,8 @@ pub fn run() {
             xray_sub_remove,
             xray_server_remove,
             xray_test,
+            xray_speed,
+            xray_speed_stop,
             xray_log,
             xray_set_domains,
             sni_defaults,

@@ -459,6 +459,20 @@ pub struct SubInfo {
 }
 
 /// Разобрать заголовки ответа (как их печатает `curl -D`).
+/// Те же сведения из комментариев в начале тела (`# profile-title: …`): так пишут
+/// подписки, лежащие файлом на GitHub, где своих заголовков нет. Заголовки важнее.
+pub fn fill_from_body(info: &mut SubInfo, body: &str) {
+    let lines: String = body.lines().take(20).filter_map(|l| l.trim().strip_prefix('#')).map(|l| format!("{}
+", l.trim())).collect();
+    let b = parse_headers(&lines);
+    if info.title.is_empty() {
+        info.title = b.title;
+    }
+    if info.update_hours == 0 {
+        info.update_hours = b.update_hours;
+    }
+}
+
 pub fn parse_headers(raw: &str) -> SubInfo {
     let mut i = SubInfo::default();
     for line in raw.lines() {
@@ -533,6 +547,22 @@ pub fn parse_subscription(body: &str) -> (Vec<Server>, Vec<String>) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn body_info() {
+        let body = "# profile-title: 🏴 BLACK LISTS | Mobile-150
+# profile-update-interval: 1
+# Date/Time: 2026-11-27 / 12:59
+
+vless://x@a:1#A
+";
+        let mut i = SubInfo::default();
+        fill_from_body(&mut i, body);
+        assert_eq!((i.title.as_str(), i.update_hours), ("🏴 BLACK LISTS | Mobile-150", 1));
+        let mut h = SubInfo { title: "From header".into(), update_hours: 12, ..Default::default() };
+        fill_from_body(&mut h, body);
+        assert_eq!((h.title.as_str(), h.update_hours), ("From header", 12), "заголовки важнее");
+    }
+
     use super::*;
 
     const U: &str = "11111111-2222-3333-4444-555555555555";

@@ -29,6 +29,8 @@ pub const SOURCES: &[(&str, &str)] = &[
     ("webtunnel", "https://raw.githubusercontent.com/center2055/OnionHop-Bridges-Collector/main/bridge/webtunnel_tested.txt"),
     ("webtunnel", "https://raw.githubusercontent.com/javadz501/Tor-Bridges-Collector/main/bridge/webtunnel_tested.txt"),
     ("webtunnel", "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/TOR-BRIDGES/TOR_BRIDGES_WEBTUNNEL.txt"),
+    // igareck проверяет мосты с сервера в России раз в несколько часов.
+    ("obfs4", "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/TOR-BRIDGES/TOR_BRIDGES_OBFS4.txt"),
 ];
 
 /// Официальный API Tor (им пользуется «Помощник подключения» Tor Browser):

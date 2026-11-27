@@ -188,6 +188,7 @@ npm run tauri build
 - **[basil00/WinDivert](https://github.com/basil00/WinDivert)**, **[hyperion-cs/dpi-checkers](https://github.com/hyperion-cs/dpi-checkers)**.
 - **[Flowseal/tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy)** (MIT) — the Telegram module is a port of it; the Worker script and the CF domain list come from it.
 - **[XTLS/Xray-core](https://github.com/XTLS/Xray-core)** (MPL-2.0) — the Xray tab core and the geoip/geosite files from the same release. Link parsing follows [v2rayN](https://github.com/2dust/v2rayN).
+- **[Twemoji](https://github.com/twitter/twemoji)** (CC-BY 4.0) via [country-flag-emoji-polyfill](https://github.com/talkjs/country-flag-emoji-polyfill) (MIT) — country flags in server names: Windows has none of its own.
 - **[The Tor Project](https://www.torproject.org/)** — tor and lyrebird (Tor Expert Bundle, BSD-3-Clause and others; license texts in `tor\docs`).
 - **[scriptzteam/Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2), [OnionHop-Bridges-Collector](https://github.com/center2055/OnionHop-Bridges-Collector), [javadz501/Tor-Bridges-Collector](https://github.com/javadz501/Tor-Bridges-Collector), [igareck/vpn-configs-for-russia](https://github.com/igareck/vpn-configs-for-russia)** — bridge lists for the search; Snowflake settings and some bridges come from the Tor Project API (moat).
 

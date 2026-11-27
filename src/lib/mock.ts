@@ -41,6 +41,8 @@ const xr: any = {
     { id: "a3", sub: "s1", name: "🇱🇻 Латвия [vless+ws+tls]", protocol: "vless", address: "lat.example", port: 2086, transport: "ws+tls" },
   ],
   pings: {},
+  speeds: {},
+  speed_testing: false,
   status: { running: false, ready: false, port: 10820, server: "", error: null, uptime: 0 },
   available: true,
   version: "26.11.9",
@@ -418,6 +420,13 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
       Object.assign(xr, { port: args.port, selected: args.selected, routing: args.routing, fragment: args.fragment });
       return structuredClone(xr);
     case "xray_add":
+      if (/^https?:\/\//.test(args.text.trim())) {
+        const url = args.text.trim();
+        const id = "c" + xr.subs.length;
+        xr.subs.push({ id, name: url.split("/").pop(), url, info: { upload: 0, download: 0, total: 0, expire: 0, update_hours: 1, title: "" }, updated: Math.floor(Date.now() / 1000), error: null });
+        for (let i = 0; i < 3; i++) xr.servers.push({ id: id + i, sub: id, name: ["🇩🇪 Germany", "🇳🇱 Netherlands", "🇫🇮 Finland"][i], protocol: "vless", address: "free.example", port: 443, transport: "raw+reality" });
+        return { status: structuredClone(xr), added: 3, errors: [] };
+      }
       xr.servers.push({ id: "m" + xr.servers.length, sub: null, name: "Мой сервер", protocol: "vless", address: "my.example", port: 443, transport: "raw+reality" });
       return { status: structuredClone(xr), added: 1, errors: [] };
     case "xray_sub_update":
@@ -434,6 +443,20 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
       await new Promise((r) => setTimeout(r, 1200));
       xr.pings = Object.fromEntries(xr.servers.map((s: any, i: number) => [s.id, { id: s.id, ms: i === 2 ? null : 600 + i * 37, error: i === 2 ? "соединение оборвано — похоже на блокировку по DPI" : null }]));
       return structuredClone(xr);
+    case "xray_speed": {
+      xr.speed_testing = true;
+      const ids = args.ids ?? xr.servers.filter((s: any) => xr.pings[s.id]?.ms != null).map((s: any) => s.id);
+      for (const [i, id] of ids.entries()) {
+        await new Promise((r) => setTimeout(r, 900));
+        if (!xr.speed_testing) break;
+        xr.speeds[id] = { id, mbps: i === 1 ? null : +Math.max(1.2, 38.4 - i * 11.7).toFixed(1), error: i === 1 ? "почти ничего не скачалось за 8 с" : null };
+      }
+      xr.speed_testing = false;
+      return structuredClone(xr);
+    }
+    case "xray_speed_stop":
+      xr.speed_testing = false;
+      return null;
     case "xray_log":
       return ["2026/11/24 21:22:45 [Warning] core: Xray 26.11.9 started", "2026/11/24 21:22:46 from tcp:127.0.0.1:18627 accepted tcp:ya.ru:443 [in -> direct]", "2026/11/24 21:22:49 from tcp:127.0.0.1:18637 accepted tcp:ifconfig.me:443 [in -> p3]"];
     case "xray_set_domains":
