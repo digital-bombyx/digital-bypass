@@ -22,7 +22,7 @@ One-click zapret2 (winws2 + Lua), a bypass proxy without admin rights, DNS switc
 
 ## Screenshots
 
-Checking a site, then bypassing with zapret2 and with the bypass proxy:
+Checking a site, then bypassing with zapret2 and with the bypass proxy (captions in Russian):
 
 https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 
