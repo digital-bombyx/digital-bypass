@@ -256,3 +256,9 @@ body {
   flex: 1 1 260px;
   min-width: 0;
 }
+/* Иконка в подписи блока — в строку с текстом. */
+.label > svg {
+  display: inline-block;
+  vertical-align: -1px;
+  margin-right: 3px;
+}

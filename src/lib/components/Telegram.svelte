@@ -6,6 +6,7 @@
   import { t } from "$lib/i18n.svelte";
   import { TG_WORKER_CODE } from "$lib/tgWorker";
   import Switch from "./Switch.svelte";
+  import SubTabs from "./SubTabs.svelte";
   import { Copy, Send, RefreshCw, Cloud, Eye, EyeOff } from "@lucide/svelte";
 
   let st = $state<TgStatus | null>(null);
@@ -17,6 +18,11 @@
   /** Имя из белых списков, которое использует tg-ws-proxy. */
   const SNI_EXAMPLE = "sprinthost.ru";
   const running = $derived(!!st?.stats.running);
+  let sub = $state<"main" | "routes">("main");
+  /** Своё на подвкладке Routes (отличия от стандартного) — для значка. */
+  const routesCount = $derived(
+    cfg ? cfg.cf_workers.length + (cfg.cf_domains.length ? 1 : 0) + (cfg.sni ? 1 : 0) + (!cfg.cf_proxy ? 1 : 0) : 0,
+  );
 
   const lines = (v: string[]) => v.join("\n");
   const fromLines = (s: string) => s.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
@@ -79,6 +85,14 @@
 
 <div class="tg fade-in">
   {#if st && cfg}
+    <SubTabs
+      key="telegram"
+      bind:value={sub}
+      tabs={[
+        { id: "main", label: "Main", title: t("Включение и подключение Telegram", "On/off and connecting Telegram") },
+        { id: "routes", label: "Routes", badge: routesCount || null, title: t("Запасные пути: подмена SNI, CF-прокси, свой Worker", "Fallback paths: SNI override, CF proxy, own Worker") },
+      ]} />
+    {#if sub === "main"}
     <section class="card block hero">
       <div class="prompt mono">{t("telegram-прокси · MTProto → WebSocket, для Telegram Desktop", "telegram proxy · MTProto → WebSocket, for Telegram Desktop")}</div>
       <PowerButton on={running} disabled={app.busy} onclick={toggle} />
@@ -142,6 +156,9 @@
         </div>
         <Switch checked={cfg.fragment} disabled={app.busy} onchange={(v) => save({ fragment: v })} />
       </div>
+    </section>
+    {:else}
+    <section class="card opts">
       <div class="opt">
         <div class="grow">
           <div class="label">{t("подмена sni", "sni override")}</div>
@@ -207,6 +224,7 @@
         <pre class="code mono">{TG_WORKER_CODE}</pre>
       </details>
     </section>
+    {/if}
   {/if}
 </div>
 
