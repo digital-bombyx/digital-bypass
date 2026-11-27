@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src-tauri/icons/128x128.png" width="96" alt="digital-bypass" />
+<img src="docs/banner.webp" width="100%" alt="digital-bypass" />
 
 # digital-bypass
 
