@@ -7,7 +7,9 @@
   // Восстановить последнюю подвкладку (если такая ещё есть) — один раз при создании.
   untrack(() => {
     try {
-      const v = localStorage.getItem(`sub.${key}`) as T | null;
+      // Макет в браузере: `?sub=tests` открывает подвкладку (для скриншотов).
+      const q = "__TAURI_INTERNALS__" in window ? null : (new URLSearchParams(location.search).get("sub") as T | null);
+      const v = q && tabs.some((x) => x.id === q) ? q : (localStorage.getItem(`sub.${key}`) as T | null);
       if (v && tabs.some((x) => x.id === v)) value = v;
     } catch {}
   });

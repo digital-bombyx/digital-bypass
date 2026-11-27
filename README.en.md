@@ -20,6 +20,15 @@ One-click zapret2 (winws2 + Lua), a bypass proxy without admin rights, DNS switc
 
 > Based on [Zapret2-RustGUI](https://github.com/digital-bombyx/Zapret2-RustGUI): its features became the `zapret2` module of this multitool.
 
+## Screenshots
+
+| | |
+|:-:|:-:|
+| <a href="docs/screenshots/en/check.png"><img src="docs/screenshots/en/check.png" alt="Check" /></a><br/><b>Check</b> — why a site does not open | <a href="docs/screenshots/en/zapret2.png"><img src="docs/screenshots/en/zapret2.png" alt="Zapret2" /></a><br/><b>Zapret2</b> — one-click bypass |
+| <a href="docs/screenshots/en/tests.png"><img src="docs/screenshots/en/tests.png" alt="Tests" /></a><br/><b>Tests</b> — strategy finder | <a href="docs/screenshots/en/proxy.png"><img src="docs/screenshots/en/proxy.png" alt="Proxy" /></a><br/><b>Proxy</b> — no admin rights |
+| <a href="docs/screenshots/en/xray.png"><img src="docs/screenshots/en/xray.png" alt="Xray" /></a><br/><b>Xray</b> — your servers and subscriptions | <a href="docs/screenshots/en/tor.png"><img src="docs/screenshots/en/tor.png" alt="Tor" /></a><br/><b>Tor</b> — bridges and routing |
+| <a href="docs/screenshots/en/telegram.png"><img src="docs/screenshots/en/telegram.png" alt="Telegram" /></a><br/><b>Telegram</b> — a proxy for Telegram Desktop | <a href="docs/screenshots/en/dns.png"><img src="docs/screenshots/en/dns.png" alt="DNS" /></a><br/><b>DNS</b> — adapter DNS and DoH |
+
 ## Modules
 
 ### zapret2

@@ -15,6 +15,12 @@
   let busy = $state(false);
   let report = $state<DiagReport | null>(null);
 
+  // Макет в браузере: `?check=youtube.com` сразу проверяет сайт (для скриншотов).
+  if (!("__TAURI_INTERNALS__" in window)) {
+    const q = new URLSearchParams(location.search).get("check");
+    if (q) queueMicrotask(() => ((domain = q), run()));
+  }
+
   async function run() {
     if (!domain.trim() || busy) return;
     busy = true;

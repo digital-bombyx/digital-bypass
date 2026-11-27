@@ -20,6 +20,15 @@ zapret2 (winws2 + Lua) в один клик, прокси-обходчик бе�
 
 > Основан на [Zapret2-RustGUI](https://github.com/digital-bombyx/Zapret2-RustGUI): его функции стали модулем `zapret2` этого мультитула.
 
+## Скриншоты
+
+| | |
+|:-:|:-:|
+| <a href="docs/screenshots/ru/check.png"><img src="docs/screenshots/ru/check.png" alt="Check" /></a><br/><b>Check</b> — почему не открывается сайт | <a href="docs/screenshots/ru/zapret2.png"><img src="docs/screenshots/ru/zapret2.png" alt="Zapret2" /></a><br/><b>Zapret2</b> — обход в один клик |
+| <a href="docs/screenshots/ru/tests.png"><img src="docs/screenshots/ru/tests.png" alt="Tests" /></a><br/><b>Tests</b> — подбор стратегии | <a href="docs/screenshots/ru/proxy.png"><img src="docs/screenshots/ru/proxy.png" alt="Proxy" /></a><br/><b>Proxy</b> — без прав администратора |
+| <a href="docs/screenshots/ru/xray.png"><img src="docs/screenshots/ru/xray.png" alt="Xray" /></a><br/><b>Xray</b> — свои серверы и подписки | <a href="docs/screenshots/ru/tor.png"><img src="docs/screenshots/ru/tor.png" alt="Tor" /></a><br/><b>Tor</b> — мосты и маршрутизация |
+| <a href="docs/screenshots/ru/telegram.png"><img src="docs/screenshots/ru/telegram.png" alt="Telegram" /></a><br/><b>Telegram</b> — прокси для Telegram Desktop | <a href="docs/screenshots/ru/dns.png"><img src="docs/screenshots/ru/dns.png" alt="DNS" /></a><br/><b>DNS</b> — DNS адаптера и DoH |
+
 ## Модули
 
 ### zapret2

@@ -176,6 +176,21 @@ const tg: any = {
   default_cf: Array.from({ length: 20 }, (_, i) => `cf${i}.co.uk`),
 };
 
+/** `?on` — прокси, Xray, Tor и Telegram уже включены (для скриншотов). */
+if (typeof location !== "undefined" && new URLSearchParams(location.search).has("on")) {
+  proxy.enabled = true;
+  proxy.config.system = true;
+  proxy.stats = { running: true, port: 8881, active: 3, total: 41, failed: 1, system: true, lan: false, auth: false, bypassed: 30, passed: 9, blocked: 2, dns_cached: 17, bypass_domains: 1840, auto_retries: 3, auto_sites: 2, last_error: null };
+  xr.enabled = true;
+  xr.pings = { a1: { id: "a1", ms: 612, error: null }, a2: { id: "a2", ms: 655, error: null }, a3: { id: "a3", ms: null, error: "соединение оборвано — похоже на блокировку по DPI" } };
+  xr.status = { running: true, ready: true, port: 10820, server: "авто: лучший из 3", error: null, uptime: 340 };
+  tor.config.enabled = true;
+  tor.config.found = ["obfs4 78.109.16.83:9938 1EFFC759915A61151D835A26C0BB2E60F5E666CB cert=AbCd iat-mode=0", "obfs4 103.17.153.50:443 E1FE1E1EBF704DB6D9F450895E449D86255DD8DE cert=EfGh iat-mode=0"];
+  tor.status = { ...tor.status, running: true, ready: true, percent: 100, phase: "Done", tier: "bridges", elapsed: 41 };
+  tg.config.enabled = true;
+  tg.stats = { ...tg.stats, running: true, active: 3, total: 12, ws: 9, cf: 3, bytes_up: 182000, bytes_down: 5400000 };
+}
+
 /** Пробные изменения ИИ в макете: `?trial` — висит отсчёт. */
 let mockTrial: number | null = typeof location !== "undefined" && new URLSearchParams(location.search).has("trial") ? Date.now() + 120000 : null;
 
