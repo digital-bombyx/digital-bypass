@@ -10,15 +10,13 @@ zapret2 (winws2 + Lua) в один клик, прокси-обходчик бе�
 
 **Русский** · [English](README.en.md)
 
-![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-58a6ff?style=flat-square&labelColor=0f1216)
-![Rust](https://img.shields.io/badge/Rust-Tauri%202-58a6ff?style=flat-square&labelColor=0f1216)
-![Svelte](https://img.shields.io/badge/Svelte-5-58a6ff?style=flat-square&labelColor=0f1216)
-![License](https://img.shields.io/badge/license-GPL--3.0-58a6ff?style=flat-square&labelColor=0f1216)
-[![Claude Code](https://img.shields.io/badge/built%20with-Claude%20Code-d97757?style=flat-square&labelColor=0f1216)](https://claude.com/claude-code)
+![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-58a6ff?style=flat&labelColor=0f1216)
+![Rust](https://img.shields.io/badge/Rust-Tauri%202-58a6ff?style=flat&labelColor=0f1216)
+![Svelte](https://img.shields.io/badge/Svelte-5-58a6ff?style=flat&labelColor=0f1216)
+![License](https://img.shields.io/badge/license-GPL--3.0-58a6ff?style=flat&labelColor=0f1216)
+[![Claude Code](https://img.shields.io/badge/built%20with-Claude%20Code-d97757?style=flat&labelColor=0f1216)](https://claude.com/claude-code)
 
 </div>
-
-> Основан на [Zapret2-RustGUI](https://github.com/digital-bombyx/Zapret2-RustGUI): его функции стали модулем `zapret2` этого мультитула.
 
 ## Скриншоты
 
@@ -26,12 +24,10 @@ zapret2 (winws2 + Lua) в один клик, прокси-обходчик бе�
 
 https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 
-| | |
-|:-:|:-:|
-| <a href="docs/screenshots/ru/check.png"><img src="docs/screenshots/ru/check.png" alt="Check" /></a><br/><b>Check</b> — почему не открывается сайт | <a href="docs/screenshots/ru/zapret2.png"><img src="docs/screenshots/ru/zapret2.png" alt="Zapret2" /></a><br/><b>Zapret2</b> — обход в один клик |
-| <a href="docs/screenshots/ru/tests.png"><img src="docs/screenshots/ru/tests.png" alt="Tests" /></a><br/><b>Tests</b> — подбор стратегии | <a href="docs/screenshots/ru/proxy.png"><img src="docs/screenshots/ru/proxy.png" alt="Proxy" /></a><br/><b>Proxy</b> — без прав администратора |
-| <a href="docs/screenshots/ru/xray.png"><img src="docs/screenshots/ru/xray.png" alt="Xray" /></a><br/><b>Xray</b> — свои серверы и подписки | <a href="docs/screenshots/ru/tor.png"><img src="docs/screenshots/ru/tor.png" alt="Tor" /></a><br/><b>Tor</b> — мосты и маршрутизация |
-| <a href="docs/screenshots/ru/telegram.png"><img src="docs/screenshots/ru/telegram.png" alt="Telegram" /></a><br/><b>Telegram</b> — прокси для Telegram Desktop | <a href="docs/screenshots/ru/dns.png"><img src="docs/screenshots/ru/dns.png" alt="DNS" /></a><br/><b>DNS</b> — DNS адаптера и DoH |
+|  |  |  |  |
+|:-:|:-:|:-:|:-:|
+| <a href="docs/screenshots/ru/check.png" title="Check — почему не открывается сайт"><img src="docs/screenshots/ru/check.png" alt="Check" /></a><br/><sub><b>Check</b></sub> | <a href="docs/screenshots/ru/zapret2.png" title="Zapret2 — обход в один клик"><img src="docs/screenshots/ru/zapret2.png" alt="Zapret2" /></a><br/><sub><b>Zapret2</b></sub> | <a href="docs/screenshots/ru/tests.png" title="Tests — подбор стратегии"><img src="docs/screenshots/ru/tests.png" alt="Tests" /></a><br/><sub><b>Tests</b></sub> | <a href="docs/screenshots/ru/proxy.png" title="Proxy — без прав администратора"><img src="docs/screenshots/ru/proxy.png" alt="Proxy" /></a><br/><sub><b>Proxy</b></sub> |
+| <a href="docs/screenshots/ru/xray.png" title="Xray — свои серверы и подписки"><img src="docs/screenshots/ru/xray.png" alt="Xray" /></a><br/><sub><b>Xray</b></sub> | <a href="docs/screenshots/ru/tor.png" title="Tor — мосты и маршрутизация"><img src="docs/screenshots/ru/tor.png" alt="Tor" /></a><br/><sub><b>Tor</b></sub> | <a href="docs/screenshots/ru/telegram.png" title="Telegram — прокси для Telegram Desktop"><img src="docs/screenshots/ru/telegram.png" alt="Telegram" /></a><br/><sub><b>Telegram</b></sub> | <a href="docs/screenshots/ru/dns.png" title="DNS — DNS адаптера и DoH"><img src="docs/screenshots/ru/dns.png" alt="DNS" /></a><br/><sub><b>DNS</b></sub> |
 
 ## Модули
 

@@ -10,15 +10,13 @@ One-click zapret2 (winws2 + Lua), a bypass proxy without admin rights, DNS switc
 
 [Русский](README.md) · **English**
 
-![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-58a6ff?style=flat-square&labelColor=0f1216)
-![Rust](https://img.shields.io/badge/Rust-Tauri%202-58a6ff?style=flat-square&labelColor=0f1216)
-![Svelte](https://img.shields.io/badge/Svelte-5-58a6ff?style=flat-square&labelColor=0f1216)
-![License](https://img.shields.io/badge/license-GPL--3.0-58a6ff?style=flat-square&labelColor=0f1216)
-[![Claude Code](https://img.shields.io/badge/built%20with-Claude%20Code-d97757?style=flat-square&labelColor=0f1216)](https://claude.com/claude-code)
+![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-58a6ff?style=flat&labelColor=0f1216)
+![Rust](https://img.shields.io/badge/Rust-Tauri%202-58a6ff?style=flat&labelColor=0f1216)
+![Svelte](https://img.shields.io/badge/Svelte-5-58a6ff?style=flat&labelColor=0f1216)
+![License](https://img.shields.io/badge/license-GPL--3.0-58a6ff?style=flat&labelColor=0f1216)
+[![Claude Code](https://img.shields.io/badge/built%20with-Claude%20Code-d97757?style=flat&labelColor=0f1216)](https://claude.com/claude-code)
 
 </div>
-
-> Based on [Zapret2-RustGUI](https://github.com/digital-bombyx/Zapret2-RustGUI): its features became the `zapret2` module of this multitool.
 
 ## Screenshots
 
@@ -26,12 +24,10 @@ Checking a site, then bypassing with zapret2 and with the bypass proxy (captions
 
 https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 
-| | |
-|:-:|:-:|
-| <a href="docs/screenshots/en/check.png"><img src="docs/screenshots/en/check.png" alt="Check" /></a><br/><b>Check</b> — why a site does not open | <a href="docs/screenshots/en/zapret2.png"><img src="docs/screenshots/en/zapret2.png" alt="Zapret2" /></a><br/><b>Zapret2</b> — one-click bypass |
-| <a href="docs/screenshots/en/tests.png"><img src="docs/screenshots/en/tests.png" alt="Tests" /></a><br/><b>Tests</b> — strategy finder | <a href="docs/screenshots/en/proxy.png"><img src="docs/screenshots/en/proxy.png" alt="Proxy" /></a><br/><b>Proxy</b> — no admin rights |
-| <a href="docs/screenshots/en/xray.png"><img src="docs/screenshots/en/xray.png" alt="Xray" /></a><br/><b>Xray</b> — your servers and subscriptions | <a href="docs/screenshots/en/tor.png"><img src="docs/screenshots/en/tor.png" alt="Tor" /></a><br/><b>Tor</b> — bridges and routing |
-| <a href="docs/screenshots/en/telegram.png"><img src="docs/screenshots/en/telegram.png" alt="Telegram" /></a><br/><b>Telegram</b> — a proxy for Telegram Desktop | <a href="docs/screenshots/en/dns.png"><img src="docs/screenshots/en/dns.png" alt="DNS" /></a><br/><b>DNS</b> — adapter DNS and DoH |
+|  |  |  |  |
+|:-:|:-:|:-:|:-:|
+| <a href="docs/screenshots/en/check.png" title="Check — why a site does not open"><img src="docs/screenshots/en/check.png" alt="Check" /></a><br/><sub><b>Check</b></sub> | <a href="docs/screenshots/en/zapret2.png" title="Zapret2 — one-click bypass"><img src="docs/screenshots/en/zapret2.png" alt="Zapret2" /></a><br/><sub><b>Zapret2</b></sub> | <a href="docs/screenshots/en/tests.png" title="Tests — strategy finder"><img src="docs/screenshots/en/tests.png" alt="Tests" /></a><br/><sub><b>Tests</b></sub> | <a href="docs/screenshots/en/proxy.png" title="Proxy — no admin rights"><img src="docs/screenshots/en/proxy.png" alt="Proxy" /></a><br/><sub><b>Proxy</b></sub> |
+| <a href="docs/screenshots/en/xray.png" title="Xray — your servers and subscriptions"><img src="docs/screenshots/en/xray.png" alt="Xray" /></a><br/><sub><b>Xray</b></sub> | <a href="docs/screenshots/en/tor.png" title="Tor — bridges and routing"><img src="docs/screenshots/en/tor.png" alt="Tor" /></a><br/><sub><b>Tor</b></sub> | <a href="docs/screenshots/en/telegram.png" title="Telegram — a proxy for Telegram Desktop"><img src="docs/screenshots/en/telegram.png" alt="Telegram" /></a><br/><sub><b>Telegram</b></sub> | <a href="docs/screenshots/en/dns.png" title="DNS — adapter DNS and DoH"><img src="docs/screenshots/en/dns.png" alt="DNS" /></a><br/><sub><b>DNS</b></sub> |
 
 ## Modules
 
