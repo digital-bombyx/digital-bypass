@@ -6,7 +6,7 @@
 
 **A network unblocking multitool for Windows**
 
-One-click zapret2 (winws2 + Lua), a bypass proxy without admin rights, DNS switching and DoH, a "why won't it open" check, hosts.
+One-click zapret2, a bypass proxy without admin rights, Xray with your own servers, Tor with a bridge finder, a Telegram proxy, DNS and DoH, a "why won't it open" check — and an MCP server so an AI assistant can find the cause and fix it.
 
 [Русский](README.md) · **English**
 
