@@ -22,6 +22,10 @@ One-click zapret2 (winws2 + Lua), a bypass proxy without admin rights, DNS switc
 
 ## Screenshots
 
+Checking a site, then bypassing with zapret2 and with the bypass proxy — 22 seconds (captions in Russian):
+
+https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
+
 | | |
 |:-:|:-:|
 | <a href="docs/screenshots/en/check.png"><img src="docs/screenshots/en/check.png" alt="Check" /></a><br/><b>Check</b> — why a site does not open | <a href="docs/screenshots/en/zapret2.png"><img src="docs/screenshots/en/zapret2.png" alt="Zapret2" /></a><br/><b>Zapret2</b> — one-click bypass |

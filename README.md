@@ -22,6 +22,10 @@ zapret2 (winws2 + Lua) в один клик, прокси-обходчик бе�
 
 ## Скриншоты
 
+Проверка сайта, обход через zapret2 и через прокси-обходчик — 22 секунды:
+
+https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
+
 | | |
 |:-:|:-:|
 | <a href="docs/screenshots/ru/check.png"><img src="docs/screenshots/ru/check.png" alt="Check" /></a><br/><b>Check</b> — почему не открывается сайт | <a href="docs/screenshots/ru/zapret2.png"><img src="docs/screenshots/ru/zapret2.png" alt="Zapret2" /></a><br/><b>Zapret2</b> — обход в один клик |
