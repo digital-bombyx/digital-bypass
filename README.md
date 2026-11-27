@@ -18,7 +18,7 @@ zapret2 в один клик, прокси-обходчик без прав ад
 
 </div>
 
-## Скриншоты
+## 📸 Скриншоты
 
 Проверка сайта, обход через zapret2 и через прокси-обходчик:
 
@@ -29,9 +29,9 @@ https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 | <a href="docs/screenshots/ru/check.png" title="Check — почему не открывается сайт"><img src="docs/screenshots/ru/check.png" alt="Check" /></a><br/><sub><b>Check</b></sub> | <a href="docs/screenshots/ru/zapret2.png" title="Zapret2 — обход в один клик"><img src="docs/screenshots/ru/zapret2.png" alt="Zapret2" /></a><br/><sub><b>Zapret2</b></sub> | <a href="docs/screenshots/ru/tests.png" title="Tests — подбор стратегии"><img src="docs/screenshots/ru/tests.png" alt="Tests" /></a><br/><sub><b>Tests</b></sub> | <a href="docs/screenshots/ru/proxy.png" title="Proxy — без прав администратора"><img src="docs/screenshots/ru/proxy.png" alt="Proxy" /></a><br/><sub><b>Proxy</b></sub> |
 | <a href="docs/screenshots/ru/xray.png" title="Xray — свои серверы и подписки"><img src="docs/screenshots/ru/xray.png" alt="Xray" /></a><br/><sub><b>Xray</b></sub> | <a href="docs/screenshots/ru/tor.png" title="Tor — мосты и маршрутизация"><img src="docs/screenshots/ru/tor.png" alt="Tor" /></a><br/><sub><b>Tor</b></sub> | <a href="docs/screenshots/ru/telegram.png" title="Telegram — прокси для Telegram Desktop"><img src="docs/screenshots/ru/telegram.png" alt="Telegram" /></a><br/><sub><b>Telegram</b></sub> | <a href="docs/screenshots/ru/dns.png" title="DNS — DNS адаптера и DoH"><img src="docs/screenshots/ru/dns.png" alt="DNS" /></a><br/><sub><b>DNS</b></sub> |
 
-## Модули
+## 🧩 Модули
 
-### zapret2
+### ⚡ zapret2
 
 - **Встроенный zapret-discord-youtube.** Сборка лежит внутри установщика, при обновлении ваши списки и настройки остаются. Можно указать свою папку.
 - **Включение в один клик.** `winws2.exe` запускается напрямую, без консоли: процессом (пока открыто приложение) или службой `zapret`, совместимой с `service.bat`.
@@ -44,7 +44,7 @@ https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 - **Game Filter, IPSet, пользовательские списки** — те же файлы, что пишет `service.bat`.
 - **Наборы доменов**: Telegram, Instagram/Facebook/WhatsApp, X, Roblox, SoundCloud добавляются в список одним кликом (YouTube и Discord уже есть во встроенных списках).
 
-### DNS
+### 🌐 DNS
 
 Иногда лёгкие блокировки обходятся одной сменой DNS.
 
@@ -55,7 +55,7 @@ https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 - Возврат к автоматическому DNS (DHCP) и сброс кэша DNS.
 - **Локальный резолвер** — шифрованный DNS и на Windows 10: приложение само отвечает на DNS-запросы на `127.0.0.x:53` и пересылает их по DoT (DNS поверх TLS, работает у всех пресетов, кроме OpenDNS) или DoH. Пока оно работает, провайдер не видит и не подменяет DNS; при выходе прежний DNS возвращается. Есть резервный обычный DNS на случай, если приложение закрыто. Резолвер **убирает ключи ECH**: на запросы HTTPS-записей отвечает пусто, и браузер шлёт обычный ClientHello вместо отбрасываемого ТСПУ `cloudflare-ech.com` — сайты за Cloudflare снова обходятся нарезкой (если у браузера выключен собственный «безопасный DNS»).
 
-### Прокси-обходчик
+### 🔀 Прокси-обходчик
 
 Обход DPI **без прав администратора и без драйвера** — для рабочих ПК и случаев, когда антивирус не даёт WinDivert.
 
@@ -73,11 +73,11 @@ https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 - **Через свой Cloudflare Worker**: домены из отдельного списка (заблокированные по IP или с геоограничениями — Instagram, Facebook, Spotify, ИИ-сервисы) идут через ваш бесплатный Worker по WebSocket, с нарезкой ClientHello к Cloudflare. TLS с сайтом остаётся сквозным. Сайты, которые сами стоят за Cloudflare, так не открыть.
 - Только HTTPS через прокси: UDP, QUIC и голос Discord по-прежнему требуют zapret2.
 
-### Telegram
+### ✈️ Telegram
 
 Локальный MTProto-прокси для Telegram Desktop — порт [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) (Flowseal, MIT). Трафик идёт через WebSocket к веб-адресам Telegram; если они недоступны — через свой Cloudflare Worker или CF-прокси (домены за Cloudflare), в крайнем случае — напрямую по TCP. TLS к Telegram и Cloudflare открывается с нарезкой ClientHello, как в прокси-обходчике; для прямого маршрута можно подменить SNI (например, на имя из белого списка). Подключение в Telegram — одной кнопкой (ссылка `tg://proxy`). Сообщения остаются зашифрованными MTProto.
 
-### Tor
+### 🧅 Tor
 
 Для того, что не берут zapret и нарезка: сайты, заблокированные по IP, геоограничения, адреса .onion. Внутри — `tor.exe` и `lyrebird` из официального [Tor Expert Bundle](https://www.torproject.org/download/tor/) (16.0.1, SHA-256 сверяется при сборке; сверить самому — [sha256sums-signed-build.txt](https://archive.torproject.org/tor-package-archive/torbrowser/16.0.1/sha256sums-signed-build.txt)).
 
@@ -91,7 +91,7 @@ https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 
 Это обход блокировок, а не анонимность: браузер через прокси узнаваем по отпечатку и кукам. Для анонимности — Tor Browser.
 
-### Xray
+### 🚀 Xray
 
 Клиент для своих серверов VLESS, VMess, Trojan и Shadowsocks — на официальном [Xray-core](https://github.com/XTLS/Xray-core) (26.11.9, SHA-256 сверяется при сборке).
 
@@ -101,7 +101,7 @@ https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 - **Нарезка ClientHello к серверу** — если сам сервер режут по SNI.
 - SOCKS5/HTTP на `127.0.0.1:10820` (порт меняется); прокси-обходчик отправляет через Xray выбранные домены, списки zapret или весь трафик.
 
-### Проверка
+### 🩺 Проверка
 
 Введите домен — приложение сравнит системный DNS с DoH, попробует TCP и TLS к каждому адресу и скажет, в чём дело: подмена DNS, DPI по имени сайта или блокировка по IP. И подскажет, какой модуль поможет.
 
@@ -113,11 +113,11 @@ https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 
 **Сканер SNI** отправляет к одному адресу TLS-приветствие с разными именами сайтов и показывает, какие имена DPI пропускает. Помогает понять, включены ли белые списки, и подобрать имя для VLESS Reality или поддельный SNI для стратегий. Идея — из [sni-spoofing-rust](https://github.com/therealaleph/sni-spoofing-rust).
 
-### hosts
+### 📄 hosts
 
 Записи из `.service\hosts` добавляются в системный hosts отдельным блоком, который снимается одной кнопкой. Свои записи, обновление с GitHub, бэкап перед записью.
 
-### Общее
+### ⚙️ Общее
 
 **Включение по сети** (как `--ssid-filter` в winws): zapret2 и прокси работают только в выбранных сетях или везде, кроме них. Сеть определяется по имени профиля Windows (для Wi-Fi — имя сети), при смене сети обход останавливается или возвращается.
 
@@ -130,7 +130,7 @@ https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 
 Трей с быстрым включением zapret2 и прокси-обходчика, сменой стратегии и состоянием DoH-резолвера, автозапуск с правами администратора, русский и английский интерфейс.
 
-## Установка
+## 📦 Установка
 
 1. Скачайте `digital-bypass_x.y.z_x64-setup.exe` со страницы [Releases](https://github.com/digital-bombyx/digital-bypass/releases/latest).
 2. Сверьте контрольную сумму: SHA-256 указан в описании релиза и в файле `.sha256` рядом с установщиком. Установщик собирает GitHub Actions из открытого кода, сумма считается там же.
@@ -147,7 +147,7 @@ https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 >
 > Сторонних бинарников в репозитории нет: при каждой сборке (локально и в GitHub Actions) скрипты скачивают их из первоисточников и сверяют SHA-256, закреплённую в коде, — при несовпадении сборка падает. Tor — с dist.torproject.org или его архива archive.torproject.org ([`scripts/sync-tor.mjs`](scripts/sync-tor.mjs)), Xray — из релизов XTLS/Xray-core ([`scripts/sync-xray.mjs`](scripts/sync-xray.mjs)), zapret — из закреплённого коммита апстрима со сверкой дерева файлов ([`scripts/sync-zapret.mjs`](scripts/sync-zapret.mjs), [`release.yml`](.github/workflows/release.yml)).
 
-## Сборка из исходников
+## 🛠️ Сборка из исходников
 
 Нужны Node.js, Rust (MSVC) и git-клон [zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube):
 
@@ -161,7 +161,7 @@ npm run tauri build
 
 Релизы собирает GitHub Actions ([`release.yml`](.github/workflows/release.yml)) при пуше тега `vX.Y.Z`, описание берётся из [CHANGELOG.md](CHANGELOG.md).
 
-## Благодарности
+## 🙏 Благодарности
 
 - **[bol-van](https://github.com/bol-van)** — [zapret](https://github.com/bol-van/zapret) и [zapret2](https://github.com/bol-van/zapret2): движок `winws` / `winws2` и Lua-библиотеки.
 - **[kinlay0](https://github.com/kinlay0/zapret2-discord-youtube-strats)** — коллекция стратегий zapret2 (K-*).
@@ -174,7 +174,7 @@ npm run tauri build
 - **[The Tor Project](https://www.torproject.org/)** — tor и lyrebird (Tor Expert Bundle, BSD-3-Clause и др., тексты лицензий — в папке `tor\docs`).
 - **[scriptzteam/Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2), [OnionHop-Bridges-Collector](https://github.com/center2055/OnionHop-Bridges-Collector), [javadz501/Tor-Bridges-Collector](https://github.com/javadz501/Tor-Bridges-Collector), [igareck/vpn-configs-for-russia](https://github.com/igareck/vpn-configs-for-russia)** — списки мостов для поиска; настройки Snowflake и часть мостов — из API Tor Project (moat).
 
-### Идеи
+### 💡 Идеи
 
 Код ниже — свой, из этих проектов взяты приёмы и подходы:
 
@@ -193,13 +193,13 @@ npm run tauri build
 
 Бинарники и Lua-скрипты встроенной сборки распространяются под лицензиями их авторов (см. `LICENSE.txt` в папке сборки).
 
-## Сделано вместе с Claude
+## 🤝 Сделано вместе с Claude
 
 <img src="docs/claude-code.png" width="72" align="right" alt="Claude Code" />
 
 Большую часть кода, проверок и исследований для этого проекта я делал в паре с [Claude](https://claude.com/claude-code) (Anthropic): от Rust-бэкенда, Tor и Xray до разбора научных статей про DPI, которые легли в автоподбор и прокси. Спасибо, Claude, за помощь в проекте.
 
-## Лицензия
+## ⚖️ Лицензия
 
 [GPL-3.0](LICENSE) с дополнительными условиями по пункту 7 ([NOTICE](NOTICE)):
 
@@ -209,6 +209,6 @@ npm run tauri build
 
 Форки и производные работы остаются открытыми под GPL-3.0.
 
-## Supported by GOAT VLESS
+## 🐐 Supported by GOAT VLESS
 
 <a href="https://t.me/goatvless_bot?start=ref_8840005712"><img src="docs/goatvless-banner-transparent.webp" alt="GOAT VLESS" width="100%"></a>

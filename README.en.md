@@ -18,7 +18,7 @@ One-click zapret2, a bypass proxy without admin rights, Xray with your own serve
 
 </div>
 
-## Screenshots
+## 📸 Screenshots
 
 Checking a site, then bypassing with zapret2 and with the bypass proxy (captions in Russian):
 
@@ -29,9 +29,9 @@ https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 | <a href="docs/screenshots/en/check.png" title="Check — why a site does not open"><img src="docs/screenshots/en/check.png" alt="Check" /></a><br/><sub><b>Check</b></sub> | <a href="docs/screenshots/en/zapret2.png" title="Zapret2 — one-click bypass"><img src="docs/screenshots/en/zapret2.png" alt="Zapret2" /></a><br/><sub><b>Zapret2</b></sub> | <a href="docs/screenshots/en/tests.png" title="Tests — strategy finder"><img src="docs/screenshots/en/tests.png" alt="Tests" /></a><br/><sub><b>Tests</b></sub> | <a href="docs/screenshots/en/proxy.png" title="Proxy — no admin rights"><img src="docs/screenshots/en/proxy.png" alt="Proxy" /></a><br/><sub><b>Proxy</b></sub> |
 | <a href="docs/screenshots/en/xray.png" title="Xray — your servers and subscriptions"><img src="docs/screenshots/en/xray.png" alt="Xray" /></a><br/><sub><b>Xray</b></sub> | <a href="docs/screenshots/en/tor.png" title="Tor — bridges and routing"><img src="docs/screenshots/en/tor.png" alt="Tor" /></a><br/><sub><b>Tor</b></sub> | <a href="docs/screenshots/en/telegram.png" title="Telegram — a proxy for Telegram Desktop"><img src="docs/screenshots/en/telegram.png" alt="Telegram" /></a><br/><sub><b>Telegram</b></sub> | <a href="docs/screenshots/en/dns.png" title="DNS — adapter DNS and DoH"><img src="docs/screenshots/en/dns.png" alt="DNS" /></a><br/><sub><b>DNS</b></sub> |
 
-## Modules
+## 🧩 Modules
 
-### zapret2
+### ⚡ zapret2
 
 - **Bundled zapret-discord-youtube.** Ships inside the installer, your lists and settings survive updates. A custom folder is supported.
 - **One-click bypass.** `winws2.exe` runs directly, without a console: as a process (while the app is open) or as the `zapret` service, compatible with `service.bat`.
@@ -44,7 +44,7 @@ https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 - **Game Filter, IPSet, user lists** — the same files `service.bat` writes.
 - **Domain sets**: Telegram, Instagram/Facebook/WhatsApp, X, Roblox, SoundCloud are added to the list in one click (YouTube and Discord are already in the built-in lists).
 
-### DNS
+### 🌐 DNS
 
 Sometimes changing DNS is enough to get around light blocking.
 
@@ -55,7 +55,7 @@ Sometimes changing DNS is enough to get around light blocking.
 - Revert to automatic DNS (DHCP) and flush the DNS cache.
 - **Local resolver** — encrypted DNS on Windows 10 too: the app answers DNS queries on `127.0.0.x:53` and forwards them over DoT (DNS over TLS, works for every preset except OpenDNS) or DoH. While it runs the ISP cannot see or spoof DNS; on exit the previous DNS is restored. An optional plain DNS fallback keeps the internet working when the app is closed.
 
-### Bypass proxy
+### 🔀 Bypass proxy
 
 DPI bypass **without admin rights and without a driver** — for work PCs and when antivirus blocks WinDivert.
 
@@ -70,11 +70,11 @@ DPI bypass **without admin rights and without a driver** — for work PCs and wh
 - **Local network sharing**: a phone on the same Wi-Fi uses the PC as its proxy. Only local network addresses are allowed, and the firewall rule is added automatically (with admin rights). An optional user and password are asked from network devices but not from the PC itself.
 - HTTPS through the proxy only: UDP, QUIC and Discord voice still need zapret2.
 
-### Telegram
+### ✈️ Telegram
 
 A local MTProto proxy for Telegram Desktop — a port of [tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy) (Flowseal, MIT). Traffic goes over WebSocket to Telegram's web endpoints; if they are unreachable — through your own Cloudflare Worker or a CF proxy (domains behind Cloudflare), as a last resort — direct TCP. TLS to Telegram and Cloudflare uses a split ClientHello, as in the bypass proxy; the direct route can override the SNI (e.g. with a whitelisted name). Connecting Telegram takes one click (a `tg://proxy` link). Messages stay MTProto-encrypted.
 
-### Tor
+### 🧅 Tor
 
 For what zapret and splitting cannot fix: IP-blocked sites, geo-restrictions, .onion addresses. Ships `tor.exe` and `lyrebird` from the official [Tor Expert Bundle](https://www.torproject.org/download/tor/) (16.0.1, SHA-256 checked at build time; check it yourself against [sha256sums-signed-build.txt](https://archive.torproject.org/tor-package-archive/torbrowser/16.0.1/sha256sums-signed-build.txt)).
 
@@ -88,7 +88,7 @@ For what zapret and splitting cannot fix: IP-blocked sites, geo-restrictions, .o
 
 This bypasses blocks; it is not anonymity: a browser behind the proxy is identifiable by its fingerprint and cookies. For anonymity use Tor Browser.
 
-### Xray
+### 🚀 Xray
 
 A client for your own VLESS, VMess, Trojan and Shadowsocks servers on the official [Xray-core](https://github.com/XTLS/Xray-core) (26.11.9, SHA-256 checked at build time).
 
@@ -98,7 +98,7 @@ A client for your own VLESS, VMess, Trojan and Shadowsocks servers on the offici
 - **ClientHello splitting to the server** — when the server itself is cut by SNI.
 - SOCKS5/HTTP on `127.0.0.1:10820` (configurable); the bypass proxy sends chosen domains, the zapret lists or all traffic through Xray.
 
-### Check
+### 🩺 Check
 
 Enter a domain: the app compares the system DNS with DoH, tries TCP and TLS to each address and tells what is wrong — DNS spoofing, DPI by site name or IP blocking — and which module helps.
 
@@ -106,23 +106,23 @@ Enter a domain: the app compares the system DNS with DoH, tries TCP and TLS to e
 
 The **SNI scanner** sends a TLS hello with different site names to one address and shows which names DPI lets through. It helps to tell whether whitelists are on and to pick a name for VLESS Reality or a fake SNI for strategies. The idea comes from [sni-spoofing-rust](https://github.com/therealaleph/sni-spoofing-rust).
 
-### hosts
+### 📄 hosts
 
 Entries from `.service\hosts` go into the system hosts file as a separate block that one button removes. Custom entries, GitHub updates, a backup before writing.
 
-### General
+### ⚙️ General
 
 Tray with quick zapret2 and bypass proxy toggles, strategy switch and DoH resolver state, autostart with admin rights, Russian and English UI.
 
-### Through your own Cloudflare Worker
+### ☁️ Through your own Cloudflare Worker
 
 The bypass proxy can send domains from a separate list (blocked by IP or geo-restricted — Instagram, Facebook, Spotify, AI services) through your free Cloudflare Worker over WebSocket, with ClientHello splitting towards Cloudflare. TLS with the site stays end-to-end. Sites hosted on Cloudflare itself cannot be reached this way. The Worker code with your key is in the app.
 
-### Destination-network restrictions
+### 🚧 Destination-network restrictions
 
 **Check** also recognizes the restriction applied to foreign hostings since 2025 (Hetzner, OVH, DigitalOcean, Vultr…): TLS to the address fails with any site name, or the transfer freezes after ~16–33 KB without a reset. Splitting does not help there.
 
-### MCP for AI assistants
+### 🤖 MCP for AI assistants
 
 Settings → MCP (off by default). Claude, Cursor and other MCP clients connect to `http://127.0.0.1:8899/mcp` with a token. Ask "why won't Discord load?" — the assistant calls `diagnose_site` (DNS, TCP, TLS, where DPI cuts) and, if needed, `find_zapret_strategy` (tries zapret2 strategies against that very site). Status, proxy and winws2 logs, the DNS check and test results are available too. Changing settings (turning zapret2 and the proxy on, picking a strategy, editing lists) needs "Allow changes".
 
@@ -131,7 +131,7 @@ Settings → MCP (off by default). Claude, Cursor and other MCP clients connect 
 - **Conflicts.** `get_status` reports another DPI bypass tool (GoodbyeDPI, zapret, ByeDPI), a VPN client or a third-party antivirus that may delete WinDivert.
 - **Knowledge.** Our server acts; a zapret2 and TSPU reference lives in [zapret2-mcp](https://github.com/rcd27/zapret2-mcp) (45 articles, in Russian) — add it next to ours: `"zapret2": {"command": "npx", "args": ["-y", "zapret2-mcp"]}`.
 
-## Other countries
+## 🌍 Other countries
 
 digital-bypass is built and tested in Russia. Outside it, keep two things in mind:
 
@@ -150,7 +150,7 @@ If something works or fails for you in another country, an issue with the **Chec
 
 > Circumventing censorship can be illegal or risky in some countries. You are responsible for how you use this software.
 
-## Install
+## 📦 Install
 
 1. Download `digital-bypass_x.y.z_x64-setup.exe` from [Releases](https://github.com/digital-bombyx/digital-bypass/releases/latest).
 2. Verify the checksum: the SHA-256 is in the release description and in the `.sha256` file next to the installer. GitHub Actions builds the installer from the public source and computes the sum there.
@@ -167,7 +167,7 @@ If something works or fails for you in another country, an issue with the **Chec
 >
 > No third-party binaries live in the repository: every build (locally and in GitHub Actions) downloads them from their origins and checks a SHA-256 pinned in the code — on a mismatch the build fails. Tor comes from dist.torproject.org or its archive at archive.torproject.org ([`scripts/sync-tor.mjs`](scripts/sync-tor.mjs)), Xray from the XTLS/Xray-core releases ([`scripts/sync-xray.mjs`](scripts/sync-xray.mjs)), zapret from a pinned upstream commit with its file tree verified ([`scripts/sync-zapret.mjs`](scripts/sync-zapret.mjs), [`release.yml`](.github/workflows/release.yml)).
 
-## Build from source
+## 🛠️ Build from source
 
 Requires Node.js, Rust (MSVC) and a git clone of [zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube):
 
@@ -179,7 +179,7 @@ npm run tauri build
 
 `scripts/sync-xray.mjs` downloads Xray-core from GitHub (offline: `$env:XRAY_ZIP`), `scripts/sync-tor.mjs` downloads the Tor Expert Bundle from dist.torproject.org (older versions from archive.torproject.org) and checks its SHA-256 (offline: `$env:TOR_TARBALL = "path\to\archive.tar.gz"`).
 
-## Credits
+## 🙏 Credits
 
 - **[bol-van](https://github.com/bol-van)** — [zapret](https://github.com/bol-van/zapret) and [zapret2](https://github.com/bol-van/zapret2).
 - **[kinlay0](https://github.com/kinlay0/zapret2-discord-youtube-strats)** — a collection of zapret2 strategies (K-*).
@@ -191,7 +191,7 @@ npm run tauri build
 - **[The Tor Project](https://www.torproject.org/)** — tor and lyrebird (Tor Expert Bundle, BSD-3-Clause and others; license texts in `tor\docs`).
 - **[scriptzteam/Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2), [OnionHop-Bridges-Collector](https://github.com/center2055/OnionHop-Bridges-Collector), [javadz501/Tor-Bridges-Collector](https://github.com/javadz501/Tor-Bridges-Collector), [igareck/vpn-configs-for-russia](https://github.com/igareck/vpn-configs-for-russia)** — bridge lists for the search; Snowflake settings and some bridges come from the Tor Project API (moat).
 
-### Ideas
+### 💡 Ideas
 
 Our code is original; these projects contributed techniques and approaches:
 
@@ -204,13 +204,13 @@ Our code is original; these projects contributed techniques and approaches:
 - **[B4](https://github.com/DanielLavrushin/b4)** and **[tspu-docs](https://github.com/DanielLavrushin/tspu-docs)** (DanielLavrushin) — stripping ECH keys from DNS, "direct vs through the bypass" checks, SNI search for hostings, winner confirmation; how TSPU restricts hostings.
 - **[zapret](https://github.com/bol-van/zapret)** (bol-van) — blockcheck methodology for the block type, small receive buffer (like `--wssize`), per-network switching (`--ssid-filter`).
 
-## Built together with Claude
+## 🤝 Built together with Claude
 
 <img src="docs/claude-code.png" width="72" align="right" alt="Claude Code" />
 
 Most of the code, testing and research for this project was done together with [Claude](https://claude.com/claude-code) (Anthropic): from the Rust backend, Tor and Xray to reading DPI research papers that shaped the auto-tune and the proxy. Thank you, Claude, for helping with the project.
 
-## License
+## ⚖️ License
 
 [GPL-3.0](LICENSE) with additional terms under section 7 ([NOTICE](NOTICE)):
 
