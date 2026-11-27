@@ -83,7 +83,7 @@ https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 
 ### Tor
 
-Для того, что не берут zapret и нарезка: сайты, заблокированные по IP, геоограничения, адреса .onion. Внутри — `tor.exe` и `lyrebird` из официального [Tor Expert Bundle](https://www.torproject.org/download/tor/) (16.0.1, SHA-256 сверяется при сборке; сверить самому — [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt)).
+Для того, что не берут zapret и нарезка: сайты, заблокированные по IP, геоограничения, адреса .onion. Внутри — `tor.exe` и `lyrebird` из официального [Tor Expert Bundle](https://www.torproject.org/download/tor/) (16.0.1, SHA-256 сверяется при сборке; сверить самому — [sha256sums-signed-build.txt](https://archive.torproject.org/tor-package-archive/torbrowser/16.0.1/sha256sums-signed-build.txt)).
 
 - **Способы подключения**: obfs4, webtunnel, snowflake, meek, свои мосты или напрямую. «Авто» идёт по очереди: свои и найденные мосты → встроенные obfs4 → snowflake → meek.
 - **Поиск мостов** (из [TorBridgeMaster](https://github.com/digital-bombyx/TorBridgeMaster)): свежие obfs4 и webtunnel из API Tor Project и сборщиков BridgeDB ([Tor-Bridges-Collector-v2](https://github.com/scriptzteam/Tor-Bridges-Collector-v2), [OnionHop](https://github.com/center2055/OnionHop-Bridges-Collector), [javadz501](https://github.com/javadz501/Tor-Bridges-Collector), [igareck](https://github.com/igareck/vpn-configs-for-russia)), проверка до ответа реле Tor через lyrebird — меньше минуты. Встроенные мосты Tor Browser в России почти все заблокированы, найденные работают.
@@ -147,9 +147,9 @@ https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 3. Запустите. Приложение попросит права администратора: они нужны WinDivert, службам, hosts и смене DNS.
 
 > [!NOTE]
-> Внутри лежат `winws2.exe`, драйвер WinDivert, `tor.exe` и `xray.exe`. Некоторые антивирусы помечают такие файлы как угрозу. Их можно сверить с первоисточниками: `xray.exe` — по [.dgst релиза Xray](https://github.com/XTLS/Xray-core/releases/download/v26.11.9/Xray-windows-64.zip.dgst), `winws2` и WinDivert — по контрольным суммам релиза [zapret2](https://github.com/bol-van/zapret2/releases), tor и lyrebird — по [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt) (сумма архива Tor Expert Bundle проверяется при сборке).
+> Внутри лежат `winws2.exe`, драйвер WinDivert, `tor.exe` и `xray.exe`. Некоторые антивирусы помечают такие файлы как угрозу. Их можно сверить с первоисточниками: `xray.exe` — по [.dgst релиза Xray](https://github.com/XTLS/Xray-core/releases/download/v26.11.9/Xray-windows-64.zip.dgst), `winws2` и WinDivert — по контрольным суммам релиза [zapret2](https://github.com/bol-van/zapret2/releases), tor и lyrebird — по [sha256sums-signed-build.txt](https://archive.torproject.org/tor-package-archive/torbrowser/16.0.1/sha256sums-signed-build.txt) (сумма архива Tor Expert Bundle проверяется при сборке).
 >
-> Сторонних бинарников в репозитории нет: при каждой сборке (локально и в GitHub Actions) скрипты скачивают их из первоисточников и сверяют SHA-256, закреплённую в коде, — при несовпадении сборка падает. Tor — с dist.torproject.org ([`scripts/sync-tor.mjs`](scripts/sync-tor.mjs)), Xray — из релизов XTLS/Xray-core ([`scripts/sync-xray.mjs`](scripts/sync-xray.mjs)), zapret — из закреплённого коммита апстрима со сверкой дерева файлов ([`scripts/sync-zapret.mjs`](scripts/sync-zapret.mjs), [`release.yml`](.github/workflows/release.yml)).
+> Сторонних бинарников в репозитории нет: при каждой сборке (локально и в GitHub Actions) скрипты скачивают их из первоисточников и сверяют SHA-256, закреплённую в коде, — при несовпадении сборка падает. Tor — с dist.torproject.org или его архива archive.torproject.org ([`scripts/sync-tor.mjs`](scripts/sync-tor.mjs)), Xray — из релизов XTLS/Xray-core ([`scripts/sync-xray.mjs`](scripts/sync-xray.mjs)), zapret — из закреплённого коммита апстрима со сверкой дерева файлов ([`scripts/sync-zapret.mjs`](scripts/sync-zapret.mjs), [`release.yml`](.github/workflows/release.yml)).
 
 ## Сборка из исходников
 
@@ -161,7 +161,7 @@ $env:ZAPRET_SRC = "D:\zapret-discord-youtube"   # по умолчанию име
 npm run tauri build
 ```
 
-Перед сборкой `scripts/sync-zapret.mjs` берёт чистую копию сборки из git и кладёт её в ресурсы установщика, `scripts/sync-xray.mjs` — Xray-core с GitHub (без сети: `$env:XRAY_ZIP`), а `scripts/sync-tor.mjs` скачивает Tor Expert Bundle с dist.torproject.org и сверяет его SHA-256 (без сети: `$env:TOR_TARBALL = "путь\к\архиву.tar.gz"`). Установщик появится в `src-tauri\target\release\bundle\nsis\`.
+Перед сборкой `scripts/sync-zapret.mjs` берёт чистую копию сборки из git и кладёт её в ресурсы установщика, `scripts/sync-xray.mjs` — Xray-core с GitHub (без сети: `$env:XRAY_ZIP`), а `scripts/sync-tor.mjs` скачивает Tor Expert Bundle с dist.torproject.org (прошлые версии — с archive.torproject.org) и сверяет его SHA-256 (без сети: `$env:TOR_TARBALL = "путь\к\архиву.tar.gz"`). Установщик появится в `src-tauri\target\release\bundle\nsis\`.
 
 Релизы собирает GitHub Actions ([`release.yml`](.github/workflows/release.yml)) при пуше тега `vX.Y.Z`, описание берётся из [CHANGELOG.md](CHANGELOG.md).
 

@@ -80,7 +80,7 @@ A local MTProto proxy for Telegram Desktop — a port of [tg-ws-proxy](https://g
 
 ### Tor
 
-For what zapret and splitting cannot fix: IP-blocked sites, geo-restrictions, .onion addresses. Ships `tor.exe` and `lyrebird` from the official [Tor Expert Bundle](https://www.torproject.org/download/tor/) (16.0.1, SHA-256 checked at build time; check it yourself against [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt)).
+For what zapret and splitting cannot fix: IP-blocked sites, geo-restrictions, .onion addresses. Ships `tor.exe` and `lyrebird` from the official [Tor Expert Bundle](https://www.torproject.org/download/tor/) (16.0.1, SHA-256 checked at build time; check it yourself against [sha256sums-signed-build.txt](https://archive.torproject.org/tor-package-archive/torbrowser/16.0.1/sha256sums-signed-build.txt)).
 
 - **Transports**: obfs4, webtunnel, snowflake, meek, your own bridges or direct. "Auto" goes in turn: own and found bridges → built-in obfs4 → snowflake → meek.
 - **Bridge search** (from [TorBridgeMaster](https://github.com/digital-bombyx/TorBridgeMaster)): fresh obfs4 and webtunnel bridges from the Tor Project API and BridgeDB collectors, verified through lyrebird up to the Tor relay's reply — under a minute.
@@ -167,9 +167,9 @@ If something works or fails for you in another country, an issue with the **Chec
 3. Run it. The app asks for administrator rights: WinDivert, services, hosts and DNS changes need them.
 
 > [!NOTE]
-> The app ships `winws2.exe`, the WinDivert driver, `tor.exe` and `xray.exe`. Some antivirus products flag files like these. You can check them against their origins: `xray.exe` against the [Xray release .dgst](https://github.com/XTLS/Xray-core/releases/download/v26.11.9/Xray-windows-64.zip.dgst), `winws2` and WinDivert against the [zapret2 release](https://github.com/bol-van/zapret2/releases) checksums, tor and lyrebird against [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt) (the Tor Expert Bundle archive sum is checked at build time).
+> The app ships `winws2.exe`, the WinDivert driver, `tor.exe` and `xray.exe`. Some antivirus products flag files like these. You can check them against their origins: `xray.exe` against the [Xray release .dgst](https://github.com/XTLS/Xray-core/releases/download/v26.11.9/Xray-windows-64.zip.dgst), `winws2` and WinDivert against the [zapret2 release](https://github.com/bol-van/zapret2/releases) checksums, tor and lyrebird against [sha256sums-signed-build.txt](https://archive.torproject.org/tor-package-archive/torbrowser/16.0.1/sha256sums-signed-build.txt) (the Tor Expert Bundle archive sum is checked at build time).
 >
-> No third-party binaries live in the repository: every build (locally and in GitHub Actions) downloads them from their origins and checks a SHA-256 pinned in the code — on a mismatch the build fails. Tor comes from dist.torproject.org ([`scripts/sync-tor.mjs`](scripts/sync-tor.mjs)), Xray from the XTLS/Xray-core releases ([`scripts/sync-xray.mjs`](scripts/sync-xray.mjs)), zapret from a pinned upstream commit with its file tree verified ([`scripts/sync-zapret.mjs`](scripts/sync-zapret.mjs), [`release.yml`](.github/workflows/release.yml)).
+> No third-party binaries live in the repository: every build (locally and in GitHub Actions) downloads them from their origins and checks a SHA-256 pinned in the code — on a mismatch the build fails. Tor comes from dist.torproject.org or its archive at archive.torproject.org ([`scripts/sync-tor.mjs`](scripts/sync-tor.mjs)), Xray from the XTLS/Xray-core releases ([`scripts/sync-xray.mjs`](scripts/sync-xray.mjs)), zapret from a pinned upstream commit with its file tree verified ([`scripts/sync-zapret.mjs`](scripts/sync-zapret.mjs), [`release.yml`](.github/workflows/release.yml)).
 
 ## Build from source
 
@@ -181,7 +181,7 @@ $env:ZAPRET_SRC = "D:\zapret-discord-youtube"   # this is the default
 npm run tauri build
 ```
 
-`scripts/sync-xray.mjs` downloads Xray-core from GitHub (offline: `$env:XRAY_ZIP`), `scripts/sync-tor.mjs` downloads the Tor Expert Bundle from dist.torproject.org and checks its SHA-256 (offline: `$env:TOR_TARBALL = "path\to\archive.tar.gz"`).
+`scripts/sync-xray.mjs` downloads Xray-core from GitHub (offline: `$env:XRAY_ZIP`), `scripts/sync-tor.mjs` downloads the Tor Expert Bundle from dist.torproject.org (older versions from archive.torproject.org) and checks its SHA-256 (offline: `$env:TOR_TARBALL = "path\to\archive.tar.gz"`).
 
 ## Credits
 

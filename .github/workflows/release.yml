@@ -78,7 +78,12 @@ jobs:
         run: npm ci
 
       - name: Проверки
+        shell: pwsh
         run: |
+          # Упавшая команда останавливает шаг (иначе pwsh идёт дальше и ошибка
+          # всплывает позже и непонятно где).
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           # Ресурсы tauri.conf.json (zapret/, tor/, xray/) должны быть на месте
           # уже для cargo test: build.rs Tauri проверяет их существование.
           npm run sync-zapret

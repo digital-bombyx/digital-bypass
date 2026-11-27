@@ -16,7 +16,13 @@ import { fileURLToPath } from "node:url";
 const TOR_VERSION = "16.0.1";
 const TOR_SHA256 = "9eed3c3ff1fe43df034ce360196c9ec95472560d77ff55614d0cd5120edea27b";
 const FILE = `tor-expert-bundle-windows-x86_64-${TOR_VERSION}.tar.gz`;
-const URL = `https://dist.torproject.org/torbrowser/${TOR_VERSION}/${FILE}`;
+// На dist.torproject.org лежит только текущая версия; прошлые переезжают в
+// archive.torproject.org. Пробуем по очереди, SHA-256 сверяется в любом случае.
+const URLS = [
+  `https://dist.torproject.org/torbrowser/${TOR_VERSION}/${FILE}`,
+  `https://archive.torproject.org/tor-package-archive/torbrowser/${TOR_VERSION}/${FILE}`,
+];
+let URL = URLS[0];
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dest = join(root, "src-tauri", "tor");
@@ -36,13 +42,24 @@ let data;
 if (process.env.TOR_TARBALL) {
   data = readFileSync(process.env.TOR_TARBALL);
 } else {
-  console.log(`[sync-tor] скачиваю ${URL}`);
-  const r = await fetch(URL);
-  if (!r.ok) {
-    console.error(`[sync-tor] ${r.status} ${r.statusText}`);
+  for (const u of URLS) {
+    console.log(`[sync-tor] скачиваю ${u}`);
+    try {
+      const r = await fetch(u);
+      if (r.ok) {
+        URL = u;
+        data = Buffer.from(await r.arrayBuffer());
+        break;
+      }
+      console.error(`[sync-tor] ${r.status} ${r.statusText}`);
+    } catch (e) {
+      console.error(`[sync-tor] ${e.cause?.code ?? e.message}`);
+    }
+  }
+  if (!data) {
+    console.error(`[sync-tor] архив ${FILE} не скачался ни из одного источника; без сети или если Tor режут — скачайте его вручную и задайте TOR_TARBALL=путь`);
     process.exit(1);
   }
-  data = Buffer.from(await r.arrayBuffer());
 }
 const sha = createHash("sha256").update(data).digest("hex");
 if (sha !== TOR_SHA256) {
