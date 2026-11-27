@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#04060b">
+  <title>digital-bypass — обход блокировок на Windows</title>
+  <meta name="description" content="Бесплатный мультитул с открытым кодом: zapret2 в один клик, прокси-обходчик без прав администратора, Xray, Tor с поиском мостов, прокси для Telegram, DNS и DoH и проверка «почему не открывается».">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="digital-bypass — обход блокировок на Windows">
+  <meta property="og:description" content="zapret2, прокси-обходчик, Xray, Tor, Telegram и проверка сайтов — в одном бесплатном приложении с открытым кодом.">
+  <meta property="og:image" content="assets/og.png">
+  <link rel="alternate" hreflang="ru" href="./">
+  <link rel="alternate" hreflang="en" href="en/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="assets/favicon-32.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preload" href="assets/fonts/onest-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/literata-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/martian-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">К содержимому</a>
+
+  <header class="top">
+    <div class="wrap top-row">
+      <a class="logo" href="#" aria-label="digital-bypass — наверх">
+        <img src="assets/icon-128.png" alt="" width="26" height="26">
+        <span>digital-bypass</span>
+      </a>
+      <nav aria-label="Разделы">
+        <ul>
+          <li><a href="#how"><span class="n">01</span> Как работает</a></li>
+          <li><a href="#modules"><span class="n">02</span> Модули</a></li>
+          <li><a href="#ai"><span class="n">03</span> ИИ</a></li>
+          <li><a href="#shots"><span class="n">04</span> Снимки</a></li>
+          <li><a href="#trust"><span class="n">05</span> Прозрачность</a></li>
+          <li><a href="#faq"><span class="n">06</span> Вопросы</a></li>
+        </ul>
+      </nav>
+      <a class="lang" href="en/" hreflang="en" lang="en" aria-label="English version">EN</a>
+      <a class="btn btn-line btn-sm" href="https://github.com/digital-bombyx/digital-bypass">
+        <svg class="i" aria-hidden="true"><use href="#i-github"/></svg> GitHub
+      </a>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ============ Первый экран: стена запрещённых сайтов ============ -->
+    <section class="hero" id="hero">
+      <!-- Декор: «стена» доменов. Нижний слой — замазан, верхний — проступает под курсором. -->
+      <div class="wall" aria-hidden="true">
+        <div class="wall-layer wall-redacted"></div>
+        <!-- маска «фонарика» — на неповёрнутом слое ровно по блоку, иначе свет уезжает от курсора -->
+        <div class="wall-spot"><div class="wall-layer wall-clear"></div></div>
+      </div>
+
+      <div class="wrap hero-grid">
+        <div class="hero-text">
+          <p class="file-no">ДЕЛО v0.2.0 · <span>digital-bypass</span></p>
+          <h1>
+            Интернет
+            <span class="redact r-load">без блокировок</span>
+            <span class="h1-tail">в&nbsp;одном приложении</span>
+          </h1>
+          <p class="lead">
+            Сам проверит, почему не&nbsp;открывается сайт, и&nbsp;включит то, что поможет:
+            zapret2, прокси-обходчик без прав администратора, свои серверы Xray, Tor
+            с&nbsp;поиском мостов и&nbsp;прокси для Telegram.
+          </p>
+          <div class="cta">
+            <a class="btn btn-primary" href="https://github.com/digital-bombyx/digital-bypass/releases/latest">
+              <svg class="i" aria-hidden="true"><use href="#i-download"/></svg> Скачать для Windows
+            </a>
+            <a class="btn btn-line" href="https://github.com/digital-bombyx/digital-bypass">
+              <svg class="i" aria-hidden="true"><use href="#i-code"/></svg> Исходный код
+            </a>
+          </div>
+          <dl class="facts">
+            <div><dt>Цена</dt><dd>0 ₽</dd></div>
+            <div><dt>Код</dt><dd>GPL-3.0</dd></div>
+            <div><dt>Система</dt><dd>Windows 10/11</dd></div>
+            <div><dt>Трекеры</dt><dd>нет</dd></div>
+          </dl>
+        </div>
+
+        <figure class="suspect">
+          <span class="stamp" aria-hidden="true">Рассекречено</span>
+          <div class="frame">
+            <img src="assets/hero.webp" alt="Фигура в шляпе за ноутбуком с замочной скважиной — символ digital-bypass" width="1400" height="900" fetchpriority="high">
+            <span class="scan" aria-hidden="true"></span>
+          </div>
+          <figcaption>
+            <span>Объект: digital-bypass</span>
+            <span>Статус: невидим для DPI</span>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ============ 01 · Как работает: анимация пакета ============ -->
+    <section class="section" id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        <p class="kicker"><span>01</span> Как это работает</p>
+        <h2 id="how-title">DPI ищет имя сайта. Мы&nbsp;<span class="redact r-scroll">режем его на&nbsp;куски</span></h2>
+        <p class="sub">
+          Провайдер видит, к&nbsp;какому сайту вы подключаетесь, по&nbsp;первому пакету — ClientHello.
+          digital-bypass разбивает его так, что фильтр не&nbsp;может собрать имя целиком, а&nbsp;сайт — может.
+        </p>
+
+        <div class="lanes" role="img" aria-label="Схема: без обхода пакет с именем youtube.com останавливается на DPI; с digital-bypass тот же пакет, разрезанный на части, проходит к сайту.">
+          <div class="lane lane-block">
+            <p class="lane-name">Без обхода</p>
+            <div class="track">
+              <span class="node node-you">Вы</span>
+              <span class="node node-dpi">DPI</span>
+              <span class="node node-site">Сайт</span>
+              <span class="pkt pkt-whole">youtube.com</span>
+              <span class="verdict v-bad">RST · сброшено</span>
+            </div>
+          </div>
+          <div class="lane lane-pass">
+            <p class="lane-name">С digital-bypass</p>
+            <div class="track">
+              <span class="node node-you">Вы</span>
+              <span class="node node-dpi">DPI</span>
+              <span class="node node-site">Сайт</span>
+              <span class="pkt pkt-part" style="--i: 1">you</span>
+              <span class="pkt pkt-part" style="--i: 2">tub</span>
+              <span class="pkt pkt-part" style="--i: 3">e.com</span>
+              <span class="verdict v-ok">200 · открылось</span>
+            </div>
+          </div>
+        </div>
+
+        <ol class="steps">
+          <li>
+            <h3><span class="sn">1</span> Проверьте сайт</h3>
+            <p>Вкладка Check за&nbsp;несколько секунд покажет причину: подмена DNS, DPI по&nbsp;имени сайта или блокировка по&nbsp;адресу.</p>
+          </li>
+          <li>
+            <h3><span class="sn">2</span> Включите подсказанное</h3>
+            <p>Под вердиктом — кнопки нужных модулей. Для DPI это zapret2 или прокси, для блокировок по&nbsp;адресу — Xray или Tor.</p>
+          </li>
+          <li>
+            <h3><span class="sn">3</span> Пользуйтесь</h3>
+            <p>Точки в&nbsp;меню показывают, что работает. Российские сайты в&nbsp;Xray и&nbsp;Tor идут напрямую.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============ 02 · Модули: папки с делами ============ -->
+    <section class="section" id="modules" aria-labelledby="modules-title">
+      <div class="wrap">
+        <p class="kicker"><span>02</span> Модули</p>
+        <h2 id="modules-title">Восемь дел, одно <span class="redact r-scroll">окно</span></h2>
+        <p class="sub">Каждый модуль закрывает свой тип блокировки. Не&nbsp;знаете, какой нужен, — начните с&nbsp;проверки.</p>
+
+        <ul class="files">
+          <li class="file reveal"><p class="tab">Дело 01</p><svg class="ci" aria-hidden="true"><use href="#i-check"/></svg><h3>Проверка</h3><p>Сравнивает DNS с&nbsp;DoH, пробует TCP и&nbsp;TLS к&nbsp;каждому адресу и&nbsp;говорит, что именно режут — и&nbsp;что поможет.</p></li>
+          <li class="file reveal"><p class="tab">Дело 02</p><svg class="ci" aria-hidden="true"><use href="#i-bolt"/></svg><h3>zapret2</h3><p>Обход DPI через WinDivert в&nbsp;один клик, тест стратегий под ваши сайты и&nbsp;автоподбор. Для всех программ, включая игры и&nbsp;голос Discord.</p></li>
+          <li class="file reveal"><p class="tab">Дело 03</p><svg class="ci" aria-hidden="true"><use href="#i-split"/></svg><h3>Прокси-обходчик</h3><p>Режет ClientHello так, что имя сайта не&nbsp;видно DPI. Без прав администратора и&nbsp;без драйвера.</p></li>
+          <li class="file reveal"><p class="tab">Дело 04</p><svg class="ci" aria-hidden="true"><use href="#i-rocket"/></svg><h3>Xray</h3><p>Свои серверы VLESS, VMess, Trojan, Shadowsocks и&nbsp;подписки. Российские сайты — напрямую.</p></li>
+          <li class="file reveal"><p class="tab">Дело 05</p><svg class="ci" aria-hidden="true"><use href="#i-onion"/></svg><h3>Tor</h3><p>Для того, что режут по&nbsp;адресу. Сам находит рабочие мосты и&nbsp;держит свежий Snowflake.</p></li>
+          <li class="file reveal"><p class="tab">Дело 06</p><svg class="ci" aria-hidden="true"><use href="#i-send"/></svg><h3>Telegram</h3><p>Прокси для Telegram Desktop через WebSocket, запасной путь — Cloudflare или свой Worker.</p></li>
+          <li class="file reveal"><p class="tab">Дело 07</p><svg class="ci" aria-hidden="true"><use href="#i-globe"/></svg><h3>DNS и&nbsp;DoH</h3><p>Смена DNS в&nbsp;два клика, DNS-over-HTTPS и&nbsp;проверка подмены ответов провайдером.</p></li>
+          <li class="file file-hot reveal"><p class="tab">Дело 08 <span class="new">новое</span></p><svg class="ci" aria-hidden="true"><use href="#i-bot"/></svg><h3>ИИ-помощник</h3><p>MCP-сервер: Claude или Cursor сам проверит сайт и&nbsp;подберёт стратегию. Сломал — откатится само.</p></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ 03 · ИИ: терминал ============ -->
+    <section class="section ai" id="ai" aria-labelledby="ai-title">
+      <div class="wrap ai-grid">
+        <div>
+          <p class="kicker"><span>03</span> Для тех, кто дружит с&nbsp;ИИ</p>
+          <h2 id="ai-title">Спросите ассистента: «почему не&nbsp;грузится <span class="redact r-scroll">Discord</span>?»</h2>
+          <p class="sub">
+            Встроенный MCP-сервер даёт Claude, Cursor и&nbsp;другим ассистентам настоящие инструменты:
+            диагностику, подбор стратегии, управление прокси, Tor и&nbsp;Xray. Выключен по&nbsp;умолчанию
+            и&nbsp;слушает только этот компьютер.
+          </p>
+          <ul class="ticks">
+            <li>Менять настройки ИИ может, только если вы разрешили.</li>
+            <li>Изменение пробное: без подтверждения через 2&nbsp;минуты всё вернётся как было.</li>
+            <li>Готовые сценарии: «сайт не&nbsp;открывается», «голос Discord», «режут VPN-сервер».</li>
+          </ul>
+        </div>
+        <div class="term" role="img" aria-label="Пример: ассистент проверяет discord.com, находит блокировку DPI, подбирает стратегию zapret2, проверяет снова и подтверждает изменение.">
+          <p class="term-bar" aria-hidden="true"><i></i><i></i><i></i><span>claude · digital-bypass</span></p>
+          <ol class="term-lines" aria-hidden="true">
+            <li class="t-user">› почему не грузится discord?</li>
+            <li class="t-tool">● diagnose_site discord.com</li>
+            <li class="t-out">  Блокировка DPI по имени сайта</li>
+            <li class="t-tool">● find_zapret_strategy discord.com apply=true</li>
+            <li class="t-out">  general (ALT4) — 4/4 проверок</li>
+            <li class="t-warn">  изменение пробное · откат через 2:00</li>
+            <li class="t-tool">● diagnose_site discord.com</li>
+            <li class="t-out">  Открывается</li>
+            <li class="t-tool">● confirm_changes</li>
+            <li class="t-ok">✓ Готово: zapret2 включён, стратегия ALT4.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 04 · Снимки ============ -->
+    <section class="section" id="shots" aria-labelledby="shots-title">
+      <div class="wrap">
+        <p class="kicker"><span>04</span> Снимки</p>
+        <h2 id="shots-title">Вещественные доказательства</h2>
+        <figure class="video">
+          <video src="assets/preview.mp4" poster="assets/preview-poster.webp" width="1280" height="720"
+                 controls muted loop playsinline preload="none"></video>
+          <figcaption>Запись 01 · проверка сайта, обход через zapret2 и&nbsp;через прокси</figcaption>
+        </figure>
+        <ul class="gallery">
+          <li><a class="shot" href="assets/shots/check.webp" data-caption="Check — почему не открывается сайт"><img src="assets/shots/check.webp" alt="Вкладка Check: вердикт «Блокировка DPI по имени сайта»" width="1375" height="950" loading="lazy"><span>Фото 01 · Check</span></a></li>
+          <li><a class="shot" href="assets/shots/zapret2.webp" data-caption="Zapret2 — обход в один клик"><img src="assets/shots/zapret2.webp" alt="Вкладка Zapret2: обход включён" width="1375" height="950" loading="lazy"><span>Фото 02 · Zapret2</span></a></li>
+          <li><a class="shot" href="assets/shots/tests.webp" data-caption="Tests — подбор стратегии"><img src="assets/shots/tests.webp" alt="Тест стратегий zapret2 с результатами" width="1375" height="950" loading="lazy"><span>Фото 03 · Tests</span></a></li>
+          <li><a class="shot" href="assets/shots/proxy.webp" data-caption="Proxy — без прав администратора"><img src="assets/shots/proxy.webp" alt="Вкладка прокси-обходчика" width="1375" height="950" loading="lazy"><span>Фото 04 · Proxy</span></a></li>
+          <li><a class="shot" href="assets/shots/xray.webp" data-caption="Xray — свои серверы и подписки"><img src="assets/shots/xray.webp" alt="Вкладка Xray с подпиской" width="1375" height="950" loading="lazy"><span>Фото 05 · Xray</span></a></li>
+          <li><a class="shot" href="assets/shots/tor.webp" data-caption="Tor — мосты и маршрутизация"><img src="assets/shots/tor.webp" alt="Вкладка Tor: подключено через мосты" width="1375" height="950" loading="lazy"><span>Фото 06 · Tor</span></a></li>
+          <li><a class="shot" href="assets/shots/telegram.webp" data-caption="Telegram — прокси для Telegram Desktop"><img src="assets/shots/telegram.webp" alt="Вкладка Telegram-прокси" width="1375" height="950" loading="lazy"><span>Фото 07 · Telegram</span></a></li>
+          <li><a class="shot" href="assets/shots/dns.webp" data-caption="DNS — DNS адаптера и DoH"><img src="assets/shots/dns.webp" alt="Вкладка DNS" width="1375" height="950" loading="lazy"><span>Фото 08 · DNS</span></a></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ Прозрачность ============ -->
+    <section class="section" id="trust" aria-labelledby="trust-title">
+      <div class="wrap">
+        <p class="kicker"><span>05</span> Прозрачность</p>
+        <h2 id="trust-title">Нам нечего <span class="redact r-scroll">скрывать</span></h2>
+        <ul class="trust">
+          <li class="reveal"><span class="ok-stamp" aria-hidden="true">✓ проверено</span><h3>Открытый код</h3><p>Весь код на&nbsp;GitHub под GPL-3.0. Форки и&nbsp;производные версии тоже остаются открытыми.</p></li>
+          <li class="reveal"><span class="ok-stamp" aria-hidden="true">✓ проверено</span><h3>Сборка у&nbsp;всех на&nbsp;виду</h3><p>Установщик собирает GitHub Actions из&nbsp;исходников, к&nbsp;релизу прикладывается SHA-256.</p></li>
+          <li class="reveal"><span class="ok-stamp" aria-hidden="true">✓ проверено</span><h3>Tor и&nbsp;Xray из&nbsp;первоисточников</h3><p>Бинарников в&nbsp;репозитории нет: при сборке они скачиваются у&nbsp;Tor Project и&nbsp;XTLS и&nbsp;сверяются по&nbsp;хешу.</p></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ Вопросы ============ -->
+    <section class="section" id="faq" aria-labelledby="faq-title">
+      <div class="wrap narrow">
+        <p class="kicker"><span>06</span> Вопросы</p>
+        <h2 id="faq-title">Протокол допроса</h2>
+        <div class="protocol">
+          <p class="proto-head" aria-hidden="true"><span>Протокол · дело 06</span><span>лист 1 из 1</span><span class="rec">запись</span></p>
+          <div class="faq">
+            <details name="faq">
+              <summary><time class="ts">00:00:14</time><span class="who">Вопрос</span><span class="qt">Это VPN?</span><span class="bars" aria-hidden="true" style="--w1:72%;--w2:48%"></span></summary>
+              <div class="ans"><span class="who">Ответ</span><p>Не&nbsp;совсем. zapret2 и&nbsp;прокси-обходчик не&nbsp;гоняют трафик через чужой сервер — они только мешают DPI узнать, на&nbsp;какой сайт вы идёте, поэтому скорость не&nbsp;падает. Для блокировок по&nbsp;адресу есть Xray со&nbsp;своими серверами и&nbsp;Tor.</p></div>
+            </details>
+            <details name="faq">
+              <summary><time class="ts">00:01:02</time><span class="who">Вопрос</span><span class="qt">Нужны ли права администратора?</span><span class="bars" aria-hidden="true" style="--w1:64%;--w2:30%"></span></summary>
+              <div class="ans"><span class="who">Ответ</span><p>Для zapret2, смены DNS и&nbsp;hosts — да: они нужны драйверу WinDivert и&nbsp;системным настройкам. Прокси-обходчик, Xray, Tor и&nbsp;прокси для Telegram работают и&nbsp;без них.</p></div>
+            </details>
+            <details name="faq">
+              <summary><time class="ts">00:02:37</time><span class="who">Вопрос</span><span class="qt">Почему антивирус ругается?</span><span class="bars" aria-hidden="true" style="--w1:80%;--w2:55%"></span></summary>
+              <div class="ans"><span class="who">Ответ</span><p>Внутри лежат <code>winws2.exe</code>, драйвер WinDivert, <code>tor.exe</code> и&nbsp;<code>xray.exe</code> — такие файлы часто помечают по&nbsp;привычке. Каждый можно сверить с&nbsp;первоисточником: ссылки и&nbsp;контрольные суммы есть в&nbsp;README.</p></div>
+            </details>
+            <details name="faq">
+              <summary><time class="ts">00:04:10</time><span class="who">Вопрос</span><span class="qt">Сломает ли это банки и&nbsp;Госуслуги?</span><span class="bars" aria-hidden="true" style="--w1:58%;--w2:40%"></span></summary>
+              <div class="ans"><span class="who">Ответ</span><p>Не&nbsp;должно. В&nbsp;Xray и&nbsp;Tor российские сайты по&nbsp;умолчанию идут напрямую, а&nbsp;zapret2 и&nbsp;прокси трогают только сайты из&nbsp;своих списков. Если какой-то сайт сломался — его можно добавить в&nbsp;исключения.</p></div>
+            </details>
+            <details name="faq">
+              <summary><time class="ts">00:05:48</time><span class="who">Вопрос</span><span class="qt">Сколько стоит?</span><span class="bars" aria-hidden="true" style="--w1:44%;--w2:0%"></span></summary>
+              <div class="ans"><span class="who">Ответ</span><p>Нисколько. Без рекламы и&nbsp;регистрации. Серверы для Xray — ваши собственные или по&nbsp;подписке, которую вы выбираете сами.</p></div>
+            </details>
+          </div>
+          <p class="proto-foot" aria-hidden="true">Протокол прочитан. С&nbsp;моих слов записано верно<span class="sign">digital-bypass</span></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Финал ============ -->
+    <section class="section final" aria-labelledby="final-title">
+      <div class="wrap">
+        <article class="closing">
+          <div class="closing-body">
+            <p class="closing-kicker">Постановление о&nbsp;прекращении дела</p>
+            <h2 id="final-title">Дело закрыто. Сайты&nbsp;— открыты</h2>
+            <dl class="fields">
+              <div><dt>Система</dt><dd>Windows 10 и&nbsp;11, 64-бит</dd></div>
+              <div><dt>Лицензия</dt><dd>GPL-3.0, исходники открыты</dd></div>
+              <div><dt>Стоимость</dt><dd>0&nbsp;₽, без регистрации</dd></div>
+              <div><dt>Проверка</dt><dd>SHA-256 на&nbsp;странице релиза</dd></div>
+            </dl>
+          </div>
+          <div class="ticket">
+            <span class="stamp stamp-final" aria-hidden="true">Доступ открыт</span>
+            <p class="ticket-label">Вещдок 01 · выдать на&nbsp;руки</p>
+            <a class="btn btn-primary" href="https://github.com/digital-bombyx/digital-bypass/releases/latest">
+              <svg class="i" aria-hidden="true"><use href="#i-download"/></svg> Скачать для Windows
+            </a>
+            <a class="btn btn-line" href="https://github.com/digital-bombyx/digital-bypass">
+              <svg class="i" aria-hidden="true"><use href="#i-github"/></svg> GitHub
+            </a>
+            <span class="barcode" aria-hidden="true"></span>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-row">
+      <p>© digital-bombyx · <a href="https://github.com/digital-bombyx/digital-bypass/blob/main/LICENSE">GPL-3.0</a></p>
+      <p class="end">— конец досье —</p>
+      <p>Сделано вместе с&nbsp;<a href="https://claude.com/claude-code">Claude Code</a></p>
+    </div>
+  </footer>
+
+  <dialog class="lightbox" id="lightbox" closedby="any" aria-label="Снимок">
+    <form method="dialog"><button class="lb-close" aria-label="Закрыть">✕</button></form>
+    <img alt="">
+    <p class="lb-cap"></p>
+  </dialog>
+
+  <!-- Иконки (в стиле Lucide, ISC) -->
+  <svg hidden xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 15V3M7 10l5 5 5-5M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4M9 18c-4.51 2-5-2-7-2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M11 2v2M5 2v2M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.77.04"/></symbol>
+    <symbol id="i-split" viewBox="0 0 24 24"><path d="M16 3h5v5M8 3H3v5M12 22v-8.3a4 4 0 0 0-1.17-2.83L3 3M15 9l6-6"/></symbol>
+    <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09zM12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2zM9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+    <symbol id="i-onion" viewBox="0 0 24 24"><path d="m12 2-8 4 8 4 8-4-8-4zM4 12l8 4 8-4M4 17l8 4 8-4"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M14.54 21.69a.5.5 0 0 0 .94-.03l6.5-19a.5.5 0 0 0-.64-.64l-19 6.5a.5.5 0 0 0-.03.94l7.93 3.18a2 2 0 0 1 1.11 1.11zM21.85 2.15 10.91 13.09"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20"/></symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></symbol>
+  </svg>
+
+  <script src="site.js" defer></script>
+</body>
+</html>

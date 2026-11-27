@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#04060b">
+  <title>digital-bypass — censorship bypass for Windows</title>
+  <meta name="description" content="Free, open-source multitool: one-click zapret2, a bypass proxy with no admin rights, Xray, Tor with bridge discovery, a Telegram proxy, DNS and DoH, and a “why won't it open” check.">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:title" content="digital-bypass — censorship bypass for Windows">
+  <meta property="og:description" content="zapret2, a bypass proxy, Xray, Tor, Telegram and a site checker — in one free, open-source app.">
+  <meta property="og:image" content="../assets/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="alternate" hreflang="ru" href="../">
+  <link rel="alternate" hreflang="en" href="./">
+  <link rel="icon" href="../assets/favicon-32.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+  <link rel="preload" href="../assets/fonts/onest-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/literata-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/martian-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top">
+    <div class="wrap top-row">
+      <a class="logo" href="#" aria-label="digital-bypass — back to top">
+        <img src="../assets/icon-128.png" alt="" width="26" height="26">
+        <span>digital-bypass</span>
+      </a>
+      <nav aria-label="Sections">
+        <ul>
+          <li><a href="#how"><span class="n">01</span> How it works</a></li>
+          <li><a href="#modules"><span class="n">02</span> Modules</a></li>
+          <li><a href="#ai"><span class="n">03</span> AI</a></li>
+          <li><a href="#shots"><span class="n">04</span> Screenshots</a></li>
+          <li><a href="#trust"><span class="n">05</span> Transparency</a></li>
+          <li><a href="#faq"><span class="n">06</span> FAQ</a></li>
+        </ul>
+      </nav>
+      <a class="lang" href="../" hreflang="ru" lang="ru" aria-label="Русская версия">RU</a>
+      <a class="btn btn-line btn-sm" href="https://github.com/digital-bombyx/digital-bypass">
+        <svg class="i" aria-hidden="true"><use href="#i-github"/></svg> GitHub
+      </a>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ============ Hero: wall of blocked sites ============ -->
+    <section class="hero" id="hero">
+      <div class="wall" aria-hidden="true">
+        <div class="wall-layer wall-redacted"></div>
+        <div class="wall-spot"><div class="wall-layer wall-clear"></div></div>
+      </div>
+
+      <div class="wrap hero-grid">
+        <div class="hero-text">
+          <p class="file-no">CASE v0.2.0 · <span>digital-bypass</span></p>
+          <h1>
+            The internet,
+            <span class="redact r-load">uncensored</span>
+            <span class="h1-tail">in&nbsp;one app</span>
+          </h1>
+          <p class="lead">
+            It finds out why a site won't open and turns on what helps:
+            zapret2, a bypass proxy that needs no admin rights, your own Xray servers, Tor
+            with bridge discovery and a&nbsp;Telegram proxy.
+          </p>
+          <div class="cta">
+            <a class="btn btn-primary" href="https://github.com/digital-bombyx/digital-bypass/releases/latest">
+              <svg class="i" aria-hidden="true"><use href="#i-download"/></svg> Download for Windows
+            </a>
+            <a class="btn btn-line" href="https://github.com/digital-bombyx/digital-bypass">
+              <svg class="i" aria-hidden="true"><use href="#i-code"/></svg> Source code
+            </a>
+          </div>
+          <dl class="facts">
+            <div><dt>Price</dt><dd>free</dd></div>
+            <div><dt>Code</dt><dd>GPL-3.0</dd></div>
+            <div><dt>OS</dt><dd>Windows 10/11</dd></div>
+            <div><dt>Trackers</dt><dd>none</dd></div>
+          </dl>
+        </div>
+
+        <figure class="suspect">
+          <span class="stamp" aria-hidden="true">Declassified</span>
+          <div class="frame">
+            <img src="../assets/hero.webp" alt="A figure in a hat behind a laptop with a keyhole — the digital-bypass emblem" width="1400" height="900" fetchpriority="high">
+            <span class="scan" aria-hidden="true"></span>
+          </div>
+          <figcaption>
+            <span>Subject: digital-bypass</span>
+            <span>Status: invisible to DPI</span>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ============ 01 · How it works ============ -->
+    <section class="section" id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        <p class="kicker"><span>01</span> How it works</p>
+        <h2 id="how-title">DPI looks for the site name. We&nbsp;<span class="redact r-scroll">cut it into pieces</span></h2>
+        <p class="sub">
+          Your ISP sees which site you're connecting to from the very first packet — the ClientHello.
+          digital-bypass splits it so the filter can't put the name back together, while the site still can.
+        </p>
+
+        <div class="lanes" role="img" aria-label="Diagram: without bypass, the packet carrying youtube.com is stopped by DPI; with digital-bypass, the same packet cut into pieces gets through to the site.">
+          <div class="lane lane-block">
+            <p class="lane-name">Without bypass</p>
+            <div class="track">
+              <span class="node node-you">You</span>
+              <span class="node node-dpi">DPI</span>
+              <span class="node node-site">Site</span>
+              <span class="pkt pkt-whole">youtube.com</span>
+              <span class="verdict v-bad">RST · dropped</span>
+            </div>
+          </div>
+          <div class="lane lane-pass">
+            <p class="lane-name">With digital-bypass</p>
+            <div class="track">
+              <span class="node node-you">You</span>
+              <span class="node node-dpi">DPI</span>
+              <span class="node node-site">Site</span>
+              <span class="pkt pkt-part" style="--i: 1">you</span>
+              <span class="pkt pkt-part" style="--i: 2">tub</span>
+              <span class="pkt pkt-part" style="--i: 3">e.com</span>
+              <span class="verdict v-ok">200 · opened</span>
+            </div>
+          </div>
+        </div>
+
+        <ol class="steps">
+          <li>
+            <h3><span class="sn">1</span> Check the site</h3>
+            <p>In a few seconds the Check tab shows the cause: DNS spoofing, DPI on the site name, or an IP block.</p>
+          </li>
+          <li>
+            <h3><span class="sn">2</span> Turn on what it suggests</h3>
+            <p>Under the verdict are buttons for the right modules: zapret2 or the proxy for DPI, Xray or Tor for IP blocks.</p>
+          </li>
+          <li>
+            <h3><span class="sn">3</span> Browse</h3>
+            <p>Dots in the sidebar show what's running. Russian sites go direct in&nbsp;Xray and&nbsp;Tor.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============ 02 · Modules ============ -->
+    <section class="section" id="modules" aria-labelledby="modules-title">
+      <div class="wrap">
+        <p class="kicker"><span>02</span> Modules</p>
+        <h2 id="modules-title">Eight cases, one <span class="redact r-scroll">window</span></h2>
+        <p class="sub">Each module handles its own kind of blocking. Not sure which one you need? Start with Check.</p>
+
+        <ul class="files">
+          <li class="file reveal"><p class="tab">Case 01</p><svg class="ci" aria-hidden="true"><use href="#i-check"/></svg><h3>Check</h3><p>Compares DNS with DoH, tries TCP and TLS to every address and tells you exactly what's blocked — and what will help.</p></li>
+          <li class="file reveal"><p class="tab">Case 02</p><svg class="ci" aria-hidden="true"><use href="#i-bolt"/></svg><h3>zapret2</h3><p>One-click DPI bypass via WinDivert, strategy tests for your sites and auto-tune. Works for every app, including games and Discord voice.</p></li>
+          <li class="file reveal"><p class="tab">Case 03</p><svg class="ci" aria-hidden="true"><use href="#i-split"/></svg><h3>Bypass proxy</h3><p>Splits the ClientHello so DPI can't see the site name. No admin rights, no driver.</p></li>
+          <li class="file reveal"><p class="tab">Case 04</p><svg class="ci" aria-hidden="true"><use href="#i-rocket"/></svg><h3>Xray</h3><p>Your own VLESS, VMess, Trojan and Shadowsocks servers and subscriptions. Russian sites go direct.</p></li>
+          <li class="file reveal"><p class="tab">Case 05</p><svg class="ci" aria-hidden="true"><use href="#i-onion"/></svg><h3>Tor</h3><p>For what's blocked by IP. Finds working bridges on its own and keeps Snowflake fresh.</p></li>
+          <li class="file reveal"><p class="tab">Case 06</p><svg class="ci" aria-hidden="true"><use href="#i-send"/></svg><h3>Telegram</h3><p>A proxy for Telegram Desktop over WebSocket, with Cloudflare or your own Worker as a fallback.</p></li>
+          <li class="file reveal"><p class="tab">Case 07</p><svg class="ci" aria-hidden="true"><use href="#i-globe"/></svg><h3>DNS &amp; DoH</h3><p>Switch DNS in two clicks, turn on DNS-over-HTTPS and check whether your ISP spoofs answers.</p></li>
+          <li class="file file-hot reveal"><p class="tab">Case 08 <span class="new">new</span></p><svg class="ci" aria-hidden="true"><use href="#i-bot"/></svg><h3>AI assistant</h3><p>An MCP server: Claude or Cursor checks the site and picks a strategy for you. If something breaks, it rolls back on its own.</p></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ 03 · AI: terminal ============ -->
+    <section class="section ai" id="ai" aria-labelledby="ai-title">
+      <div class="wrap ai-grid">
+        <div>
+          <p class="kicker"><span>03</span> For AI fans</p>
+          <h2 id="ai-title">Ask your assistant: “why won't <span class="redact r-scroll">Discord</span> load?”</h2>
+          <p class="sub">
+            The built-in MCP server gives Claude, Cursor and other assistants real tools:
+            diagnostics, strategy search, and control over the proxy, Tor and Xray. It's off by default
+            and only listens on this computer.
+          </p>
+          <ul class="ticks">
+            <li>AI can change settings only if you allow it.</li>
+            <li>Changes are on trial: without your confirmation everything reverts after 2&nbsp;minutes.</li>
+            <li>Ready-made scenarios: “site won't open”, “Discord voice”, “my VPN server is blocked”.</li>
+          </ul>
+        </div>
+        <div class="term" role="img" aria-label="Example: the assistant checks discord.com, finds a DPI block, picks a zapret2 strategy, checks again and confirms the change.">
+          <p class="term-bar" aria-hidden="true"><i></i><i></i><i></i><span>claude · digital-bypass</span></p>
+          <ol class="term-lines" aria-hidden="true">
+            <li class="t-user">› why won't discord load?</li>
+            <li class="t-tool">● diagnose_site discord.com</li>
+            <li class="t-out">  DPI block on the site name</li>
+            <li class="t-tool">● find_zapret_strategy discord.com apply=true</li>
+            <li class="t-out">  general (ALT4) — 4/4 checks</li>
+            <li class="t-warn">  trial change · rollback in 2:00</li>
+            <li class="t-tool">● diagnose_site discord.com</li>
+            <li class="t-out">  Opens</li>
+            <li class="t-tool">● confirm_changes</li>
+            <li class="t-ok">✓ Done: zapret2 on, strategy ALT4.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 04 · Screenshots ============ -->
+    <section class="section" id="shots" aria-labelledby="shots-title">
+      <div class="wrap">
+        <p class="kicker"><span>04</span> Screenshots</p>
+        <h2 id="shots-title">Exhibits</h2>
+        <figure class="video">
+          <video src="../assets/preview.mp4" poster="../assets/preview-poster.webp" width="1280" height="720"
+                 controls muted loop playsinline preload="none"></video>
+          <figcaption>Recording 01 · site check, bypass via zapret2 and via the proxy (Russian UI)</figcaption>
+        </figure>
+        <ul class="gallery">
+          <li><a class="shot" href="../assets/shots/en/check.webp" data-caption="Check — why a site won't open"><img src="../assets/shots/en/check.webp" alt="Check tab: verdict “DPI block on the site name”" width="1375" height="950" loading="lazy"><span>Exhibit 01 · Check</span></a></li>
+          <li><a class="shot" href="../assets/shots/en/zapret2.webp" data-caption="Zapret2 — one-click bypass"><img src="../assets/shots/en/zapret2.webp" alt="Zapret2 tab: bypass on" width="1375" height="950" loading="lazy"><span>Exhibit 02 · Zapret2</span></a></li>
+          <li><a class="shot" href="../assets/shots/en/tests.webp" data-caption="Tests — strategy search"><img src="../assets/shots/en/tests.webp" alt="zapret2 strategy tests with results" width="1375" height="950" loading="lazy"><span>Exhibit 03 · Tests</span></a></li>
+          <li><a class="shot" href="../assets/shots/en/proxy.webp" data-caption="Proxy — no admin rights"><img src="../assets/shots/en/proxy.webp" alt="Bypass proxy tab" width="1375" height="950" loading="lazy"><span>Exhibit 04 · Proxy</span></a></li>
+          <li><a class="shot" href="../assets/shots/en/xray.webp" data-caption="Xray — your servers and subscriptions"><img src="../assets/shots/en/xray.webp" alt="Xray tab with a subscription" width="1375" height="950" loading="lazy"><span>Exhibit 05 · Xray</span></a></li>
+          <li><a class="shot" href="../assets/shots/en/tor.webp" data-caption="Tor — bridges and routing"><img src="../assets/shots/en/tor.webp" alt="Tor tab: connected via bridges" width="1375" height="950" loading="lazy"><span>Exhibit 06 · Tor</span></a></li>
+          <li><a class="shot" href="../assets/shots/en/telegram.webp" data-caption="Telegram — proxy for Telegram Desktop"><img src="../assets/shots/en/telegram.webp" alt="Telegram proxy tab" width="1375" height="950" loading="lazy"><span>Exhibit 07 · Telegram</span></a></li>
+          <li><a class="shot" href="../assets/shots/en/dns.webp" data-caption="DNS — adapter DNS and DoH"><img src="../assets/shots/en/dns.webp" alt="DNS tab" width="1375" height="950" loading="lazy"><span>Exhibit 08 · DNS</span></a></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ Transparency ============ -->
+    <section class="section" id="trust" aria-labelledby="trust-title">
+      <div class="wrap">
+        <p class="kicker"><span>05</span> Transparency</p>
+        <h2 id="trust-title">Nothing to <span class="redact r-scroll">hide</span></h2>
+        <ul class="trust">
+          <li class="reveal"><span class="ok-stamp" aria-hidden="true">✓ verified</span><h3>Open source</h3><p>All the code is on&nbsp;GitHub under GPL-3.0. Forks and derivatives stay open too.</p></li>
+          <li class="reveal"><span class="ok-stamp" aria-hidden="true">✓ verified</span><h3>Built in the open</h3><p>GitHub Actions builds the installer from source, and every release ships with SHA-256 checksums.</p></li>
+          <li class="reveal"><span class="ok-stamp" aria-hidden="true">✓ verified</span><h3>Tor and Xray from the source</h3><p>No binaries in the repo: they're downloaded from the Tor Project and XTLS at build time and verified by hash.</p></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ FAQ ============ -->
+    <section class="section" id="faq" aria-labelledby="faq-title">
+      <div class="wrap narrow">
+        <p class="kicker"><span>06</span> FAQ</p>
+        <h2 id="faq-title">Interrogation record</h2>
+        <div class="protocol">
+          <p class="proto-head" aria-hidden="true"><span>Record · case 06</span><span>sheet 1 of 1</span><span class="rec">rec</span></p>
+          <div class="faq">
+            <details name="faq">
+              <summary><time class="ts">00:00:14</time><span class="who">Question</span><span class="qt">Is this a VPN?</span><span class="bars" aria-hidden="true" style="--w1:72%;--w2:48%"></span></summary>
+              <div class="ans"><span class="who">Answer</span><p>Not quite. zapret2 and the bypass proxy don't route your traffic through someone else's server — they only keep DPI from learning which site you're visiting, so your speed doesn't drop. For IP blocks there's Xray with your own servers, and Tor.</p></div>
+            </details>
+            <details name="faq">
+              <summary><time class="ts">00:01:02</time><span class="who">Question</span><span class="qt">Does it need admin rights?</span><span class="bars" aria-hidden="true" style="--w1:64%;--w2:30%"></span></summary>
+              <div class="ans"><span class="who">Answer</span><p>For zapret2, DNS changes and hosts — yes: the WinDivert driver and system settings require them. The bypass proxy, Xray, Tor and the Telegram proxy work without them.</p></div>
+            </details>
+            <details name="faq">
+              <summary><time class="ts">00:02:37</time><span class="who">Question</span><span class="qt">Why does my antivirus complain?</span><span class="bars" aria-hidden="true" style="--w1:80%;--w2:55%"></span></summary>
+              <div class="ans"><span class="who">Answer</span><p>The app ships <code>winws2.exe</code>, the WinDivert driver, <code>tor.exe</code> and <code>xray.exe</code> — files like these often get flagged out of habit. Each one can be checked against its original source: links and checksums are in the README.</p></div>
+            </details>
+            <details name="faq">
+              <summary><time class="ts">00:04:10</time><span class="who">Question</span><span class="qt">Will it break banking sites?</span><span class="bars" aria-hidden="true" style="--w1:58%;--w2:40%"></span></summary>
+              <div class="ans"><span class="who">Answer</span><p>It shouldn't. In Xray and Tor, Russian sites go direct by default, and zapret2 and the proxy only touch the sites on their lists. If a site breaks, add it to the exclusions.</p></div>
+            </details>
+            <details name="faq">
+              <summary><time class="ts">00:05:48</time><span class="who">Question</span><span class="qt">How much does it cost?</span><span class="bars" aria-hidden="true" style="--w1:44%;--w2:0%"></span></summary>
+              <div class="ans"><span class="who">Answer</span><p>Nothing. No ads, no sign-up. Xray servers are your own or from a subscription you pick yourself.</p></div>
+            </details>
+          </div>
+          <p class="proto-foot" aria-hidden="true">Read and confirmed as accurate<span class="sign">digital-bypass</span></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Closing ============ -->
+    <section class="section final" aria-labelledby="final-title">
+      <div class="wrap">
+        <article class="closing">
+          <div class="closing-body">
+            <p class="closing-kicker">Order to close the case</p>
+            <h2 id="final-title">Case closed. Sites&nbsp;— open</h2>
+            <dl class="fields">
+              <div><dt>System</dt><dd>Windows 10 and&nbsp;11, 64-bit</dd></div>
+              <div><dt>License</dt><dd>GPL-3.0, open source</dd></div>
+              <div><dt>Price</dt><dd>Free, no sign-up</dd></div>
+              <div><dt>Verify</dt><dd>SHA-256 on&nbsp;the release page</dd></div>
+            </dl>
+          </div>
+          <div class="ticket">
+            <span class="stamp stamp-final" aria-hidden="true">Access granted</span>
+            <p class="ticket-label">Exhibit 01 · release to owner</p>
+            <a class="btn btn-primary" href="https://github.com/digital-bombyx/digital-bypass/releases/latest">
+              <svg class="i" aria-hidden="true"><use href="#i-download"/></svg> Download for Windows
+            </a>
+            <a class="btn btn-line" href="https://github.com/digital-bombyx/digital-bypass">
+              <svg class="i" aria-hidden="true"><use href="#i-github"/></svg> GitHub
+            </a>
+            <span class="barcode" aria-hidden="true"></span>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-row">
+      <p>© digital-bombyx · <a href="https://github.com/digital-bombyx/digital-bypass/blob/main/LICENSE">GPL-3.0</a></p>
+      <p class="end">— end of file —</p>
+      <p>Made with&nbsp;<a href="https://claude.com/claude-code">Claude Code</a></p>
+    </div>
+  </footer>
+
+  <dialog class="lightbox" id="lightbox" closedby="any" aria-label="Screenshot">
+    <form method="dialog"><button class="lb-close" aria-label="Close">✕</button></form>
+    <img alt="">
+    <p class="lb-cap"></p>
+  </dialog>
+
+  <!-- Icons (Lucide style, ISC) -->
+  <svg hidden xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 15V3M7 10l5 5 5-5M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4M9 18c-4.51 2-5-2-7-2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M11 2v2M5 2v2M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.77.04"/></symbol>
+    <symbol id="i-split" viewBox="0 0 24 24"><path d="M16 3h5v5M8 3H3v5M12 22v-8.3a4 4 0 0 0-1.17-2.83L3 3M15 9l6-6"/></symbol>
+    <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09zM12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2zM9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+    <symbol id="i-onion" viewBox="0 0 24 24"><path d="m12 2-8 4 8 4 8-4-8-4zM4 12l8 4 8-4M4 17l8 4 8-4"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M14.54 21.69a.5.5 0 0 0 .94-.03l6.5-19a.5.5 0 0 0-.64-.64l-19 6.5a.5.5 0 0 0-.03.94l7.93 3.18a2 2 0 0 1 1.11 1.11zM21.85 2.15 10.91 13.09"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20"/></symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></symbol>
+  </svg>
+
+  <script src="../site.js" defer></script>
+</body>
+</html>
