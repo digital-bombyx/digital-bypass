@@ -29,11 +29,13 @@ pub struct Settings {
     pub token: String,
     /// Разрешить ассистенту менять настройки (иначе — только чтение и проверки).
     pub allow_changes: bool,
+    /// Изменения ассистента — пробные: без `confirm_changes` откатываются (trial.rs).
+    pub rollback: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { enabled: false, port: 8899, token: String::new(), allow_changes: false }
+        Settings { enabled: false, port: 8899, token: String::new(), allow_changes: false, rollback: true }
     }
 }
 
@@ -172,17 +174,42 @@ pub fn handle(app: &AppHandle, req: &Value) -> Option<Value> {
             let v = if ["2025-06-18", "2025-03-26", "2024-11-05"].contains(&v) { v } else { PROTOCOL };
             ok(json!({
                 "protocolVersion": v,
-                "capabilities": {"tools": {"listChanged": false}},
+                "capabilities": {"tools": {"listChanged": false}, "prompts": {"listChanged": false}},
                 "serverInfo": {"name": "digital-bypass", "version": env!("CARGO_PKG_VERSION")},
                 "instructions": INSTRUCTIONS,
             }))
         }
         "ping" => ok(json!({})),
+        "prompts/list" => ok(json!({"prompts": PROMPTS.iter().map(|p| json!({
+            "name": p.name, "title": p.title, "description": p.description,
+            "arguments": p.arg.map(|(n, d, req)| vec![json!({"name": n, "description": d, "required": req})]).unwrap_or_default(),
+        })).collect::<Vec<_>>()})),
+        "prompts/get" => {
+            let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
+            let Some(p) = PROMPTS.iter().find(|p| p.name == name) else { return err(-32602, "unknown prompt") };
+            let arg = p.arg.and_then(|(n, _, _)| params.get("arguments").and_then(|a| a.get(n)).and_then(|v| v.as_str())).unwrap_or("").trim();
+            if p.arg.is_some_and(|(_, _, req)| req) && arg.is_empty() {
+                return err(-32602, "missing required argument");
+            }
+            let text = p.text.replace("{arg}", if arg.is_empty() { "(not given — ask the user)" } else { arg });
+            ok(json!({"description": p.description, "messages": [{"role": "user", "content": {"type": "text", "text": text}}]}))
+        }
         "tools/list" => ok(json!({"tools": tools()})),
         "tools/call" => {
             let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
             let args = params.get("arguments").cloned().unwrap_or(json!({}));
-            let r = call(app, name, &args);
+            // Изменение — пробное: снимок до, отсчёт до отката после (trial.rs).
+            let trial = changes(name, &args) && crate::trial::enabled(&app.state::<AppState>());
+            if trial {
+                crate::trial::begin(app);
+            }
+            let mut r = call(app, name, &args);
+            if trial {
+                crate::trial::after(app, name);
+                if let Ok(Value::Object(m)) = &mut r {
+                    m.insert("trial".into(), json!(TRIAL_NOTE));
+                }
+            }
             let _ = app.emit("mcp-call", name);
             ok(match r {
                 Ok(v) => json!({"content":[{"type":"text","text": serde_json::to_string_pretty(&v).unwrap_or_default()}], "structuredContent": v, "isError": false}),
@@ -193,10 +220,88 @@ pub fn handle(app: &AppHandle, req: &Value) -> Option<Value> {
     }
 }
 
+/// Готовые сценарии (MCP prompts): в Claude Desktop и Claude Code — команды в меню.
+struct Prompt {
+    name: &'static str,
+    title: &'static str,
+    description: &'static str,
+    /// (имя, описание, обязателен)
+    arg: Option<(&'static str, &'static str, bool)>,
+    text: &'static str,
+}
+
+const PROMPTS: &[Prompt] = &[
+    Prompt {
+        name: "fix_site",
+        title: "A site does not open",
+        description: "Find out why a site does not open and fix it with zapret2, the bypass proxy, Xray or Tor.",
+        arg: Some(("domain", "The site, e.g. youtube.com", true)),
+        text: "The site {arg} does not open for me. Using the digital-bypass tools:
+1. get_status — what is running now.
+2. diagnose_site {arg} — find the cause (DNS spoofing, DPI on the site name, IP block, destination-network restriction).
+3. Fix by the cause: DNS — suggest the DNS tab or the DoH resolver; DPI — find_zapret_strategy {arg} with apply=true, or start the bypass proxy if diagnose_site says a split ClientHello helps; IP block or network restriction — Xray if I have servers (xray_control status), otherwise Tor (tor_control start, find_tor_bridges if it cannot connect), then add the domain to proxy_xray or proxy_tor.
+4. Verify with diagnose_site {arg} again. If it works, call confirm_changes; if it got worse, call rollback_changes.
+Explain each step briefly, in my language. Do not change anything unrelated to this site.",
+    },
+    Prompt {
+        name: "discord_voice",
+        title: "Discord voice or calls do not work",
+        description: "Discord text works but voice, calls or streams do not (UDP, IP ranges).",
+        arg: None,
+        text: "Discord voice, calls or screen sharing do not work for me. Discord voice uses UDP to many IP ranges, which only zapret2 can handle (the bypass proxy is TCP-only).
+1. get_status — is zapret2 running, with which strategy; check zapret2.status for errors.
+2. diagnose_site discord.com and discord.gg — is the text part fine.
+3. Voice needs the zapret2 ipset in 'List' mode (it holds Discord's IP ranges) — check whether the user turned it off and tell them where to switch it (Zapret2 → Advanced → IPSET); the game filter may also matter (TCP+UDP).
+4. If voice is still broken, try other strategies with zapret_control select (the ALT and FAKE TLS AUTO ones handle UDP differently), asking me to test a call after each.
+5. Keep the working one with confirm_changes; roll back otherwise.
+Answer in my language.",
+    },
+    Prompt {
+        name: "server_blocked",
+        title: "My VPN / Xray server is blocked or slow",
+        description: "The user's own VLESS/VMess/Trojan server stopped connecting or freezes.",
+        arg: Some(("server", "Optional: the server's domain or address", false)),
+        text: "My Xray server ({arg}) does not connect or the connection freezes. Using the digital-bypass tools:
+1. xray_control status, then xray_control test — which servers answer and how fast (never print subscription URLs or UUIDs back to me).
+2. If a server name is known, diagnose_site on it: a freeze after ~16-20 KB means a destination-network restriction (hosting or Cloudflare cut by address) — splitting does not help there, but zapret2 with its ipset in 'List' mode often does, because WinDivert also handles xray.exe's own connection; DPI on the SNI — turn on 'split ClientHello to the server' in the Xray tab.
+3. Try another server or 'auto' (xray_control select).
+4. Verify, then confirm_changes or rollback_changes.
+Answer in my language.",
+    },
+    Prompt {
+        name: "first_setup",
+        title: "First setup check",
+        description: "Check this computer and suggest how to set up digital-bypass.",
+        arg: None,
+        text: "I have just installed digital-bypass. Check my setup and suggest what to turn on:
+1. get_status — admin rights, what runs, and possible_conflicts (other DPI bypass tools, VPN clients, antivirus that may delete WinDivert).
+2. dns_check — does my ISP tamper with DNS.
+3. diagnose_site youtube.com, then one or two sites I name.
+4. Recommend: zapret2 (needs admin, covers apps and UDP) or the bypass proxy (no admin, browsers only), DNS changes if DNS is spoofed, and what to do about conflicts.
+Do not change anything until I agree. Answer in my language.",
+    },
+];
+
+const TRIAL_NOTE: &str = "This change is a TRIAL: it is rolled back automatically in 2 minutes unless you call confirm_changes. First check that things still work (diagnose_site, or ask the user), then call confirm_changes; if something broke, call rollback_changes.";
+
+/// Меняет ли вызов настройки (тогда он пробный и может откатиться).
+fn changes(name: &str, a: &Value) -> bool {
+    let action = arg_str(a, "action").unwrap_or("");
+    match name {
+        "zapret_control" | "proxy_control" | "proxy_set_options" | "add_domains_to_list" => true,
+        "tor_control" => matches!(action, "start" | "stop" | "set_scope"),
+        "xray_control" => matches!(action, "start" | "stop" | "select" | "set_scope"),
+        "find_zapret_strategy" => {
+            a.get("apply").and_then(|v| v.as_bool()).unwrap_or(false) || a.get("add_to_list").and_then(|v| v.as_bool()).unwrap_or(true)
+        }
+        _ => false,
+    }
+}
+
 const INSTRUCTIONS: &str = "digital-bypass is a Windows censorship-circumvention tool (zapret2/winws2 DPI bypass, a local bypass proxy, DNS/DoH, Telegram proxy). \
 Typical flow for 'site X does not open': call diagnose_site(X) first; it tells whether the block is DNS spoofing, DPI on the site name (and at which stage), or an IP block. \
 For DPI blocks call find_zapret_strategy(X) (it needs admin rights and takes up to a few minutes) or suggest the proxy. IP blocks cannot be fixed by zapret or the proxy splitting: suggest Xray if the user has a server or subscription (xray_control start, then add_domains_to_list list=proxy_xray), Tor (tor_control start, then add_domains_to_list list=proxy_tor; if Tor cannot connect, find_tor_bridges first), the user's Cloudflare Worker route, or a VPN. \
-Tools that change settings fail unless the user enabled 'allow changes' in the app's MCP settings; then explain how to enable it instead of retrying.";
+Tools that change settings fail unless the user enabled 'allow changes' in the app's MCP settings; then explain how to enable it instead of retrying. Changes are TRIALS by default: the app rolls them back after 2 minutes unless you call confirm_changes — so a change that breaks the network (and cuts you off) undoes itself. After changing something, verify it (diagnose_site on the site in question) and call confirm_changes, or rollback_changes if it got worse.";
 
 fn tool(name: &str, desc: &str, props: Value, required: &[&str]) -> Value {
     json!({"name": name, "description": desc, "inputSchema": {"type":"object","properties": props, "required": required}})
@@ -205,7 +310,7 @@ fn tool(name: &str, desc: &str, props: Value, required: &[&str]) -> Value {
 fn tools() -> Vec<Value> {
     let dom = json!({"type":"string","description":"Domain or URL, e.g. youtube.com"});
     vec![
-        tool("get_status", "Current state: zapret2 (running, strategy, mode, errors), bypass proxy, Telegram proxy, DoH resolver, per-network rule, admin rights, whether changes are allowed.", json!({}), &[]),
+        tool("get_status", "Current state: zapret2 (running, strategy, mode, errors), bypass proxy, Telegram proxy, DoH resolver, Tor, Xray, per-network rule, admin rights, whether changes are allowed, pending trial changes, and possible_conflicts (other DPI bypass tools, VPN clients, third-party antivirus) — a common reason why 'it is on but does not work'.", json!({}), &[]),
         tool("diagnose_site", "Why a site does not open: compares system DNS with DoH, tries TCP and TLS to each address (twice), detects DNS spoofing / DPI on the site name / IP blocking, the DPI stage (request or server reply) and whether splitting the ClientHello helps. Returns a verdict and concrete advice. Read-only, ~5-20 s.", json!({"domain": dom}), &["domain"]),
         tool("find_zapret_strategy", "Find a zapret2 strategy that opens a given site: runs winws2 with each strategy and checks HTTPS to the site. Strategies that did best in the last full test go first; stops after `want` fully working ones. Needs admin rights; takes from 30 s to a few minutes. If the domain is not in the zapret lists it must be added (add_to_list, needs 'allow changes'). With apply=true the best strategy is selected and zapret2 is turned on.", json!({
             "domain": dom,
@@ -246,6 +351,8 @@ fn tools() -> Vec<Value> {
             "want": {"type":"integer","description":"How many bridges to find (default 8)"},
             "kinds": {"type":"array","items":{"type":"string","enum":["obfs4","webtunnel"]},"description":"Default both"}
         }), &[]),
+        tool("confirm_changes", "Keep the pending trial changes (stop the automatic rollback). Call it after verifying that the change works.", json!({}), &[]),
+        tool("rollback_changes", "Undo the pending trial changes now: restores zapret2 (on/off, strategy), the bypass proxy settings, Tor/Xray on/off and the zapret2 lists to how they were before the first change.", json!({}), &[]),
         tool("dns_check", "Does the ISP tamper with DNS: interception of queries to public resolvers and spoofed answers for given domains (compared with DoT).", json!({"domains":{"type":"array","items":{"type":"string"}}}), &[]),
     ]
 }
@@ -347,6 +454,9 @@ pub fn call(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
                 "doh_resolver": to_value(&stub),
                 "network_rule": to_value(&net),
                 "mcp_allow_changes": mcp.allow_changes,
+                "mcp_rollback": mcp.rollback,
+                "pending_trial": to_value(crate::trial::view(&st)),
+                "possible_conflicts": to_value(crate::conflicts::detect()),
             }))
         }
         "diagnose_site" => {
@@ -356,6 +466,15 @@ pub fn call(app: &AppHandle, name: &str, a: &Value) -> Result<Value, String> {
             Ok(json!({"advice": advice(&r, in_zapret), "in_zapret_lists": in_zapret, "report": to_value(&r)}))
         }
         "find_zapret_strategy" => find_strategy(app, a),
+        "confirm_changes" => {
+            let had = crate::trial::confirm(app);
+            Ok(json!({"kept": had, "message": if had { "Changes kept." } else { "There were no pending changes." }}))
+        }
+        "rollback_changes" => {
+            let done = crate::trial::rollback(app)?;
+            notify(app);
+            Ok(json!({"rolled_back": done}))
+        }
         "list_strategies" => {
             let ov = crate::overview_of(&st);
             Ok(json!({
@@ -724,6 +843,29 @@ mod tests {
         for x in &t {
             assert!(x["name"].is_string() && x["inputSchema"]["type"] == "object");
         }
+    }
+
+    #[test]
+    fn prompts_shape() {
+        assert!(PROMPTS.len() >= 4);
+        for p in PROMPTS {
+            assert_eq!(p.text.contains("{arg}"), p.arg.is_some(), "{}", p.name);
+            // Шаги — каждый с новой строки, без лишних обратных слэшей.
+            assert!(p.text.contains("\n2. ") && !p.text.contains('\\'), "{}", p.name);
+        }
+    }
+
+    #[test]
+    fn trial_changes() {
+        assert!(changes("zapret_control", &json!({"action":"select"})));
+        assert!(changes("proxy_set_options", &json!({})));
+        assert!(!changes("tor_control", &json!({"action":"status"})));
+        assert!(changes("tor_control", &json!({"action":"set_scope"})));
+        assert!(!changes("xray_control", &json!({"action":"test"})));
+        assert!(changes("find_zapret_strategy", &json!({"domain":"x.com"})));
+        assert!(!changes("find_zapret_strategy", &json!({"domain":"x.com","add_to_list":false})));
+        assert!(!changes("diagnose_site", &json!({})));
+        assert!(!changes("confirm_changes", &json!({})));
     }
 
     #[test]

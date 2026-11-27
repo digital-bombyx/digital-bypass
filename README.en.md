@@ -117,6 +117,11 @@ The bypass proxy can send domains from a separate list (blocked by IP or geo-res
 
 Settings → MCP (off by default). Claude, Cursor and other MCP clients connect to `http://127.0.0.1:8899/mcp` with a token. Ask "why won't Discord load?" — the assistant calls `diagnose_site` (DNS, TCP, TLS, where DPI cuts) and, if needed, `find_zapret_strategy` (tries zapret2 strategies against that very site). Status, proxy and winws2 logs, the DNS check and test results are available too. Changing settings (turning zapret2 and the proxy on, picking a strategy, editing lists) needs "Allow changes".
 
+- **Auto-rollback.** The assistant's changes are trials: unless it confirms within 2 minutes (`confirm_changes`) that everything works, the app restores the previous state. An AI that broke the network and lost its own connection cannot leave you offline. The window shows a countdown with Keep / Roll back buttons.
+- **Ready-made scenarios** (MCP prompts — menu commands in Claude Desktop and Claude Code): "a site does not open", "Discord voice does not work", "my VPN/Xray server is blocked", "first setup".
+- **Conflicts.** `get_status` reports another DPI bypass tool (GoodbyeDPI, zapret, ByeDPI), a VPN client or a third-party antivirus that may delete WinDivert.
+- **Knowledge.** Our server acts; a zapret2 and TSPU reference lives in [zapret2-mcp](https://github.com/rcd27/zapret2-mcp) (45 articles, in Russian) — add it next to ours: `"zapret2": {"command": "npx", "args": ["-y", "zapret2-mcp"]}`.
+
 ## Other countries
 
 digital-bypass is built and tested in Russia. Outside it, keep two things in mind:

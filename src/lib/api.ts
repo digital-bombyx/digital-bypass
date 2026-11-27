@@ -353,7 +353,7 @@ export type EvolveRun = {
 };
 
 export type McpStatus = {
-  settings: { enabled: boolean; port: number; token: string; allow_changes: boolean };
+  settings: { enabled: boolean; port: number; token: string; allow_changes: boolean; rollback: boolean };
   running: boolean;
   url: string;
   error: string | null;
@@ -383,6 +383,8 @@ export type Modules = {
   telegram: ModuleState;
   /** Системный прокси Windows (всегда прокси-обходчик) и куда по умолчанию идёт трафик. */
   system_proxy: { port: number; via: "bypass" | "tor" | "xray" } | null;
+  /** Изменения от ИИ ждут подтверждения; seconds_left null — изменение ещё выполняется. */
+  trial: { seconds_left: number | null; tools: string[] } | null;
 };
 
 export const api = {
@@ -441,6 +443,9 @@ export const api = {
   tgStatus: () => invoke<TgStatus>("tg_status"),
   mcpStatus: () => invoke<McpStatus>("mcp_status"),
   mcpSet: (enabled: boolean, allowChanges: boolean, port: number) => invoke<McpStatus>("mcp_set", { enabled, allowChanges, port }),
+  mcpSetRollback: (on: boolean) => invoke<McpStatus>("mcp_set_rollback", { on }),
+  mcpTrialConfirm: () => invoke<void>("mcp_trial_confirm"),
+  mcpTrialRollback: () => invoke<void>("mcp_trial_rollback"),
   mcpRegenToken: () => invoke<McpStatus>("mcp_regen_token"),
   netStatus: () => invoke<NetStatus>("net_status"),
   netSet: (rules: NetRules) => invoke<NetStatus>("net_set", { rules }),

@@ -3,6 +3,7 @@ mod addons_strats;
 mod autostart;
 mod bridges;
 mod bundled;
+mod conflicts;
 mod diag;
 mod dns;
 mod dnscheck;
@@ -26,6 +27,7 @@ mod telegram;
 mod strategy;
 mod tester;
 mod tor;
+mod trial;
 mod xray;
 mod xraylinks;
 mod util;
@@ -77,6 +79,8 @@ pub struct AppState {
     xray_testing: AtomicBool,
     /// Последняя проверка задержки: id сервера → результат.
     xray_pings: Mutex<std::collections::HashMap<String, xray::Ping>>,
+    /// Изменения от ИИ (MCP), ждущие подтверждения; иначе — откат.
+    mcp_trial: Mutex<Option<trial::Trial>>,
 }
 
 impl AppState {
@@ -901,6 +905,8 @@ struct Modules {
     telegram: &'static str,
     /// Системный прокси Windows прописан (это всегда прокси-обходчик).
     system_proxy: Option<SystemProxy>,
+    /// Изменения от ИИ ждут подтверждения (иначе откат).
+    trial: Option<trial::TrialView>,
 }
 
 #[derive(Serialize)]
@@ -947,6 +953,7 @@ fn modules_of(state: &AppState) -> Modules {
         tor: tor_s,
         telegram: if state.tg.lock().unwrap().is_some() { "on" } else { "off" },
         system_proxy,
+        trial: trial::view(state),
     }
 }
 
@@ -1600,6 +1607,25 @@ fn mcp_set(app: AppHandle, state: State<AppState>, enabled: bool, allow_changes:
     Ok(mcp_status_of(&state))
 }
 
+/// Автооткат изменений от ИИ (вкл/выкл).
+#[tauri::command(async)]
+fn mcp_set_rollback(state: State<AppState>, on: bool) -> McpStatus {
+    state.update(|s| s.mcp.rollback = on);
+    mcp_status_of(&state)
+}
+
+/// Оставить изменения от ИИ, не дожидаясь его подтверждения.
+#[tauri::command(async)]
+fn mcp_trial_confirm(app: AppHandle) {
+    trial::confirm(&app);
+}
+
+/// Откатить изменения от ИИ сейчас.
+#[tauri::command(async)]
+fn mcp_trial_rollback(app: AppHandle) -> R<()> {
+    trial::rollback(&app).map(|_| ())
+}
+
 /// Новый токен: старые подключения ассистентов перестанут работать.
 #[tauri::command(async)]
 fn mcp_regen_token(app: AppHandle, state: State<AppState>) -> McpStatus {
@@ -2161,7 +2187,9 @@ pub fn run() {
                 xray: Mutex::new(None),
                 xray_testing: AtomicBool::new(false),
                 xray_pings: Mutex::new(std::collections::HashMap::new()),
+                mcp_trial: Mutex::new(None),
             });
+            trial::watch(app.handle().clone());
 
             let handle = app.handle().clone();
             app.state::<AppState>().runner.set_notify(move || {
@@ -2374,6 +2402,9 @@ pub fn run() {
             modules,
             net_status,
             mcp_status,
+            mcp_set_rollback,
+            mcp_trial_confirm,
+            mcp_trial_rollback,
             mcp_set,
             mcp_regen_token,
             evolve_start,

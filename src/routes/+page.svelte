@@ -13,7 +13,7 @@
   import Telegram from "$lib/components/Telegram.svelte";
   import Tor from "$lib/components/Tor.svelte";
   import Xray from "$lib/components/Xray.svelte";
-  import { Power, Globe, Network, Settings2, ShieldAlert, Waypoints, Stethoscope, Send, Layers, Rocket } from "@lucide/svelte";
+  import { Power, Globe, Network, Settings2, ShieldAlert, Waypoints, Stethoscope, Send, Layers, Rocket, Bot } from "@lucide/svelte";
 
   type Tab = "home" | "hosts" | "dns" | "proxy" | "telegram" | "tor" | "xray" | "diag" | "settings";
   let tab = $state<Tab>("home");
@@ -38,9 +38,25 @@
   ];
   /** Состояние модулей для точек в меню и строки системного прокси. */
   let mods = $state<Modules | null>(null);
-  const modKey: Partial<Record<Tab, keyof Omit<Modules, "system_proxy">>> = { home: "zapret", proxy: "proxy", xray: "xray", tor: "tor", telegram: "telegram" };
+  const modKey: Partial<Record<Tab, keyof Omit<Modules, "system_proxy" | "trial">>> = { home: "zapret", proxy: "proxy", xray: "xray", tor: "tor", telegram: "telegram" };
   const stateText = (s: string) =>
     ({ on: t("работает", "running"), starting: t("подключается", "connecting"), error: t("ошибка", "error"), off: "" })[s] ?? "";
+  /** Что поменял ИИ — понятными словами. */
+  const toolNames: Record<string, string> = {
+    zapret_control: "zapret2",
+    find_zapret_strategy: "zapret2",
+    proxy_control: "Proxy",
+    proxy_set_options: "Proxy",
+    add_domains_to_list: t("списки", "lists"),
+    tor_control: "Tor",
+    xray_control: "Xray",
+  };
+  const trialWhat = $derived([...new Set((mods?.trial?.tools ?? []).map((x) => toolNames[x] ?? x))].join(", "));
+  const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  async function trialAct(keep: boolean) {
+    await act(() => (keep ? api.mcpTrialConfirm() : api.mcpTrialRollback()), keep ? t("Изменения оставлены", "Changes kept") : t("Изменения откачены", "Changes rolled back"));
+    pollModules();
+  }
   async function pollModules() {
     if (document.visibilityState !== "visible") return;
     try {
@@ -95,6 +111,21 @@
   {#if app.ov}
     {#if !app.ov.admin}
       <div class="banner mono"><ShieldAlert size={14} /> {t("нет прав администратора — только просмотр", "no administrator rights — view only")}</div>
+    {/if}
+    {#if mods?.trial}
+      {@const tr = mods.trial}
+      <div class="banner trial mono" role="status">
+        <Bot size={14} />
+        <span class="grow">
+          {#if tr.seconds_left === null}
+            {t("ИИ меняет настройки", "The AI is changing settings")}{trialWhat ? ` (${trialWhat})` : ""}…
+          {:else}
+            {t("ИИ изменил", "The AI changed")} {trialWhat || t("настройки", "settings")} — {t("откат через", "rollback in")} {mmss(tr.seconds_left)}, {t("если он не подтвердит, что всё работает", "unless it confirms that everything works")}
+          {/if}
+        </span>
+        <button class="btn sm" disabled={app.busy} onclick={() => trialAct(true)}>{t("Оставить", "Keep")}</button>
+        <button class="btn sm ghost" disabled={app.busy} onclick={() => trialAct(false)}>{t("Откатить", "Roll back")}</button>
+      </div>
     {/if}
 
     <div class="body">
@@ -164,6 +195,16 @@
     color: var(--yellow);
     background: rgba(210, 153, 34, 0.08);
     border-bottom: 1px solid rgba(210, 153, 34, 0.18);
+  }
+  .banner.trial {
+    color: var(--text);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border-bottom-color: color-mix(in srgb, var(--accent) 30%, transparent);
+    padding: 5px 10px 5px 14px;
+  }
+  .banner .grow {
+    flex: 1;
+    min-width: 0;
   }
   /* Широкое окно: навигация слева, сгруппированная по модулям. */
   .body {

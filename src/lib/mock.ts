@@ -176,8 +176,11 @@ const tg: any = {
   default_cf: Array.from({ length: 20 }, (_, i) => `cf${i}.co.uk`),
 };
 
+/** Пробные изменения ИИ в макете: `?trial` — висит отсчёт. */
+let mockTrial: number | null = typeof location !== "undefined" && new URLSearchParams(location.search).has("trial") ? Date.now() + 120000 : null;
+
 const mcp: any = {
-  settings: { enabled: false, port: 8899, token: "3b1f0c9e7a5d4c2b1a0f9e8d7c6b5a49e1d2c3b4", allow_changes: false },
+  settings: { enabled: false, port: 8899, token: "3b1f0c9e7a5d4c2b1a0f9e8d7c6b5a49e1d2c3b4", allow_changes: false, rollback: true },
   running: false,
   url: "http://127.0.0.1:8899/mcp",
   error: null,
@@ -370,6 +373,13 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
       mcp.running = args.enabled;
       mcp.url = `http://127.0.0.1:${args.port}/mcp`;
       return structuredClone(mcp);
+    case "mcp_set_rollback":
+      mcp.settings.rollback = args.on;
+      return structuredClone(mcp);
+    case "mcp_trial_confirm":
+    case "mcp_trial_rollback":
+      mockTrial = null;
+      return;
     case "mcp_regen_token":
       mcp.settings.token = "9f2c" + Math.random().toString(16).slice(2, 14);
       return structuredClone(mcp);
@@ -456,6 +466,7 @@ export async function mockInvoke(cmd: string, args: any = {}): Promise<any> {
         xray: tun(xr.status),
         tor: tun(tor.status),
         telegram: tg.stats?.running ? "on" : "off",
+        trial: mockTrial ? { seconds_left: Math.max(0, Math.round((mockTrial - Date.now()) / 1000)), tools: ["zapret_control", "proxy_set_options"] } : null,
         system_proxy: proxy.stats?.running && proxy.stats?.system ? { port: proxy.config.port, via: tor.proxy_tor_scope === "all" && tor.status.ready ? "tor" : "bypass" } : null,
       };
     }

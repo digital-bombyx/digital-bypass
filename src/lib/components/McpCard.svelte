@@ -86,6 +86,20 @@
         </div>
         <Switch checked={st.settings.allow_changes} disabled={app.busy} onchange={(v) => set({ allow_changes: v })} />
       </div>
+      {#if st.settings.allow_changes}
+        <div class="line">
+          <div>
+            <div class="t">{t("Откатывать неподтверждённое", "Roll back unconfirmed changes")}</div>
+            <div class="hint faint mono">
+              {t(
+                "изменение от ИИ — пробное: если за 2 минуты он не подтвердил, что всё работает, приложение вернёт как было. Защищает от случая, когда ИИ сломал сеть и сам потерял связь",
+                "an AI change is a trial: if it does not confirm within 2 minutes that everything works, the app restores the previous state. Protects against the AI breaking the network and losing its own connection",
+              )}
+            </div>
+          </div>
+          <Switch checked={st.settings.rollback} disabled={app.busy} onchange={async (v) => (st = await api.mcpSetRollback(v))} />
+        </div>
+      {/if}
       <div class="row mono">
         <span class="faint">{t("адрес", "address")}</span>
         <span class="url">{st.url}</span>
