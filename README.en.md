@@ -168,6 +168,8 @@ If something works or fails for you in another country, an issue with the **Chec
 
 > [!NOTE]
 > The app ships `winws2.exe`, the WinDivert driver, `tor.exe` and `xray.exe`. Some antivirus products flag files like these. You can check them against their origins: `xray.exe` against the [Xray release .dgst](https://github.com/XTLS/Xray-core/releases/download/v26.11.9/Xray-windows-64.zip.dgst), `winws2` and WinDivert against the [zapret2 release](https://github.com/bol-van/zapret2/releases) checksums, tor and lyrebird against [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt) (the Tor Expert Bundle archive sum is checked at build time).
+>
+> No third-party binaries live in the repository: every build (locally and in GitHub Actions) downloads them from their origins and checks a SHA-256 pinned in the code — on a mismatch the build fails. Tor comes from dist.torproject.org ([`scripts/sync-tor.mjs`](scripts/sync-tor.mjs)), Xray from the XTLS/Xray-core releases ([`scripts/sync-xray.mjs`](scripts/sync-xray.mjs)), zapret from a pinned upstream commit with its file tree verified ([`scripts/sync-zapret.mjs`](scripts/sync-zapret.mjs), [`release.yml`](.github/workflows/release.yml)).
 
 ## Build from source
 

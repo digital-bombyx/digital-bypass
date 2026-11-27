@@ -148,6 +148,8 @@ https://github.com/user-attachments/assets/5298f432-b7dd-4a0d-b7e6-1d6b9afa2764
 
 > [!NOTE]
 > Внутри лежат `winws2.exe`, драйвер WinDivert, `tor.exe` и `xray.exe`. Некоторые антивирусы помечают такие файлы как угрозу. Их можно сверить с первоисточниками: `xray.exe` — по [.dgst релиза Xray](https://github.com/XTLS/Xray-core/releases/download/v26.11.9/Xray-windows-64.zip.dgst), `winws2` и WinDivert — по контрольным суммам релиза [zapret2](https://github.com/bol-van/zapret2/releases), tor и lyrebird — по [sha256sums-signed-build.txt](https://dist.torproject.org/torbrowser/16.0.1/sha256sums-signed-build.txt) (сумма архива Tor Expert Bundle проверяется при сборке).
+>
+> Сторонних бинарников в репозитории нет: при каждой сборке (локально и в GitHub Actions) скрипты скачивают их из первоисточников и сверяют SHA-256, закреплённую в коде, — при несовпадении сборка падает. Tor — с dist.torproject.org ([`scripts/sync-tor.mjs`](scripts/sync-tor.mjs)), Xray — из релизов XTLS/Xray-core ([`scripts/sync-xray.mjs`](scripts/sync-xray.mjs)), zapret — из закреплённого коммита апстрима со сверкой дерева файлов ([`scripts/sync-zapret.mjs`](scripts/sync-zapret.mjs), [`release.yml`](.github/workflows/release.yml)).
 
 ## Сборка из исходников
 
